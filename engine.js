@@ -10,12 +10,55 @@ class WorldEngine {
     this.data = this.loadFromStorage();
   }
 
+  // Sanitiza o nome do personagem para exibir somente nome e sobrenome, sem cargos ou títulos
+  cleanCharacterName(name) {
+    if (!name || typeof name !== "string") return "";
+    let clean = name.trim();
+    clean = clean.replace(/\(nasc\.?\s*([^)]+)\)/i, "$1");
+    clean = clean.replace(/\s*\([^)]*\)/g, "");
+    clean = clean.replace(/^(Príncipe\/Rei|Príncipe\s+Herdeiro|Princesa\s+Herdeira|Rei|Rainha|Príncipe|Princesa|Lorde|Lord|Lady|Herdeiro|Herdeira|Cavaleiro|Guarda|Sor|Sir|Dom|Dona)\s+/i, "");
+    clean = clean.replace(/\b([A-Za-zÀ-ÿ]+)\s+(I|II|III|IV|V|VI)\b/i, "$1");
+    if (clean.toLowerCase() === "lyanna") clean = "Lyanna Valmont";
+    if (clean.toLowerCase() === "jonas") clean = "Jonas Valmont";
+    return clean.replace(/\s+/g, " ").trim();
+  }
+
   loadFromStorage() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && Array.isArray(parsed.characters) && Array.isArray(parsed.houses)) {
+          let modified = false;
+
+          if (!Array.isArray(parsed.races)) {
+            parsed.races = Array.isArray(DEFAULT_WORLD_DATA.races) ? DEFAULT_WORLD_DATA.races.slice() : ["Humano", "Elfo", "Anão", "Orc"];
+            modified = true;
+          }
+
+          if (parsed.meta && !parsed.meta.selectedRaceFilter) {
+            parsed.meta.selectedRaceFilter = "all";
+            modified = true;
+          }
+
+          parsed.characters.forEach(c => {
+            if (c.name) {
+              const cleaned = this.cleanCharacterName(c.name);
+              if (cleaned !== c.name) {
+                c.name = cleaned;
+                modified = true;
+              }
+            }
+            if (!c.race) {
+              c.race = c.creatureType ? (c.creatureType.charAt(0).toUpperCase() + c.creatureType.slice(1)) : "Humano";
+              modified = true;
+            }
+          });
+          if (modified) {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+            } catch (e) {}
+          }
           return parsed;
         }
       }
@@ -23,6 +66,35 @@ class WorldEngine {
       console.warn("Erro ao carregar localStorage, usando dados iniciais:", e);
     }
     return JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+  }
+
+  getRaces() {
+    const list = Array.isArray(this.data.races) && this.data.races.length > 0
+      ? this.data.races.slice()
+      : (Array.isArray(DEFAULT_WORLD_DATA.races) ? DEFAULT_WORLD_DATA.races.slice() : ["Humano", "Elfo", "Anão", "Orc"]);
+
+    if (Array.isArray(this.data.characters)) {
+      this.data.characters.forEach(c => {
+        const r = c.race || c.creatureType;
+        if (r && !list.some(item => item.toLowerCase() === r.toLowerCase())) {
+          list.push(r);
+        }
+      });
+    }
+    return list;
+  }
+
+  addRace(raceName) {
+    if (!raceName || typeof raceName !== "string") return;
+    const name = raceName.trim();
+    if (!name) return;
+    if (!Array.isArray(this.data.races)) {
+      this.data.races = this.getRaces();
+    }
+    if (!this.data.races.some(r => r.toLowerCase() === name.toLowerCase())) {
+      this.data.races.push(name);
+      this.saveToStorage();
+    }
   }
 
   saveToStorage() {
@@ -44,8 +116,20 @@ class WorldEngine {
         worldTitle: "Meu Mundo de Fantasia",
         currentYear: 1000,
         treeColorMode: "linhagem",
-        selectedHouseFilter: "all"
+        selectedHouseFilter: "all",
+        selectedRaceFilter: "all"
       },
+      races: [
+        "Humano",
+        "Elfo",
+        "Anão",
+        "Orc",
+        "Bruxo / Feiticeiro",
+        "Sereia / Tritão",
+        "Draconiano",
+        "Vampiro",
+        "Fada / Silfo"
+      ],
       houses: [
         {
           id: "house_real_1",
@@ -246,25 +330,7 @@ class WorldEngine {
   detectCharacterInconsistencies(charDraft) {
     const warnings = [];
 
-    // 1. Criaturas míticas (Bruxos, Elfos, Sereias, Caçadores míticos...)
-    if (charDraft.creatureType && charDraft.creatureType !== "humano") {
-      const creatureNames = {
-        bruxo: "Bruxo(a)",
-        elfo: "Elfo(a)",
-        sereia: "Sereia / Tritão",
-        cacador: "Caçador(a) Sobrenatural",
-        outro_mitico: "Criatura Mítica"
-      };
-      const label = creatureNames[charDraft.creatureType] || charDraft.creatureType;
-      warnings.push({
-        code: "MYTHICAL_CREATURE",
-        where: `Natureza do Personagem: "${charDraft.name || "Novo Personagem"}" foi classificado como ${label}.`,
-        whyNotAllowed: "Pelas leis canônicas deste sistema, criaturas míticas (bruxos, elfos, sereias, caçadores...) não aparecem na árvore genealógica de sangue mortal.",
-        promptLabel: "Explique por que decidiu incluir ou manter este ser mítico na genealogia mesmo com a inconsistência:"
-      });
-    }
-
-    // 2. Datas de Nascimento e Falecimento inconsistentes
+    // 1. Datas de Nascimento e Falecimento inconsistentes
     const bYear = Number(charDraft.birthYear);
     const dYear = charDraft.deathYear ? Number(charDraft.deathYear) : null;
     if (!isNaN(bYear) && dYear !== null && !isNaN(dYear) && dYear < bYear) {

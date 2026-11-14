@@ -7,8 +7,22 @@ const DEFAULT_WORLD_DATA = {
     worldTitle: "Crônicas de Ébano & Vinha",
     currentYear: 1248,
     treeColorMode: "linhagem", // "linhagem" (Casa de Sangue/Origem) ou "territorio" (Território/Casa Oficial)
-    selectedHouseFilter: "all"
+    selectedHouseFilter: "all",
+    selectedRaceFilter: "all"
   },
+
+  // Raças / Espécies Registradas no Códice
+  races: [
+    "Humano",
+    "Elfo",
+    "Anão",
+    "Orc",
+    "Bruxo / Feiticeiro",
+    "Sereia / Tritão",
+    "Draconiano",
+    "Vampiro",
+    "Fada / Silfo"
+  ],
 
   // Casas / Dinastias
   houses: [
@@ -182,12 +196,13 @@ const DEFAULT_WORLD_DATA = {
     // GERAÇÃO 1 - CASA VALMONT (Patriarca e Matriarca)
     {
       id: "char_theron",
-      name: "Rei Theron Valmont",
+      name: "Theron Valmont",
       gender: "M",
       birthYear: 1170,
       deathYear: 1220,
       isAlive: false,
       socialRank: "rei", // rei, principe, lorde, guarda, civil, prostituta, fazendeira
+      race: "Humano",
       creatureType: "humano", // humano (padrão) ou mítico (com justificativa de inconsistência)
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -219,12 +234,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_lyanna",
-      name: "Rainha Lyanna",
+      name: "Lyanna Valmont",
       gender: "F",
       birthYear: 1174,
       deathYear: 1222,
       isAlive: false,
       socialRank: "rei",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -256,12 +272,13 @@ const DEFAULT_WORLD_DATA = {
     // GERAÇÃO 2 - CASA VALMONT (Rei Aldric, Irmão Príncipe/Rei Daemon, Esposa Elena da Casa Y, Amante Civil)
     {
       id: "char_aldric",
-      name: "Rei Aldric I Valmont",
+      name: "Aldric Valmont",
       gender: "M",
       birthYear: 1196,
       deathYear: 1246,
       isAlive: false,
       socialRank: "rei",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -294,12 +311,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_elena",
-      name: "Rainha Elena (nasc. Ravencrest)",
+      name: "Elena Ravencrest",
       gender: "F",
       birthYear: 1202,
       deathYear: null,
       isAlive: true,
       socialRank: "principe", // Princesa de nascimento que virou Rainha pelo casamento
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_ravencrest", // Casa X (Origem)
       officialHouseId: "house_valmont", // Casa A (Oficializada pelo casamento em 1225!)
@@ -335,12 +353,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_daemon",
-      name: "Príncipe/Rei Daemon Valmont",
+      name: "Daemon Valmont",
       gender: "M",
       birthYear: 1199,
       deathYear: null,
       isAlive: true,
       socialRank: "rei", // Irmão do Rei Aldric - prioridade na sucessão!
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -371,12 +390,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_seraphina",
-      name: "Rainha Seraphina (nasc. Ravencrest)",
+      name: "Seraphina Ravencrest",
       gender: "F",
       birthYear: 1205,
       deathYear: null,
       isAlive: true,
       socialRank: "lorde",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_ravencrest",
       officialHouseId: "house_valmont",
@@ -407,12 +427,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_mira_camponesa",
-      name: "Mira do Vale (Fazendeira)",
+      name: "Mira do Vale",
       gender: "F",
       birthYear: 1204,
       deathYear: null,
       isAlive: true,
       socialRank: "fazendeira", // Mulher fora dos padrões nobres -> gera filho bastardo com o Rei!
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_plebe",
       officialHouseId: "house_plebe",
@@ -443,12 +464,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_garrett_guarda",
-      name: "Garrett (Guarda da Fronteira)",
+      name: "Garrett",
       gender: "M",
       birthYear: 1200,
       deathYear: null,
       isAlive: true,
       socialRank: "guarda",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_plebe",
       officialHouseId: "house_plebe",
@@ -478,12 +500,13 @@ const DEFAULT_WORLD_DATA = {
     // GERAÇÃO 3 - CASA VALMONT (Filhos de Aldric & Elena: Gêmeos + Bastardo de Aldric + Filho Herdeiro de Daemon)
     {
       id: "char_lucian",
-      name: "Príncipe Lucian Valmont",
+      name: "Lucian Valmont",
       gender: "M",
       birthYear: 1234, // Tem 14 anos em 1248 (< 18 anos!)
       deathYear: null,
       isAlive: true,
       socialRank: "principe",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -511,12 +534,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_vaella",
-      name: "Princesa Vaella Valmont",
+      name: "Vaella Valmont",
       gender: "F",
       birthYear: 1234,
       deathYear: null,
       isAlive: true,
       socialRank: "principe",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -544,12 +568,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_jonas_bastardo",
-      name: "Jonas (Bastardo do Vale)",
+      name: "Jonas Valmont",
       gender: "M",
       birthYear: 1223,
       deathYear: null,
       isAlive: true,
       socialRank: "civil",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_plebe", // Bastardo: não pertence à casa real por padrão!
       officialHouseId: "house_plebe",
@@ -577,12 +602,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_baelor",
-      name: "Príncipe Baelor Valmont",
+      name: "Baelor Valmont",
       gender: "M",
       birthYear: 1229, // 19 anos em 1248 (>= 18 anos!)
       deathYear: null,
       isAlive: true,
       socialRank: "principe",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_valmont",
       officialHouseId: "house_valmont",
@@ -614,12 +640,13 @@ const DEFAULT_WORLD_DATA = {
     // ========================================================================
     {
       id: "char_aurelius_solarius",
-      name: "Lorde Aurélius Solárius",
+      name: "Aurélius Solárius",
       gender: "M",
       birthYear: 1175,
       deathYear: 1230,
       isAlive: false,
       socialRank: "lorde",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_solarius",
       officialHouseId: "house_solarius",
@@ -645,12 +672,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_cassian_solarius",
-      name: "Lorde Cassian Solárius",
+      name: "Cassian Solárius",
       gender: "M",
       birthYear: 1198,
       deathYear: 1240,
       isAlive: false,
       socialRank: "lorde",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_solarius",
       officialHouseId: "house_solarius",
@@ -676,12 +704,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_cael_solarius",
-      name: "Lorde Cael Solárius (Tio)",
+      name: "Cael Solárius",
       gender: "M",
       birthYear: 1204,
       deathYear: null,
       isAlive: true,
       socialRank: "lorde",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_solarius",
       officialHouseId: "house_solarius",
@@ -717,12 +746,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_lyra_solarius",
-      name: "Lady Lyra Solárius (Sobrinha)",
+      name: "Lyra Solárius",
       gender: "F",
       birthYear: 1219,
       deathYear: null,
       isAlive: true,
       socialRank: "lorde",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_solarius",
       officialHouseId: "house_solarius",
@@ -758,12 +788,13 @@ const DEFAULT_WORLD_DATA = {
     },
     {
       id: "char_solon_solarius",
-      name: "Herdeiro Solon Solárius",
+      name: "Solon Solárius",
       gender: "M",
       birthYear: 1241,
       deathYear: null,
       isAlive: true,
       socialRank: "lorde",
+      race: "Humano",
       creatureType: "humano",
       birthHouseId: "house_solarius",
       officialHouseId: "house_solarius",

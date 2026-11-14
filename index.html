@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crônicas & Linhagens — Livro das Linhagens Reais</title>
+  <link rel="icon" type="image/png" href="logo/logo-removebg-preview.png" />
+  <link rel="shortcut icon" href="logo/logo-removebg-preview.png" />
+  <link rel="apple-touch-icon" href="logo/logo-removebg-preview.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
@@ -17,11 +20,7 @@
   <header class="top-header">
     <div class="brand-area">
       <div class="brand-sigil" title="Selo Heráldico do Reino">
-        <svg viewBox="0 0 40 40" class="sigil-svg">
-          <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1"/>
-          <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="0.8"/>
-          <path d="M20 7 L23 15 L31 16 L25 22 L27 30 L20 25 L13 30 L15 22 L9 16 L17 15 Z" fill="currentColor" opacity="0.85"/>
-        </svg>
+        <img src="logo/logo-removebg-preview.png" alt="Logo" class="sigil-img" />
       </div>
       <div class="brand-title">
         <h1 id="worldTitleDisplay">Crônicas de Ébano & Vinha</h1>
@@ -71,7 +70,7 @@
        ==================================================================== -->
   <section id="tab-tree" class="tab-panel active">
     <div class="tree-toolbar">
-      <!-- Grupo 1: Perspectiva e Filtros -->
+      <!-- Grupo 1: Perspectiva -->
       <div class="toolbar-section">
         <span class="toolbar-section-label">Perspectiva:</span>
         <div class="mode-toggle-box">
@@ -82,10 +81,59 @@
             Feudo & Casa Oficial
           </button>
         </div>
+      </div>
 
-        <select id="houseFilterSelect" class="select-medieval" onchange="app.setHouseFilter(this.value)">
-          <option value="all">Todas as Casas e Linhagens</option>
-        </select>
+      <!-- Grupo 1B: Filtros Pesquisáveis (Digitar ou Escolher Casa e Raça) -->
+      <div class="toolbar-section filter-search-section">
+        <span class="toolbar-section-label">Filtros:</span>
+
+        <!-- Filtro Pesquisável por Casa -->
+        <div class="filter-search-box" title="Digite para buscar ou selecione a Casa">
+          <span class="filter-icon-sigil" title="Casa Feudal">&#127984;</span>
+          <input
+            type="text"
+            id="houseFilterInput"
+            list="houseFilterDatalist"
+            placeholder="Buscar / Selecionar Casa..."
+            class="filter-search-field"
+            autocomplete="off"
+            oninput="app.onHouseFilterInput(this.value)"
+            onfocus="this.select()"
+          />
+          <datalist id="houseFilterDatalist"></datalist>
+          <button
+            type="button"
+            id="btnClearHouseFilter"
+            class="filter-search-clear"
+            onclick="app.clearHouseFilter()"
+            title="Limpar filtro de casa"
+          >&times;</button>
+        </div>
+
+        <!-- Filtro Pesquisável por Raça -->
+        <div class="filter-search-box" title="Digite para buscar ou selecione a Raça">
+          <span class="filter-icon-sigil" title="Raça / Espécie">&#128101;</span>
+          <input
+            type="text"
+            id="raceFilterInput"
+            list="raceFilterDatalist"
+            placeholder="Buscar / Selecionar Raça..."
+            class="filter-search-field"
+            autocomplete="off"
+            oninput="app.onRaceFilterInput(this.value)"
+            onfocus="this.select()"
+          />
+          <datalist id="raceFilterDatalist"></datalist>
+          <button
+            type="button"
+            id="btnClearRaceFilter"
+            class="filter-search-clear"
+            onclick="app.clearRaceFilter()"
+            title="Limpar filtro de raça"
+          >&times;</button>
+        </div>
+
+        <button class="btn btn-sm btn-medieval" onclick="app.promptNewRace()" title="Cadastrar nova raça no Códice">+ Raça</button>
       </div>
 
       <!-- Grupo 2: Ações do Escriba -->
@@ -121,8 +169,20 @@
     <div class="tree-legend">
       <div class="legend-items">
         <div class="legend-item">
+          <span class="dot-sample dot-blood"></span>
+          <span><strong>Círculo Vermelho:</strong> Membro de Sangue da Família</span>
+        </div>
+        <div class="legend-item">
+          <span class="dot-sample dot-external"></span>
+          <span><strong>Círculo Azul:</strong> Membro de Outra Família</span>
+        </div>
+        <div class="legend-item">
+          <span class="line-sample line-twin"></span>
+          <span><strong>Traço Roxo:</strong> Irmãos Gêmeos</span>
+        </div>
+        <div class="legend-item">
           <span class="line-sample line-blood"></span>
-          <span><strong>Linha Carmesim:</strong> Vínculo de Sangue (Pais, Filhos, Irmãos e Tios)</span>
+          <span><strong>Linha Vermelha:</strong> Vínculo de Sangue (Pais &amp; Filhos)</span>
         </div>
         <div class="legend-item">
           <span class="line-sample line-marriage"></span>
@@ -130,15 +190,11 @@
         </div>
         <div class="legend-item">
           <span class="line-sample line-avuncular"></span>
-          <span><strong>Cordão Azul & Ouro:</strong> União Avuncular (Tio & Sobrinha)</span>
-        </div>
-        <div class="legend-item">
-          <span class="ring-sample ring-assimilated"></span>
-          <span><strong>Aro Duplo:</strong> Esposa assimilada à Casa do marido (origem preservada no perfil)</span>
+          <span><strong>Cordão Azul &amp; Ouro:</strong> União Avuncular (Tio &amp; Sobrinha)</span>
         </div>
       </div>
       <div class="legend-tip">
-        Clique no medalhão ou em &ldquo;Perfil&rdquo; para inspecionar história, aparência, causas de morte e feudos.
+        Clique no medalhão ou no nome para inspecionar história, aparência, causas de morte e feudos.
       </div>
     </div>
 

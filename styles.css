@@ -100,6 +100,14 @@ body {
   height: 24px;
 }
 
+.sigil-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
 .brand-title h1 {
   font-family: var(--font-display);
   font-size: 1.12rem;
@@ -371,6 +379,67 @@ body {
   border-color: var(--border-gold-bright);
 }
 
+/* Filtros Pesquisáveis (Digitar ou Escolher Casa / Raça) */
+.filter-search-section {
+  gap: 10px;
+}
+
+.filter-search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background: #120e0a;
+  border: 1px solid var(--border-brass);
+  border-radius: 3px;
+  padding: 2px 6px 2px 8px;
+  transition: all 0.2s ease;
+}
+
+.filter-search-box:focus-within {
+  border-color: var(--border-gold-bright);
+  box-shadow: 0 0 8px rgba(223, 186, 115, 0.25);
+  background: #16110c;
+}
+
+.filter-icon-sigil {
+  font-size: 0.85rem;
+  margin-right: 6px;
+  opacity: 0.85;
+  user-select: none;
+}
+
+.filter-search-field {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--ink-parchment);
+  font-family: var(--font-serif);
+  font-size: 0.88rem;
+  padding: 4px 0;
+  width: 175px;
+}
+
+.filter-search-field::placeholder {
+  color: #7d6f5d;
+  font-style: italic;
+  font-size: 0.82rem;
+}
+
+.filter-search-clear {
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.filter-search-clear:hover {
+  color: var(--gold-leaf);
+}
+
 /* Escala / Zoom */
 .zoom-controls {
   display: inline-flex;
@@ -419,10 +488,12 @@ body {
   width: 22px;
   height: 3px;
   border-radius: 1px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .line-blood {
-  background: var(--crimson-wax);
+  background: #c81e32;
 }
 
 .line-marriage {
@@ -433,12 +504,30 @@ body {
   background: repeating-linear-gradient(90deg, #294873 0, #294873 5px, #c5a059 5px, #c5a059 10px);
 }
 
-.ring-sample {
-  width: 13px;
-  height: 13px;
+.line-twin {
+  background: #a855f7;
+  height: 4px;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
+}
+
+.dot-sample {
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  border: 2px dashed #4872a8;
   display: inline-block;
+  vertical-align: middle;
+}
+
+.dot-blood {
+  background: #c81e32;
+  border: 2px solid #ff4d61;
+  box-shadow: 0 0 8px rgba(200, 30, 50, 0.85);
+}
+
+.dot-external {
+  background: #2563eb;
+  border: 2px solid #60a5fa;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.85);
 }
 
 .legend-tip {
@@ -533,7 +622,7 @@ body {
   justify-content: center;
   background: #14100c;
   /* Borda nobre em relevo metálico */
-  border: 3.5px solid var(--ring-color, #8b202e);
+  border: 4px solid var(--ring-color, #c81e32);
   box-shadow:
     0 8px 20px rgba(0, 0, 0, 0.8),
     inset 0 2px 4px rgba(255, 255, 255, 0.15),
@@ -544,8 +633,44 @@ body {
 .grape-sphere:hover {
   box-shadow:
     0 12px 26px rgba(0, 0, 0, 0.9),
-    0 0 12px rgba(197, 160, 89, 0.35);
+    0 0 16px var(--ring-color, #c81e32);
   transform: scale(1.03);
+}
+
+/* Bolinha Vermelha: Ligação de Sangue da Família */
+.grape-sphere.sphere-blood {
+  border-color: #c81e32;
+  box-shadow:
+    0 0 16px rgba(200, 30, 50, 0.55),
+    0 8px 20px rgba(0, 0, 0, 0.8),
+    inset 0 2px 4px rgba(255, 255, 255, 0.18),
+    inset 0 0 10px rgba(200, 30, 50, 0.35);
+}
+
+.grape-sphere.sphere-blood:hover {
+  border-color: #ff334b;
+  box-shadow:
+    0 0 24px rgba(255, 51, 75, 0.8),
+    0 12px 26px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(255, 51, 75, 0.5);
+}
+
+/* Bolinha Azul: Pessoa de Outra Família na Árvore */
+.grape-sphere.sphere-external {
+  border-color: #2563eb;
+  box-shadow:
+    0 0 16px rgba(37, 99, 235, 0.55),
+    0 8px 20px rgba(0, 0, 0, 0.8),
+    inset 0 2px 4px rgba(255, 255, 255, 0.18),
+    inset 0 0 10px rgba(37, 99, 235, 0.35);
+}
+
+.grape-sphere.sphere-external:hover {
+  border-color: #3b82f6;
+  box-shadow:
+    0 0 24px rgba(59, 130, 246, 0.8),
+    0 12px 26px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(59, 130, 246, 0.5);
 }
 
 /* Moldura Interna da Foto / Pintura Ancestral */
@@ -691,13 +816,7 @@ body {
 }
 
 .grape-dates {
-  font-family: var(--font-serif);
-  font-size: 0.86rem;
-  color: #c4b59d;
-  margin-top: 2px;
-  line-height: 1.2;
-  letter-spacing: 0.3px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.9);
+  display: none !important;
 }
 
 /* Selos Nobiliárquicos / Badges Discretos */

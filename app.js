@@ -23,7 +23,7 @@ class FantasyGenealogyApp {
 
   init() {
     this.syncHeaderAndBadges();
-    this.populateHouseFilterSelect();
+    this.populateFilterControls();
     this.renderTree();
     this.renderHousesAndSuccessionTab();
     this.renderGrimoire();
@@ -104,24 +104,105 @@ class FantasyGenealogyApp {
     this.renderTree();
   }
 
-  populateHouseFilterSelect() {
+  populateFilterControls() {
+    // 1. Datalist e Campo de Busca de Casa
+    const houseDatalist = document.getElementById("houseFilterDatalist");
+    if (houseDatalist) {
+      houseDatalist.innerHTML = this.engine.data.houses
+        .map(h => `<option value="${this.escapeHtml(h.name)}"></option>`)
+        .join("");
+    }
+    const houseInput = document.getElementById("houseFilterInput");
+    if (houseInput) {
+      const currentHouseVal = this.engine.data.meta.selectedHouseFilter || "all";
+      if (currentHouseVal === "all") {
+        houseInput.value = "";
+      } else {
+        const foundH = this.engine.getHouse(currentHouseVal);
+        houseInput.value = foundH ? foundH.name : currentHouseVal;
+      }
+    }
+
+    // 2. Datalist e Campo de Busca de Raça
+    const raceDatalist = document.getElementById("raceFilterDatalist");
+    if (raceDatalist) {
+      const races = this.engine.getRaces();
+      raceDatalist.innerHTML = races
+        .map(r => `<option value="${this.escapeHtml(r)}"></option>`)
+        .join("");
+    }
+    const raceInput = document.getElementById("raceFilterInput");
+    if (raceInput) {
+      const currentRaceVal = this.engine.data.meta.selectedRaceFilter || "all";
+      raceInput.value = currentRaceVal === "all" ? "" : currentRaceVal;
+    }
+
+    // 3. Suporte para select legado de Casas (se presente no DOM)
     const sel = document.getElementById("houseFilterSelect");
-    if (!sel) return;
-    const currentVal = this.engine.data.meta.selectedHouseFilter || "all";
-    sel.innerHTML = `<option value="all">Todas as Casas e Linhagens</option>`;
-    this.engine.data.houses.forEach(h => {
-      const opt = document.createElement("option");
-      opt.value = h.id;
-      opt.textContent = `${h.name}${h.allowAvuncularMarriage ? " (Tradição Avuncular)" : ""}`;
-      sel.appendChild(opt);
-    });
-    sel.value = currentVal;
+    if (sel) {
+      const currentVal = this.engine.data.meta.selectedHouseFilter || "all";
+      sel.innerHTML = `<option value="all">Todas as Casas e Linhagens</option>`;
+      this.engine.data.houses.forEach(h => {
+        const opt = document.createElement("option");
+        opt.value = h.id;
+        opt.textContent = `${h.name}${h.allowAvuncularMarriage ? " (Tradição Avuncular)" : ""}`;
+        sel.appendChild(opt);
+      });
+      sel.value = currentVal;
+    }
+  }
+
+  populateHouseFilterSelect() {
+    this.populateFilterControls();
+  }
+
+  onHouseFilterInput(val) {
+    const clean = (val || "").trim();
+    this.engine.data.meta.selectedHouseFilter = clean ? clean : "all";
+    this.engine.saveToStorage();
+    this.renderTree();
+  }
+
+  clearHouseFilter() {
+    const input = document.getElementById("houseFilterInput");
+    if (input) input.value = "";
+    this.onHouseFilterInput("");
   }
 
   setHouseFilter(houseId) {
-    this.engine.data.meta.selectedHouseFilter = houseId;
+    this.onHouseFilterInput(houseId);
+    this.populateFilterControls();
+  }
+
+  onRaceFilterInput(val) {
+    const clean = (val || "").trim();
+    this.engine.data.meta.selectedRaceFilter = clean ? clean : "all";
     this.engine.saveToStorage();
     this.renderTree();
+  }
+
+  clearRaceFilter() {
+    const input = document.getElementById("raceFilterInput");
+    if (input) input.value = "";
+    this.onRaceFilterInput("");
+  }
+
+  setRaceFilter(race) {
+    this.onRaceFilterInput(race);
+    this.populateFilterControls();
+  }
+
+  promptNewRace() {
+    const race = prompt("Digite o nome da nova Raça / Espécie que deseja incluir no Códice:");
+    if (race && race.trim()) {
+      const trimmed = race.trim();
+      const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+      this.engine.addRace(capitalized);
+      this.populateFilterControls();
+      const raceInput = document.getElementById("raceFilterInput");
+      if (raceInput) raceInput.value = capitalized;
+      this.onRaceFilterInput(capitalized);
+    }
   }
 
   adjustZoom(delta) {
@@ -146,14 +227,53 @@ class FantasyGenealogyApp {
   // --------------------------------------------------------------------------
   computeGrapeClusterLayout() {
     const d = this.engine.data;
-    const filterHouseId = d.meta.selectedHouseFilter || "all";
+    const rawHouseFilter = (d.meta.selectedHouseFilter || "all").trim();
+    const rawRaceFilter = (d.meta.selectedRaceFilter || "all").trim();
 
-    // Filtra personagens visíveis
+    const normalizeText = str =>
+      (str || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const normHouseFilter = normalizeText(rawHouseFilter);
+    const normRaceFilter = normalizeText(rawRaceFilter);
+
+    // Identifica Casas correspondentes à busca digitada (por ID, Nome ou Brasão)
+    let matchingHouseIds = null;
+    if (normHouseFilter && normHouseFilter !== "all") {
+      matchingHouseIds = new Set();
+      d.houses.forEach(h => {
+        const normHId = normalizeText(h.id);
+        const normHName = normalizeText(h.name);
+        const normSigil = normalizeText(h.sigilTitle);
+        if (
+          normHId === normHouseFilter ||
+          normHName.includes(normHouseFilter) ||
+          normSigil.includes(normHouseFilter)
+        ) {
+          matchingHouseIds.add(h.id);
+        }
+      });
+      // Permite também casar ID exato direto se fornecido
+      matchingHouseIds.add(rawHouseFilter);
+    }
+
+    // Filtra personagens visíveis por Casa e Raça
     let chars = d.characters.slice();
-    if (filterHouseId !== "all") {
+    if (matchingHouseIds !== null) {
       chars = chars.filter(
-        c => c.officialHouseId === filterHouseId || c.birthHouseId === filterHouseId
+        c => (c.officialHouseId && matchingHouseIds.has(c.officialHouseId)) ||
+             (c.birthHouseId && matchingHouseIds.has(c.birthHouseId))
       );
+    }
+
+    if (normRaceFilter && normRaceFilter !== "all") {
+      chars = chars.filter(c => {
+        const cRace = normalizeText(c.race || c.creatureType || "humano");
+        return cRace.includes(normRaceFilter);
+      });
     }
 
     const charIds = new Set(chars.map(c => c.id));
@@ -201,6 +321,10 @@ class FantasyGenealogyApp {
 
     // Agrupa por Cacho / Casa Feudal Principal
     const getClusterHouseId = c => {
+      if (matchingHouseIds !== null) {
+        if (c.birthHouseId && matchingHouseIds.has(c.birthHouseId)) return c.birthHouseId;
+        if (c.officialHouseId && matchingHouseIds.has(c.officialHouseId)) return c.officialHouseId;
+      }
       if (c.spouseIds && c.spouseIds.length > 0) {
         for (const spId of c.spouseIds) {
           const sp = this.engine.getCharacter(spId);
@@ -292,7 +416,8 @@ class FantasyGenealogyApp {
           positions[c.id] = {
             x: startX + idx * NODE_SPACING_X,
             y: TOP_MARGIN_Y + g * GEN_SPACING_Y + grapeArcOffsetY,
-            generation: g
+            generation: g,
+            clusterHouseId: houseId
           };
         });
       });
@@ -316,6 +441,21 @@ class FantasyGenealogyApp {
     const { chars, positions, clusterHeaders, totalWidth, totalHeight } =
       this.computeGrapeClusterLayout();
 
+    if (chars.length === 0) {
+      svg.innerHTML = "";
+      nodesContainer.innerHTML = `
+        <div style="position:absolute; left:50%; top:220px; transform:translateX(-50%); text-align:center; color:var(--ink-secondary); font-family:var(--font-serif); font-size:1.05rem; max-width:500px; padding:28px; background:rgba(20,16,12,0.92); border:1px solid var(--border-brass); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,0.8);">
+          <div style="font-size:2rem; margin-bottom:10px;">📜</div>
+          <h3 style="font-family:var(--font-display); color:var(--gold-leaf); margin-bottom:8px; font-size:1.15rem;">Nenhum Assento Encontrado</h3>
+          <p style="color:var(--ink-dim); font-size:0.92rem; line-height:1.5;">Nenhum membro atende simultaneamente aos filtros de Casa e Raça selecionados.</p>
+          <div style="margin-top:16px;">
+            <button class="btn btn-sm btn-gold" onclick="app.clearHouseFilter(); app.clearRaceFilter();">Restaurar Todas as Linhagens</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     stage.style.width = `${totalWidth}px`;
     stage.style.height = `${totalHeight}px`;
     svg.setAttribute("viewBox", `0 0 ${totalWidth} ${totalHeight}`);
@@ -327,6 +467,9 @@ class FantasyGenealogyApp {
       <defs>
         <filter id="shadowMedieval" x="-10%" y="-10%" width="120%" height="120%">
           <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
+        </filter>
+        <filter id="glowPurple" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#a855f7" flood-opacity="0.85"/>
         </filter>
       </defs>
     `;
@@ -405,7 +548,7 @@ class FantasyGenealogyApp {
 
         svgHtml += `
           <path d="M ${originX} ${originY} C ${originX} ${ctrlY1}, ${childPos.x} ${ctrlY2}, ${childPos.x} ${childTopY}"
-                fill="none" stroke="#8b202e" stroke-width="2.6"
+                fill="none" stroke="#c81e32" stroke-width="2.6"
                 ${child.isBastard ? 'stroke-dasharray="5 4"' : ""}
                 filter="url(#shadowMedieval)" />
         `;
@@ -417,13 +560,13 @@ class FantasyGenealogyApp {
 
         svgHtml += `
           <path d="M ${originX} ${originY} C ${originX} ${ctrlY}, ${childPos.x} ${ctrlY}, ${childPos.x} ${childTopY}"
-                fill="none" stroke="#8b202e" stroke-width="2.6"
+                fill="none" stroke="#c81e32" stroke-width="2.6"
                 ${child.isBastard ? 'stroke-dasharray="5 4"' : ""}
                 filter="url(#shadowMedieval)" />
         `;
       }
 
-      // Laço Carmesim de Gêmeos
+      // Traço Púrpura/Roxo de Gêmeos (Fácil Visualização)
       if (child.twinOfId && positions[child.twinOfId]) {
         const twinKey = [child.id, child.twinOfId].sort().join("__");
         if (!drawnTwins.has(twinKey)) {
@@ -432,10 +575,10 @@ class FantasyGenealogyApp {
           const midX = (childPos.x + tPos.x) / 2;
           const topY = Math.min(childPos.y, tPos.y) + 12;
           svgHtml += `
-            <path d="M ${childPos.x} ${childPos.y + 18} Q ${midX} ${topY - 22} ${tPos.x} ${tPos.y + 18}"
-                  fill="none" stroke="#8b202e" stroke-width="2" stroke-dasharray="3 3" />
-            <rect x="${midX - 30}" y="${topY - 23}" width="60" height="15" rx="2" fill="#241a15" stroke="#8b202e" />
-            <text x="${midX}" y="${topY - 12}" fill="#dfba73" font-family="Cinzel, serif" font-size="8.5" font-weight="700" text-anchor="middle">Gêmeos</text>
+            <path d="M ${childPos.x} ${childPos.y + 16} Q ${midX} ${topY - 26} ${tPos.x} ${tPos.y + 16}"
+                  fill="none" stroke="#a855f7" stroke-width="3.2" filter="url(#glowPurple)" />
+            <rect x="${midX - 34}" y="${topY - 26}" width="68" height="17" rx="3" fill="#1b0e26" stroke="#a855f7" stroke-width="1.5" />
+            <text x="${midX}" y="${topY - 14}" fill="#f3e8ff" font-family="Cinzel, serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="0.5">GÊMEOS</text>
           `;
         }
       }
@@ -443,6 +586,7 @@ class FantasyGenealogyApp {
       // Conexão Fraterna Sutil entre Irmãos
       const siblings = this.engine.getSiblings(child);
       siblings.forEach(sib => {
+        if (child.twinOfId === sib.id) return;
         const sibPos = positions[sib.id];
         if (!sibPos) return;
         const sibKey = ["sib", ...[child.id, sib.id].sort()].join("__");
@@ -456,7 +600,7 @@ class FantasyGenealogyApp {
 
         svgHtml += `
           <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
-                fill="none" stroke="#8b202e" stroke-width="1.4" opacity="0.45" />
+                fill="none" stroke="#c81e32" stroke-width="1.4" opacity="0.45" />
         `;
       });
     });
@@ -483,26 +627,20 @@ class FantasyGenealogyApp {
       const pos = positions[c.id];
       if (!pos) return;
 
-      const birthHouse = this.engine.getHouse(c.birthHouseId);
-      const officialHouse = this.engine.getHouse(c.officialHouseId);
-      const territory = this.engine.getTerritory(c.livedInTerritoryId);
+      const clusterHouseId = pos.clusterHouseId;
+      // Ligação de sangue da família:
+      // Se a pessoa nasceu nesta família (birthHouseId === clusterHouseId), é de sangue (bolinha vermelha).
+      // Se for de outra família que aparece nesta árvore, é bolinha azul.
+      const isBloodOfCurrentFamily = Boolean(
+        (c.birthHouseId && c.birthHouseId === clusterHouseId) ||
+        (!c.birthHouseId && c.officialHouseId === clusterHouseId)
+      );
 
-      let ringColor = "#8b202e";
-      let modeSubLabel = "";
-
-      if (colorMode === "linhagem") {
-        ringColor = (birthHouse && birthHouse.color) || "#8b202e";
-        modeSubLabel = `${birthHouse ? birthHouse.name : "Linhagem Antiga"}`;
-      } else {
-        ringColor = (territory && territory.color) || (officialHouse && officialHouse.color) || "#294873";
-        modeSubLabel = `${territory ? territory.name : (officialHouse ? officialHouse.name : "Sem Feudo Fixo")}`;
-      }
-
-      const isAssimilatedWife =
-        c.gender === "F" && c.birthHouseId && c.officialHouseId && c.birthHouseId !== c.officialHouseId;
-
-      const birthStr = c.birthYear ? `* ${c.birthYear}` : "* ?";
-      const deathStr = c.isAlive ? "Vivo" : `† ${c.deathYear || "?"}`;
+      const sphereClass = isBloodOfCurrentFamily ? "sphere-blood" : "sphere-external";
+      const ringColor = isBloodOfCurrentFamily ? "#dc2626" : "#2563eb";
+      const sphereTooltip = isBloodOfCurrentFamily
+        ? "Membro de Sangue da Família"
+        : "Membro de Outra Família (Origem Externa)";
 
       if (c.isPlaceholderEmpty) {
         nodesHtml += `
@@ -521,21 +659,18 @@ class FantasyGenealogyApp {
       }
 
       const portraitSrc = this.getCharacterPortraitSrc(c);
+      const displayName = this.engine.cleanCharacterName ? this.engine.cleanCharacterName(c.name) : c.name;
 
       nodesHtml += `
         <div class="grape-node-wrapper" style="left:${pos.x}px; top:${pos.y}px;">
-          <div class="grape-sphere ${isAssimilatedWife ? "assimilated-wife" : ""}"
-               style="--ring-color:${ringColor}; --origin-house-color:${birthHouse ? birthHouse.color : "#294873"};">
+          <div class="grape-sphere ${sphereClass}"
+               style="--ring-color:${ringColor};"
+               title="${sphereTooltip}">
 
-            <!-- CAMAFEU HERÁLDICO COM RETRATO REAL (SEM NOME NO INTERIOR DO CÍRCULO) -->
+            <!-- CAMAFEU HERÁLDICO COM RETRATO (SEM NOME NO INTERIOR DO CÍRCULO) -->
             <div class="sphere-portrait-clip" onclick="app.openProfileModal('${c.id}')" title="Inspecionar códice e registros">
               <img class="sphere-portrait-img" src="${portraitSrc}" alt="" />
             </div>
-
-            <!-- BOTÃO DISCRETO DE PERFIL -->
-            <button class="sphere-info-btn" onclick="app.openProfileModal('${c.id}')" title="Ver História, Aparência, Causa de Morte e Feudos">
-              Perfil
-            </button>
 
             <!-- Ações Rápidas Nobiliárquicas no Hover -->
             <div class="sphere-quick-actions">
@@ -547,10 +682,9 @@ class FantasyGenealogyApp {
             </div>
           </div>
 
-          <!-- IDENTIFICAÇÃO GENEALÓGICA INFERIOR: SOMENTE NOME & DATAS (SEM CAIXA) -->
+          <!-- IDENTIFICAÇÃO GENEALÓGICA INFERIOR: SOMENTE NOME E SOBRENOME (SEM DATAS NEM CARGO) -->
           <div class="grape-caption" onclick="app.openProfileModal('${c.id}')" title="Inspecionar registro">
-            <div class="grape-name">${this.escapeHtml(c.name)}</div>
-            <div class="grape-dates">${birthStr} &bull; ${deathStr}</div>
+            <div class="grape-name">${this.escapeHtml(displayName)}</div>
           </div>
         </div>
       `;
@@ -585,23 +719,6 @@ class FantasyGenealogyApp {
     }
 
     let headgearSvg = "";
-    if (rank === "rei") {
-      headgearSvg = `
-        <polygon points="30,31 35,14 43,24 50,11 57,24 65,14 70,31" fill="#c5a059" stroke="#5c441c" stroke-width="1.2"/>
-        <circle cx="50" cy="16" r="2.2" fill="#8b202e"/>
-        <circle cx="37" cy="20" r="1.6" fill="#294873"/>
-        <circle cx="63" cy="20" r="1.6" fill="#294873"/>
-      `;
-    } else if (rank === "principe" || rank === "lorde") {
-      headgearSvg = `
-        <path d="M 33 30 Q 50 22 67 30 L 65 33 Q 50 26 35 33 Z" fill="#c5a059" stroke="#694d1f" stroke-width="1"/>
-        <circle cx="50" cy="26" r="2" fill="${robeColor}"/>
-      `;
-    } else if (rank === "guarda") {
-      headgearSvg = `
-        <path d="M 32 35 Q 50 18 68 35 Z" fill="#4d4740" stroke="#756d61" stroke-width="1.2"/>
-      `;
-    }
 
     const hairBackSvg = isFemale
       ? `<path d="M 27 42 Q 22 75 29 95 L 71 95 Q 78 75 73 42 Q 50 20 27 42 Z" fill="${hairColor}"/>`
@@ -758,7 +875,7 @@ class FantasyGenealogyApp {
           </div>
           <div style="flex:1;">
             <div style="font-family:var(--font-display); font-size:1.05rem; font-weight:700; color:var(--gold-leaf); text-transform:uppercase;">${this.escapeHtml(c.name)}</div>
-            <div style="font-size:0.88rem; color:var(--ink-secondary); font-style:italic;">${this.escapeHtml(c.royalBranchStatus || "Membro da Linhagem")}</div>
+            <div style="font-size:0.88rem; color:var(--ink-secondary); font-style:italic;">${this.escapeHtml(c.royalBranchStatus || "Membro da Linhagem")} &bull; <strong>Raça:</strong> ${this.escapeHtml(c.race || "Humano")}</div>
             <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
               <button class="btn btn-sm btn-gold" onclick="app.triggerQuickPhotoUpload('${c.id}')">Substituir Retrato</button>
               ${
@@ -791,6 +908,7 @@ class FantasyGenealogyApp {
           <div class="card-box">
             <h2>Assento Feudal & Casas</h2>
             <p style="font-size:0.92rem; line-height:1.6;">
+              <strong>Raça / Espécie:</strong> <span style="color:var(--gold-leaf); font-weight:700;">${this.escapeHtml(c.race || "Humano")}</span><br/>
               <strong>Feudo de Residência:</strong>
               ${
                 territory
@@ -948,7 +1066,8 @@ class FantasyGenealogyApp {
           deathYear: prefill.deathYear || "",
           isAlive: prefill.isAlive !== undefined ? prefill.isAlive : true,
           socialRank: prefill.socialRank || "principe",
-          creatureType: "humano",
+          race: prefill.race || "Humano",
+          creatureType: prefill.creatureType || (prefill.race ? prefill.race.toLowerCase() : "humano"),
           birthHouseId: prefill.birthHouseId || (this.engine.data.houses[0] && this.engine.data.houses[0].id) || "",
           officialHouseId: prefill.officialHouseId || prefill.birthHouseId || (this.engine.data.houses[0] && this.engine.data.houses[0].id) || "",
           livedInTerritoryId: prefill.livedInTerritoryId || (this.engine.data.territories[0] && this.engine.data.territories[0].id) || "",
@@ -1000,6 +1119,8 @@ class FantasyGenealogyApp {
       )
       .join("");
 
+    const charRace = c.race || (c.creatureType ? (c.creatureType.charAt(0).toUpperCase() + c.creatureType.slice(1)) : "Humano");
+
     const bodyHtml = `
       <div id="charInconsistencyBox" style="display:none;"></div>
       <div id="charSmartBastardNotice" style="display:none;"></div>
@@ -1008,7 +1129,7 @@ class FantasyGenealogyApp {
       <div class="form-row">
         <div class="form-group">
           <label>Nome Completo do Personagem:</label>
-          <input type="text" id="cf_name" value="${this.escapeHtml(c.name)}" placeholder="Ex: Príncipe Aegon Valmont" />
+          <input type="text" id="cf_name" value="${this.escapeHtml(c.name)}" placeholder="Ex: Aegon Valmont" />
         </div>
         <div class="form-group">
           <label>Gênero & Condição Social:</label>
@@ -1076,14 +1197,20 @@ class FantasyGenealogyApp {
           <select id="cf_territoryId">${territoriesOpts}</select>
         </div>
         <div class="form-group">
-          <label>Natureza do Personagem:</label>
-          <select id="cf_creatureType" onchange="app.checkFormBastardAndTwinHints()">
-            <option value="humano" ${c.creatureType === "humano" ? "selected" : ""}>Mortal / Humano (Padrão Genealógico)</option>
-            <option value="bruxo" ${c.creatureType === "bruxo" ? "selected" : ""}>Feiticeiro / Mago (Gera Notificação de Inconsistência)</option>
-            <option value="elfo" ${c.creatureType === "elfo" ? "selected" : ""}>Elfo (Gera Notificação de Inconsistência)</option>
-            <option value="sereia" ${c.creatureType === "sereia" ? "selected" : ""}>Povo do Mar / Sereia (Gera Notificação de Inconsistência)</option>
-            <option value="cacador" ${c.creatureType === "cacador" ? "selected" : ""}>Caçador Mítico (Gera Notificação de Inconsistência)</option>
-          </select>
+          <label>Raça / Espécie (Digite ou Selecione):</label>
+          <input
+            type="text"
+            id="cf_race"
+            list="cf_raceList"
+            value="${this.escapeHtml(charRace)}"
+            placeholder="Ex: Humano, Elfo, Draconiano..."
+            autocomplete="off"
+            class="input-medieval"
+            style="width:100%;"
+          />
+          <datalist id="cf_raceList">
+            ${this.engine.getRaces().map(r => `<option value="${this.escapeHtml(r)}"></option>`).join("")}
+          </datalist>
         </div>
       </div>
 
@@ -1235,7 +1362,8 @@ class FantasyGenealogyApp {
   }
 
   saveCharacterFromModal(editCharId = "") {
-    const name = document.getElementById("cf_name").value.trim() || "Membro sem Nome";
+    const rawName = document.getElementById("cf_name").value.trim() || "Membro sem Nome";
+    const name = this.engine.cleanCharacterName(rawName) || rawName;
     const gender = document.getElementById("cf_gender").value;
     const socialRank = document.getElementById("cf_rank").value;
     const birthYear = Number(document.getElementById("cf_birthYear").value) || null;
@@ -1246,7 +1374,10 @@ class FantasyGenealogyApp {
     let birthHouseId = document.getElementById("cf_birthHouseId").value;
     let officialHouseId = document.getElementById("cf_officialHouseId").value;
     const livedInTerritoryId = document.getElementById("cf_territoryId").value || null;
-    const creatureType = document.getElementById("cf_creatureType").value;
+    const rawRace = document.getElementById("cf_race")?.value.trim() || "Humano";
+    const race = rawRace ? (rawRace.charAt(0).toUpperCase() + rawRace.slice(1)) : "Humano";
+    this.engine.addRace(race);
+    const creatureType = race.toLowerCase();
     const twinOfId = document.getElementById("cf_twinOfId").value || null;
     const isBastard = document.getElementById("cf_isBastard").checked;
     const bastardLegitimizedByAuthor = document.getElementById("cf_bastardException").checked;
@@ -1269,6 +1400,8 @@ class FantasyGenealogyApp {
       name,
       gender,
       socialRank,
+      race,
+      creatureType,
       birthYear,
       deathYear,
       isAlive,
@@ -1277,7 +1410,6 @@ class FantasyGenealogyApp {
       birthHouseId,
       officialHouseId,
       livedInTerritoryId,
-      creatureType,
       twinOfId,
       isBastard,
       bastardLegitimizedByAuthor,
@@ -1384,6 +1516,7 @@ class FantasyGenealogyApp {
     );
 
     this.closeModal();
+    this.populateFilterControls();
     this.syncHeaderAndBadges();
     this.renderTree();
   }
@@ -1402,6 +1535,7 @@ class FantasyGenealogyApp {
       birthHouseId: parent.officialHouseId || parent.birthHouseId,
       officialHouseId: parent.officialHouseId || parent.birthHouseId,
       livedInTerritoryId: parent.livedInTerritoryId,
+      race: parent.race || "Humano",
       socialRank: parent.socialRank === "rei" ? "principe" : parent.socialRank
     });
   }
@@ -1513,6 +1647,8 @@ class FantasyGenealogyApp {
 
   confirmRetroactiveSibling() {
     const refId = document.getElementById("retro_refSiblingId").value;
+    const refChar = this.engine.getCharacter(refId);
+    const refRace = (refChar && refChar.race) || "Humano";
     const name = document.getElementById("retro_name").value.trim() || "Novo Irmão";
     const gender = document.getElementById("retro_gender").value;
     const bYear = Number(document.getElementById("retro_birthYear").value) || 1200;
@@ -1535,7 +1671,8 @@ class FantasyGenealogyApp {
       deathYear: dYear,
       isAlive: !dYear,
       socialRank: proposal.socialRank,
-      creatureType: "humano",
+      race: refRace,
+      creatureType: refRace.toLowerCase(),
       birthHouseId: proposal.birthHouseId,
       officialHouseId: proposal.officialHouseId,
       livedInTerritoryId: proposal.livedInTerritoryId,
@@ -1576,7 +1713,8 @@ class FantasyGenealogyApp {
         deathYear: null,
         isAlive: true,
         socialRank: proposal.socialRank,
-        creatureType: "humano",
+        race: refRace,
+        creatureType: refRace.toLowerCase(),
         birthHouseId: proposal.birthHouseId,
         officialHouseId: proposal.officialHouseId,
         livedInTerritoryId: proposal.livedInTerritoryId,
@@ -1610,6 +1748,7 @@ class FantasyGenealogyApp {
     );
 
     this.closeModal();
+    this.populateFilterControls();
     this.syncHeaderAndBadges();
     this.renderTree();
   }
