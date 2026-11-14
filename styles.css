@@ -1,0 +1,1137 @@
+/* ============================================================================
+   STYLES.CSS - Estética de Crônica Medieval & Códice Antigo
+   Tipografia: Cinzel (Títulos e Selos) & EB Garamond (Textos e Anais)
+   ============================================================================ */
+
+:root {
+  /* Paleta de Pergaminho Antigo, Couro e Ouro Envelhecido */
+  --bg-desk: #120f0c;
+  --bg-parchment-deep: #181410;
+  --bg-parchment-card: #201a14;
+  --bg-parchment-hover: #29221b;
+  --bg-parchment-inset: #15110d;
+
+  --border-gold-subtle: rgba(197, 160, 89, 0.28);
+  --border-gold-bright: #c5a059;
+  --border-brass: #6e5737;
+  --border-dark: rgba(0, 0, 0, 0.55);
+
+  --gold-leaf: #dfba73;
+  --gold-antique: #c5a059;
+  --gold-muted: #9c7f4e;
+
+  --crimson-wax: #8b202e;
+  --crimson-light: #ba3849;
+  --azure-tome: #294873;
+  --azure-light: #4872a8;
+
+  --ink-parchment: #ece3d2;
+  --ink-secondary: #c9bea7;
+  --ink-dim: #948671;
+
+  --font-display: "Cinzel", "Cinzel Decorative", Georgia, serif;
+  --font-serif: "EB Garamond", Garamond, Georgia, serif;
+
+  --shadow-medieval: 0 8px 24px rgba(0, 0, 0, 0.65);
+  --shadow-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 50% 0%, #241c15 0%, #120f0c 75%),
+    #120f0c;
+  color: var(--ink-parchment);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  background-attachment: fixed;
+}
+
+/* --------------------------------------------------------------------------
+   CABEÇALHO MEDIEVAL & NAVEGAÇÃO DE CAPÍTULOS
+   -------------------------------------------------------------------------- */
+.top-header {
+  background: linear-gradient(180deg, #1c1611 0%, #15110d 100%);
+  border-bottom: 2px solid var(--border-gold-subtle);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.brand-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-sigil {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-gold-bright);
+  background: radial-gradient(circle, #38281b 0%, #18120d 80%);
+  color: var(--gold-leaf);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-bevel);
+  flex-shrink: 0;
+}
+
+.sigil-svg {
+  width: 24px;
+  height: 24px;
+}
+
+.brand-title h1 {
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.brand-title p {
+  font-family: var(--font-serif);
+  font-size: 0.84rem;
+  color: var(--ink-dim);
+  font-style: italic;
+  letter-spacing: 0.3px;
+}
+
+/* Guias do Códice */
+.main-nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.nav-tab {
+  background: #19140f;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-secondary);
+  padding: 8px 14px;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-tab:hover {
+  background: #271f17;
+  color: var(--gold-leaf);
+  border-color: var(--border-gold-bright);
+}
+
+.nav-tab.active {
+  background: linear-gradient(180deg, #3d2a1b 0%, #251a11 100%);
+  color: var(--gold-leaf);
+  border-color: var(--border-gold-bright);
+  box-shadow: inset 0 1px 0 rgba(223, 186, 115, 0.3), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.nav-badge {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-brass);
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
+  color: var(--gold-antique);
+}
+
+/* Controles de Cabeçalho */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.year-box {
+  background: #19130e;
+  border: 1px solid var(--border-gold-subtle);
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  color: var(--gold-antique);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.5px;
+}
+
+.year-box input {
+  width: 64px;
+  background: #0f0c09;
+  border: 1px solid var(--border-brass);
+  color: var(--gold-leaf);
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.header-btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+/* --------------------------------------------------------------------------
+   BOTÕES & COMPONENTES NOBILIÁRQUICOS
+   -------------------------------------------------------------------------- */
+.btn {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 7px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.btn-medieval {
+  background: #241c15;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-secondary);
+}
+
+.btn-medieval:hover {
+  background: #31261d;
+  color: var(--gold-leaf);
+  border-color: var(--border-gold-bright);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #7a1d29 0%, #57141d 100%);
+  border: 1px solid #993240;
+  color: #faeed9;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(180deg, #912432 0%, #6b1824 100%);
+  border-color: #ba4757;
+  color: #fff;
+}
+
+.btn-gold {
+  background: linear-gradient(180deg, #8a6526 0%, #634718 100%);
+  border: 1px solid #b3883a;
+  color: #fff6e0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.btn-gold:hover {
+  background: linear-gradient(180deg, #9e752f 0%, #75551f 100%);
+  border-color: #d1a34d;
+}
+
+.btn-danger {
+  background: #3a1518;
+  border: 1px solid #70262b;
+  color: #e5a4a9;
+}
+
+.btn-danger:hover {
+  background: #541c21;
+  border-color: #8c3239;
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+}
+
+/* --------------------------------------------------------------------------
+   BARRA DE INSTRUMENTOS & ORDENAÇÃO DO CÓDICE
+   -------------------------------------------------------------------------- */
+.tab-panel {
+  display: none;
+  flex: 1;
+  padding: 16px 22px;
+}
+
+.tab-panel.active {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tree-toolbar {
+  background: linear-gradient(180deg, #221b14 0%, #19140f 100%);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  box-shadow: var(--shadow-medieval);
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbar-section-label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--gold-muted);
+  text-transform: uppercase;
+}
+
+/* Seletor de Modo: Linhagem de Sangue vs Feudo */
+.mode-toggle-box {
+  display: inline-flex;
+  background: #110e0a;
+  border: 1px solid var(--border-brass);
+  border-radius: 3px;
+  padding: 2px;
+}
+
+.mode-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.mode-toggle-btn.active {
+  background: linear-gradient(180deg, #3d2c1d 0%, #291d12 100%);
+  color: var(--gold-leaf);
+  border: 1px solid var(--border-gold-subtle);
+}
+
+.select-medieval,
+.input-medieval {
+  background: #120e0a;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-parchment);
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  padding: 5px 10px;
+  border-radius: 3px;
+}
+
+.select-medieval:focus,
+.input-medieval:focus {
+  outline: none;
+  border-color: var(--border-gold-bright);
+}
+
+/* Escala / Zoom */
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zoom-readout {
+  font-family: var(--font-serif);
+  font-size: 0.82rem;
+  color: var(--gold-antique);
+  min-width: 42px;
+  text-align: center;
+}
+
+/* Faixa de Legenda */
+.tree-legend {
+  background: #1a140e;
+  border: 1px solid var(--border-gold-subtle);
+  border-left: 3px solid var(--border-gold-bright);
+  padding: 8px 14px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.legend-items {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-secondary);
+}
+
+.line-sample {
+  width: 22px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+.line-blood {
+  background: var(--crimson-wax);
+}
+
+.line-marriage {
+  background: var(--azure-tome);
+}
+
+.line-avuncular {
+  background: repeating-linear-gradient(90deg, #294873 0, #294873 5px, #c5a059 5px, #c5a059 10px);
+}
+
+.ring-sample {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px dashed #4872a8;
+  display: inline-block;
+}
+
+.legend-tip {
+  font-style: italic;
+  color: var(--gold-muted);
+  font-size: 0.82rem;
+}
+
+/* --------------------------------------------------------------------------
+   PERGAMINHO ANCESTRAL (CANVAS DA ÁRVORE)
+   -------------------------------------------------------------------------- */
+.grape-tree-viewport {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 245px);
+  min-height: 520px;
+  background:
+    radial-gradient(ellipse at 50% 30%, #201a14 0%, #15110d 65%, #0e0b08 100%);
+  border: 2px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  overflow: auto;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.85);
+}
+
+.grape-tree-stage {
+  position: relative;
+  min-width: 1550px;
+  min-height: 980px;
+  padding: 40px 60px 100px 60px;
+  transform-origin: 0 0;
+  transition: transform 0.15s ease-out;
+}
+
+.tree-connections-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Ramo Heráldico Superior (Tronco da Linhagem) */
+.cluster-header-vine {
+  position: absolute;
+  z-index: 3;
+  background: linear-gradient(180deg, #2a2016 0%, #1a130d 100%);
+  border: 1px solid var(--border-gold-bright);
+  border-radius: 2px;
+  padding: 5px 16px;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold-leaf);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+
+/* --------------------------------------------------------------------------
+   MEDALHÕES HERÁLDICOS (ESFERAS COM FOTO, SEM NOME DENTRO)
+   -------------------------------------------------------------------------- */
+.grape-node-wrapper {
+  position: absolute;
+  width: 154px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 5;
+  transform: translate(-50%, 0);
+  transition: transform 0.18s ease;
+}
+
+.grape-node-wrapper:hover {
+  z-index: 20;
+  transform: translate(-50%, -3px);
+}
+
+/* Aro Metálico / Camafeu Antigo */
+.grape-sphere {
+  width: 106px;
+  height: 106px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #14100c;
+  /* Borda nobre em relevo metálico */
+  border: 3.5px solid var(--ring-color, #8b202e);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.8),
+    inset 0 2px 4px rgba(255, 255, 255, 0.15),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.85);
+  transition: all 0.2s ease;
+}
+
+.grape-sphere:hover {
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(197, 160, 89, 0.35);
+  transform: scale(1.03);
+}
+
+/* Moldura Interna da Foto / Pintura Ancestral */
+.sphere-portrait-clip {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 35%, #2a2118, #110d09);
+  cursor: pointer;
+}
+
+.sphere-portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: sepia(0.18) contrast(1.06);
+  transition: transform 0.25s ease;
+}
+
+.grape-sphere:hover .sphere-portrait-img {
+  transform: scale(1.06);
+}
+
+/* Aro Duplo para Casamento Nobre com Assimilação */
+.grape-sphere.assimilated-wife {
+  outline: 2.5px dashed var(--origin-house-color, #4872a8);
+  outline-offset: 3.5px;
+}
+
+/* Espaço Vazio Reservado na Linhagem */
+.grape-sphere.empty-placeholder {
+  background: #16120e;
+  border: 2px dashed #6b5c49;
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.8);
+}
+
+/* Plaqueta "Perfil" na Borda Inferior do Medalhão */
+.sphere-info-btn {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1c150e;
+  border: 1px solid var(--border-gold-bright);
+  color: var(--gold-leaf);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  z-index: 8;
+  white-space: nowrap;
+}
+
+.sphere-info-btn:hover {
+  background: var(--gold-antique);
+  color: #120e0a;
+}
+
+/* Ações Rápidas no Hover (Menu Nobiliárquico) */
+.sphere-quick-actions {
+  position: absolute;
+  top: -24px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 25;
+  background: #18120c;
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--border-gold-subtle);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.85);
+}
+
+.grape-node-wrapper:hover .sphere-quick-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.quick-dot-btn {
+  background: #241c14;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-secondary);
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.quick-dot-btn:hover {
+  background: var(--gold-antique);
+  color: #120e0a;
+}
+
+.quick-dot-btn.danger:hover {
+  background: #7a1d29;
+  color: #fff;
+}
+
+/* Plaqueta Genealógica Embaixo do Medalhão */
+.grape-caption {
+  margin-top: 10px;
+  background: linear-gradient(180deg, #221b14 0%, #18130e 100%);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 3px;
+  padding: 5px 8px;
+  width: 148px;
+  text-align: center;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
+}
+
+.grape-name {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--gold-leaf);
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.grape-dates {
+  font-family: var(--font-serif);
+  font-size: 0.82rem;
+  color: var(--ink-secondary);
+  margin-top: 1px;
+}
+
+.grape-house-sub {
+  font-family: var(--font-serif);
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+  font-style: italic;
+  margin-top: 1px;
+}
+
+/* Selos Nobiliárquicos / Badges Discretos */
+.badge-pill {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.badge-bastard {
+  background: #2b1f13;
+  border-color: #8c6a32;
+  color: #dfba73;
+}
+
+.badge-twin {
+  background: #231c28;
+  border-color: #684f75;
+  color: #d1b8de;
+}
+
+.badge-excluded-lineage {
+  background: #331518;
+  border-color: #803038;
+  color: #e5a4a9;
+}
+
+.badge-avuncular {
+  background: #232214;
+  border-color: #877f37;
+  color: #e3dc88;
+}
+
+/* --------------------------------------------------------------------------
+   PAINÉIS DE REGISTRO & CÓDICES (SUCESSÃO, GRIMÓRIO, CARTOGRAFIA, HISTÓRICO)
+   -------------------------------------------------------------------------- */
+.grid-2col {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-box {
+  background: linear-gradient(180deg, #221b14 0%, #19130e 100%);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-medieval);
+}
+
+.card-header-styled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-gold-subtle);
+  padding-bottom: 8px;
+}
+
+.card-box h2 {
+  font-family: var(--font-display);
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--gold-leaf);
+  text-transform: uppercase;
+}
+
+.card-box p.sub-desc {
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  color: var(--ink-secondary);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.decree-tag {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--gold-antique);
+  border: 1px solid var(--border-gold-subtle);
+  padding: 2px 7px;
+  border-radius: 2px;
+}
+
+/* Grimório */
+.creations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.creation-card {
+  background: #1d1712;
+  border: 1px solid var(--border-brass);
+  border-top: 2px solid var(--gold-antique);
+  border-radius: 3px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.18s;
+}
+
+.creation-card:hover {
+  background: #251d16;
+  border-color: var(--border-gold-bright);
+}
+
+.creation-cat-tag {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--gold-leaf);
+  background: #140f0b;
+  border: 1px solid var(--border-brass);
+  padding: 2px 6px;
+  border-radius: 2px;
+  align-self: flex-start;
+}
+
+/* --------------------------------------------------------------------------
+   CARTOGRAFIA DO REINO (MAPA ANTIGO)
+   -------------------------------------------------------------------------- */
+.map-studio-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+}
+
+@media (max-width: 1100px) {
+  .map-studio-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.map-canvas-container {
+  position: relative;
+  background: #181512;
+  border: 2px solid var(--border-gold-bright);
+  border-radius: 3px;
+  overflow: hidden;
+  min-height: 560px;
+  box-shadow: var(--shadow-medieval);
+}
+
+#fantasyMapCanvas {
+  display: block;
+  width: 100%;
+  height: 560px;
+  cursor: crosshair;
+}
+
+.map-pins-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.map-city-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.16s ease;
+  z-index: 10;
+}
+
+.map-city-pin:hover,
+.map-city-pin.selected {
+  transform: translate(-50%, -50%) scale(1.1);
+  z-index: 20;
+}
+
+.pin-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--pin-color, #8b202e);
+  border: 2px solid #dfba73;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+.pin-label {
+  margin-top: 3px;
+  background: #16110c;
+  border: 1px solid var(--border-gold-bright);
+  color: var(--ink-parchment);
+  padding: 2px 7px;
+  border-radius: 2px;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.map-city-pin.selected .pin-label {
+  background: var(--gold-antique);
+  color: #120e0a;
+}
+
+/* --------------------------------------------------------------------------
+   ANAIS DO REINO (LIVRO DE REGISTROS)
+   -------------------------------------------------------------------------- */
+.history-note {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.86rem;
+  color: var(--ink-dim);
+}
+
+.audit-log-item {
+  background: #1c1611;
+  border: 1px solid var(--border-brass);
+  border-left: 3px solid var(--border-gold-bright);
+  border-radius: 3px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.audit-log-item.cat-LINHAGEM {
+  border-left-color: var(--crimson-wax);
+}
+
+.audit-log-item.cat-CASA {
+  border-left-color: var(--gold-antique);
+}
+
+.audit-log-item.cat-TERRITORIO {
+  border-left-color: var(--azure-tome);
+}
+
+/* --------------------------------------------------------------------------
+   EDITO REAL & PERGAMINHO DE MODAL
+   -------------------------------------------------------------------------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 6, 0.85);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 1000;
+}
+
+.modal-backdrop.open {
+  display: flex;
+}
+
+.modal-window {
+  background: linear-gradient(180deg, #241c15 0%, #19130e 100%);
+  border: 2px solid var(--border-gold-bright);
+  border-radius: 4px;
+  width: 100%;
+  max-width: 740px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-gold-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #17120d;
+}
+
+.modal-header h3 {
+  font-family: var(--font-display);
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold-leaf);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--gold-leaf);
+}
+
+.modal-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--border-gold-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #17120d;
+}
+
+/* Formulários do Códice */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--gold-muted);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: #110e0a;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-parchment);
+  padding: 7px 10px;
+  border-radius: 3px;
+  font-family: var(--font-serif);
+  font-size: 0.94rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--border-gold-bright);
+}
+
+/* Faixas de Alerta e Editais */
+.alert-banner {
+  padding: 10px 14px;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.alert-warning {
+  background: #261d12;
+  border: 1px solid #99732d;
+  color: #f7e2ba;
+}
+
+.alert-danger {
+  background: #2b1416;
+  border: 1px solid #7d262d;
+  color: #fad1d4;
+}
+
+.alert-info {
+  background: #171d29;
+  border: 1px solid #3b5a82;
+  color: #dbe7f7;
+}
+
+/* Guias do Perfil */
+.profile-subtabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-gold-subtle);
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-subtab-btn {
+  background: #16120d;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-secondary);
+  padding: 5px 12px;
+  border-radius: 2px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.profile-subtab-btn.active {
+  background: var(--gold-antique);
+  color: #120e0a;
+  border-color: var(--gold-leaf);
+}

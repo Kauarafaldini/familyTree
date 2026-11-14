@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crônicas & Linhagens — Livro das Linhagens Reais</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ====================================================================
+       CABEÇALHO MEDIEVAL & NAVEGAÇÃO DE ABAS
+       ==================================================================== -->
+  <header class="top-header">
+    <div class="brand-area">
+      <div class="brand-sigil" title="Selo Heráldico do Reino">
+        <svg viewBox="0 0 40 40" class="sigil-svg">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1"/>
+          <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="0.8"/>
+          <path d="M20 7 L23 15 L31 16 L25 22 L27 30 L20 25 L13 30 L15 22 L9 16 L17 15 Z" fill="currentColor" opacity="0.85"/>
+        </svg>
+      </div>
+      <div class="brand-title">
+        <h1 id="worldTitleDisplay">Crônicas de Ébano & Vinha</h1>
+        <p>Livro das Linhagens Reais &bull; Tratados Matrimoniais &bull; Cartografia do Reino</p>
+      </div>
+    </div>
+
+    <nav class="main-nav" aria-label="Navegação do Códice">
+      <button class="nav-tab active" data-tab="tab-tree" onclick="app.switchTab('tab-tree')">
+        <span class="tab-label">Genealogia</span>
+        <span class="nav-badge" id="badgeCharCount">0</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-houses" onclick="app.switchTab('tab-houses')">
+        <span class="tab-label">Sucessão & Casas</span>
+        <span class="nav-badge" id="badgeHouseCount">0</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-grimoire" onclick="app.switchTab('tab-grimoire')">
+        <span class="tab-label">Grimório Arcano</span>
+        <span class="nav-badge" id="badgeCreationCount">0</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-map" onclick="app.switchTab('tab-map')">
+        <span class="tab-label">Cartografia</span>
+        <span class="nav-badge" id="badgeTerritoryCount">0</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-history" onclick="app.switchTab('tab-history')">
+        <span class="tab-label">Anais do Reino</span>
+        <span class="nav-badge" id="badgeLogCount">0</span>
+      </button>
+    </nav>
+
+    <div class="header-actions">
+      <div class="year-box" title="Ano corrente da narrativa (calcula maioridade de 18 anos dos sucessores)">
+        <span class="year-label">Ano Corrente:</span>
+        <input type="number" id="currentYearInput" value="1248" onchange="app.updateCurrentYear(this.value)" />
+      </div>
+      <div class="header-btn-group">
+        <button class="btn btn-medieval" onclick="app.exportWorldJson()" title="Salvar pergaminho em arquivo JSON">Exportar Códice</button>
+        <button class="btn btn-medieval" onclick="document.getElementById('importJsonInput').click()" title="Carregar pergaminho salvo">Importar Códice</button>
+        <input type="file" id="importJsonInput" accept=".json" style="display:none" onchange="app.importWorldJson(event)" />
+        <button class="btn btn-medieval" onclick="app.openResetWorldModal()" title="Configurações e restauração do mundo">Reino</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====================================================================
+       ABA 1: ÁRVORE GENEALÓGICA EM CACHOS DESCENDENTES
+       ==================================================================== -->
+  <section id="tab-tree" class="tab-panel active">
+    <div class="tree-toolbar">
+      <!-- Grupo 1: Perspectiva e Filtros -->
+      <div class="toolbar-section">
+        <span class="toolbar-section-label">Perspectiva:</span>
+        <div class="mode-toggle-box">
+          <button id="btnModeLinhagem" class="mode-toggle-btn active" onclick="app.setTreeColorMode('linhagem')">
+            Linhagem de Sangue
+          </button>
+          <button id="btnModeTerritorio" class="mode-toggle-btn" onclick="app.setTreeColorMode('territorio')">
+            Feudo & Casa Oficial
+          </button>
+        </div>
+
+        <select id="houseFilterSelect" class="select-medieval" onchange="app.setHouseFilter(this.value)">
+          <option value="all">Todas as Casas e Linhagens</option>
+        </select>
+      </div>
+
+      <!-- Grupo 2: Ações do Escriba -->
+      <div class="toolbar-section">
+        <span class="toolbar-section-label">Ações do Escriba:</span>
+        <button class="btn btn-primary" onclick="app.openCharacterModal()">
+          Novo Personagem
+        </button>
+        <button class="btn btn-gold" onclick="app.openMarriageModal()">
+          Celebrar Casamento
+        </button>
+        <button class="btn btn-medieval" onclick="app.openTwinsModal()">
+          Registrar Gêmeos
+        </button>
+        <button class="btn btn-medieval" onclick="app.openRetroactiveSiblingModal()">
+          Irmão Retroativo
+        </button>
+      </div>
+
+      <!-- Grupo 3: Escala do Pergaminho -->
+      <div class="toolbar-section zoom-section">
+        <span class="toolbar-section-label">Escala:</span>
+        <div class="zoom-controls">
+          <button class="btn btn-sm btn-medieval" onclick="app.adjustZoom(-0.1)" title="Diminuir zoom">&minus;</button>
+          <span id="zoomLabel" class="zoom-readout">100%</span>
+          <button class="btn btn-sm btn-medieval" onclick="app.adjustZoom(0.1)" title="Aumentar zoom">+</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.resetZoom()" title="Ajustar escala original">1:1</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Faixa Heráldica / Legenda do Pergaminho -->
+    <div class="tree-legend">
+      <div class="legend-items">
+        <div class="legend-item">
+          <span class="line-sample line-blood"></span>
+          <span><strong>Linha Carmesim:</strong> Vínculo de Sangue (Pais, Filhos, Irmãos e Tios)</span>
+        </div>
+        <div class="legend-item">
+          <span class="line-sample line-marriage"></span>
+          <span><strong>Linha Azul-Real:</strong> Aliança Matrimonial</span>
+        </div>
+        <div class="legend-item">
+          <span class="line-sample line-avuncular"></span>
+          <span><strong>Cordão Azul & Ouro:</strong> União Avuncular (Tio & Sobrinha)</span>
+        </div>
+        <div class="legend-item">
+          <span class="ring-sample ring-assimilated"></span>
+          <span><strong>Aro Duplo:</strong> Esposa assimilada à Casa do marido (origem preservada no perfil)</span>
+        </div>
+      </div>
+      <div class="legend-tip">
+        Clique no medalhão ou em &ldquo;Perfil&rdquo; para inspecionar história, aparência, causas de morte e feudos.
+      </div>
+    </div>
+
+    <!-- Rolo do Pergaminho Genealógico -->
+    <div class="grape-tree-viewport" id="grapeTreeViewport">
+      <div class="grape-tree-stage" id="grapeTreeStage">
+        <svg class="tree-connections-svg" id="treeConnectionsSvg"></svg>
+        <div id="grapeNodesContainer"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       ABA 2: SUCESSÃO REAL, REGÊNCIA & CASAS DINÁSTICAS
+       ==================================================================== -->
+  <section id="tab-houses" class="tab-panel">
+    <div class="grid-2col">
+      <!-- Coluna Esquerda: Leis de Sucessão e Regência -->
+      <div class="card-box">
+        <div class="card-header-styled">
+          <h2>Tribunal Sucessório & Regência do Trono</h2>
+          <span class="decree-tag">Leis Canônicas Vigentes</span>
+        </div>
+        <p class="sub-desc">
+          Simule a sucessão dinástica segundo a tradição do reino:
+          <strong>1) Prioridade dos irmãos do rei</strong> (tornando sua prole a nova linhagem herdeira);
+          <strong>2) Maioridade aos 18 anos</strong> (ausentes irmãos vivos, a <strong>Rainha Consorte assume como Regente</strong>);
+          <strong>3) Princesas herdeiras</strong> assumem unicamente se não restarem varões legítimos;
+          <strong>4) Bastardos</strong> permanecem desprovidos de herança, salvo concessão expressa da autora.
+        </p>
+
+        <div class="form-row" style="margin-bottom:14px;">
+          <div class="form-group">
+            <label for="successionKingSelect">Soberano em Análise de Sucessão:</label>
+            <select id="successionKingSelect" class="select-medieval" onchange="app.renderSuccessionAnalysis()"></select>
+          </div>
+          <div class="form-group">
+            <label for="successionSimYear">Ano da Transição (Ano Corrente: <span id="succCurrentYearSpan">1248</span>):</label>
+            <input type="number" id="successionSimYear" value="1248" onchange="app.renderSuccessionAnalysis()" />
+          </div>
+        </div>
+
+        <div id="successionResultBox"></div>
+      </div>
+
+      <!-- Coluna Direita: Casas Nobres e Anais Históricos -->
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div class="card-box">
+          <div class="card-header-styled">
+            <h2>Casas & Linhagens Nobres</h2>
+            <button class="btn btn-primary btn-sm" onclick="app.openHouseModal()">Nova Casa</button>
+          </div>
+          <p class="sub-desc">
+            Casas soberanas, casas nobres e linhagens consanguíneas avunculares. Alterações registradas sob a rubrica Dinastia nos anais.
+          </p>
+          <div id="housesListContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+
+        <div class="card-box">
+          <div class="card-header-styled">
+            <h2>Marcos Históricos das Casas</h2>
+            <button class="btn btn-gold btn-sm" onclick="app.openHouseEventModal()">Novo Marco</button>
+          </div>
+          <p class="sub-desc">
+            Acontecimentos incorporados à história de esposas nobiliárquicas a partir do ano de núpcias e herdados por irmãos adicionados retroativamente.
+          </p>
+          <div id="houseEventsListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:290px; overflow-y:auto;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       ABA 3: GRIMÓRIO (MAGIAS, POÇÕES, ENCANTAMENTOS E ARCANOS)
+       ==================================================================== -->
+  <section id="tab-grimoire" class="tab-panel">
+    <div class="tree-toolbar">
+      <div class="toolbar-section" id="grimoireCategoryPills"></div>
+      <div class="toolbar-section">
+        <input
+          type="text"
+          id="grimoireSearchInput"
+          placeholder="Consultar tomo, poção, encantamento..."
+          class="input-medieval"
+          style="min-width:240px;"
+          oninput="app.renderGrimoire()"
+        />
+        <button class="btn btn-medieval" onclick="app.promptNewCreationCategory()">Nova Categoria</button>
+        <button class="btn btn-primary" onclick="app.openCreationModal()">Inscrever no Grimório</button>
+      </div>
+    </div>
+
+    <div class="creations-grid" id="creationsGridContainer"></div>
+  </section>
+
+  <!-- ====================================================================
+       ABA 4: CARTOGRAFIA DO REINO (FEUDOS, CIDADES E MARCOS)
+       ==================================================================== -->
+  <section id="tab-map" class="tab-panel">
+    <div class="tree-toolbar">
+      <div class="toolbar-section">
+        <span class="toolbar-section-label">Instrumentos Cartográficos:</span>
+        <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')">Examinar / Mover Feudo</button>
+        <button class="btn btn-sm btn-primary" id="mapToolAddCity" onclick="app.setMapTool('add_city')">Fundar Feudo / Cidade</button>
+        <button class="btn btn-sm btn-medieval" id="mapToolLand" onclick="app.setMapTool('draw_land')">Traçar Costa</button>
+        <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')">Traçar Rio</button>
+        <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')">Traçar Estrada</button>
+        <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')">Erguer Montanhas</button>
+      </div>
+      <div class="toolbar-section">
+        <button class="btn btn-sm btn-medieval" onclick="app.undoLastMapStroke()">Desfazer Traço</button>
+        <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()">Limpar Rascunho</button>
+      </div>
+    </div>
+
+    <div class="map-studio-layout">
+      <!-- Pergaminho Cartográfico -->
+      <div class="map-canvas-container" id="mapCanvasContainer">
+        <canvas id="fantasyMapCanvas" width="960" height="560"></canvas>
+        <div class="map-pins-layer" id="mapPinsLayer"></div>
+      </div>
+
+      <!-- Placa de Registro do Feudo Selecionado -->
+      <div class="card-box" id="mapTerritoryDetailPanel"></div>
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       ABA 5: ANAIS DO REINO (REGISTRO CRONOLÓGICO SEPARADO & REVERSÃO)
+       ==================================================================== -->
+  <section id="tab-history" class="tab-panel">
+    <div class="tree-toolbar">
+      <div class="toolbar-section">
+        <span class="toolbar-section-label">Registros por Matéria:</span>
+        <button class="btn btn-sm btn-medieval" id="histFilterALL" onclick="app.setHistoryFilter('ALL')">Todos os Anais</button>
+        <button class="btn btn-sm btn-medieval" id="histFilterLINHAGEM" onclick="app.setHistoryFilter('LINHAGEM')">Linhagem de Sangue</button>
+        <button class="btn btn-sm btn-medieval" id="histFilterCASA" onclick="app.setHistoryFilter('CASA')">Casas & Trono</button>
+        <button class="btn btn-sm btn-medieval" id="histFilterTERRITORIO" onclick="app.setHistoryFilter('TERRITORIO')">Feudos & Territórios</button>
+      </div>
+      <div class="history-note">
+        Exclusões de linhagens, casas ou nomes cartográficos podem ser revertidas nos respectivos assentos abaixo.
+      </div>
+    </div>
+
+    <div class="card-box">
+      <div class="card-header-styled">
+        <h2>Anais & Crônicas de Alterações (Linhagem &bull; Dinastia &bull; Território)</h2>
+      </div>
+      <p class="sub-desc">
+        Registros de alterações estruturais devidamente divididos em <strong>Linhagem</strong>, <strong>Dinastia/Casa</strong> e <strong>Território</strong>. Qualquer exclusão ou reestruturação pode ser revogada restaurando o códice ao estado anterior.
+      </p>
+      <div id="auditLogsContainer"></div>
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       PERGAMINHO DE EDITO / MODAL UNIVERSAL
+       ==================================================================== -->
+  <div class="modal-backdrop" id="mainModalBackdrop">
+    <div class="modal-window" id="mainModalWindow">
+      <div class="modal-header">
+        <h3 id="mainModalTitle">Edito Real</h3>
+        <button class="modal-close" onclick="app.closeModal()" title="Fechar pergaminho">&times;</button>
+      </div>
+      <div class="modal-body" id="mainModalBody"></div>
+      <div class="modal-footer" id="mainModalFooter"></div>
+    </div>
+  </div>
+
+  <!-- Scripts do Códice -->
+  <script src="data.js"></script>
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

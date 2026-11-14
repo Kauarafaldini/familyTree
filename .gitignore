@@ -1,0 +1,9 @@
+# Dependências e caches
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Configurações de IDE e ambiente
+.vscode/
+.idea/
+*.log
