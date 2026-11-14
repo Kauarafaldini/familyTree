@@ -660,41 +660,44 @@ body {
   color: #fff;
 }
 
-/* Plaqueta Genealógica Embaixo do Medalhão */
+/* Identificação Genealógica Embaixo do Medalhão (Sem caixa, texto limpo direto) */
 .grape-caption {
-  margin-top: 10px;
-  background: linear-gradient(180deg, #221b14 0%, #18130e 100%);
-  border: 1px solid var(--border-gold-subtle);
-  border-radius: 3px;
-  padding: 5px 8px;
-  width: 148px;
+  margin-top: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0 4px;
+  width: 154px;
   text-align: center;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
+  box-shadow: none;
+  cursor: pointer;
 }
 
 .grape-name {
   font-family: var(--font-display);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.6px;
   color: var(--gold-leaf);
   line-height: 1.25;
   text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.9);
+  word-break: break-word;
+  transition: color 0.15s ease;
+}
+
+.grape-caption:hover .grape-name {
+  color: #fff4d1;
 }
 
 .grape-dates {
   font-family: var(--font-serif);
-  font-size: 0.82rem;
-  color: var(--ink-secondary);
-  margin-top: 1px;
-}
-
-.grape-house-sub {
-  font-family: var(--font-serif);
-  font-size: 0.75rem;
-  color: var(--ink-dim);
-  font-style: italic;
-  margin-top: 1px;
+  font-size: 0.86rem;
+  color: #c4b59d;
+  margin-top: 2px;
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.9);
 }
 
 /* Selos Nobiliárquicos / Badges Discretos */

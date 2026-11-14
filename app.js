@@ -502,9 +502,7 @@ class FantasyGenealogyApp {
         c.gender === "F" && c.birthHouseId && c.officialHouseId && c.birthHouseId !== c.officialHouseId;
 
       const birthStr = c.birthYear ? `* ${c.birthYear}` : "* ?";
-      const deathStr = c.isAlive
-        ? `Vivo (${c.birthYear ? currentYear - c.birthYear + "a" : ""})`
-        : `† ${c.deathYear || "?"}`;
+      const deathStr = c.isAlive ? "Vivo" : `† ${c.deathYear || "?"}`;
 
       if (c.isPlaceholderEmpty) {
         nodesHtml += `
@@ -516,30 +514,10 @@ class FantasyGenealogyApp {
             </div>
             <div class="grape-caption">
               <div class="grape-name" style="color:#806f58;">[Assento Vago]</div>
-              <div class="grape-dates">Lugar de: ${this.escapeHtml(c.previousDeletedName || "Excluído")}</div>
             </div>
           </div>
         `;
         return;
-      }
-
-      // Selos Nobiliárquicos Discretos
-      let extraBadgesHtml = "";
-      if (c.isBastard) {
-        if (c.bastardLegitimizedByAuthor) {
-          extraBadgesHtml += `<div class="badge-pill badge-bastard">Lembrança de Bastardo (Exceção)</div>`;
-        } else {
-          extraBadgesHtml += `<div class="badge-pill badge-bastard">Bastardo (Desprovido de Herança)</div>`;
-        }
-      }
-      if (c.twinOfId) {
-        extraBadgesHtml += `<div class="badge-pill badge-twin">Gêmeo(a)</div>`;
-      }
-      if (c.linkedToExcludedLineage) {
-        extraBadgesHtml += `<div class="badge-pill badge-excluded-lineage" title="Retomou a Casa de Nascimento após exclusão da linhagem">Linhagem Excluída</div>`;
-      }
-      if (c.creatureType && c.creatureType !== "humano") {
-        extraBadgesHtml += `<div class="badge-pill badge-twin">Ser Mítico (Exceção)</div>`;
       }
 
       const portraitSrc = this.getCharacterPortraitSrc(c);
@@ -569,17 +547,10 @@ class FantasyGenealogyApp {
             </div>
           </div>
 
-          <!-- PLAQUETA GENEALÓGICA INFERIOR: NOME & DATAS -->
-          <div class="grape-caption">
+          <!-- IDENTIFICAÇÃO GENEALÓGICA INFERIOR: SOMENTE NOME & DATAS (SEM CAIXA) -->
+          <div class="grape-caption" onclick="app.openProfileModal('${c.id}')" title="Inspecionar registro">
             <div class="grape-name">${this.escapeHtml(c.name)}</div>
             <div class="grape-dates">${birthStr} &bull; ${deathStr}</div>
-            <div class="grape-house-sub">${this.escapeHtml(modeSubLabel)}</div>
-            ${
-              isAssimilatedWife
-                ? `<div class="grape-house-sub" style="color:#7899c4;">Oficial: ${this.escapeHtml(officialHouse ? officialHouse.name : "")}</div>`
-                : ""
-            }
-            ${extraBadgesHtml}
           </div>
         </div>
       `;
