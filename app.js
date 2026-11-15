@@ -3,6 +3,33 @@
 // Estética de História Antiga, Camafeus Heráldicos e Crônicas Nobiliárquicas
 // ============================================================================
 
+const FANTASY_MONTHS = [
+  { num: 1, name: "Geada das Sombras", season: "Inverno Profundo", days: 30 },
+  { num: 2, name: "Degelo dos Montes", season: "Fim do Inverno", days: 30 },
+  { num: 3, name: "Semeadura da Terra", season: "Primavera Nascente", days: 30 },
+  { num: 4, name: "Florescência dos Vales", season: "Primavera Plena", days: 30 },
+  { num: 5, name: "Solstício das Vinhas", season: "Transição do Verão", days: 30 },
+  { num: 6, name: "Sol Alto", season: "Verão Dourado", days: 30 },
+  { num: 7, name: "Grande Colheita", season: "Verão Tardio", days: 30 },
+  { num: 8, name: "Vindima Real", season: "Outono Inicial", days: 30 },
+  { num: 9, name: "Folhas Douradas", season: "Outono Médio", days: 30 },
+  { num: 10, name: "Brumas Ancestrais", season: "Outono Tardio", days: 30 },
+  { num: 11, name: "Ventos Uivantes", season: "Início do Inverno", days: 30 },
+  { num: 12, name: "Noite Longa", season: "Solstício de Inverno", days: 30 }
+];
+
+const TIMELINE_CATEGORIES = {
+  war: { label: "Guerras & Conflitos", icon: "⚔️", color: "#ef4444", badgeClass: "badge-war" },
+  battle: { label: "Batalhas", icon: "🛡️", color: "#f97316", badgeClass: "badge-war" },
+  birth: { label: "Nascimentos Ilustres", icon: "🌱", color: "#10b981", badgeClass: "badge-birth" },
+  death: { label: "Mortes & Martírios", icon: "🪦", color: "#a855f7", badgeClass: "badge-death" },
+  coronation: { label: "Coroações & Tronos", icon: "👑", color: "#eab308", badgeClass: "badge-coronation" },
+  wedding: { label: "Matrimônios Reais", icon: "💍", color: "#ec4899", badgeClass: "badge-wedding" },
+  foundation: { label: "Fundações & Tratados", icon: "🏰", color: "#06b6d4", badgeClass: "badge-foundation" },
+  arcane: { label: "Fenômenos Arcanos", icon: "✨", color: "#8b5cf6", badgeClass: "badge-arcane" },
+  general: { label: "Crônica Geral", icon: "📜", color: "#d97706", badgeClass: "badge-bastard" }
+};
+
 class FantasyGenealogyApp {
   constructor() {
     this.engine = window.worldEngine;
@@ -14,9 +41,35 @@ class FantasyGenealogyApp {
     // Estado da Cartografia
     this.selectedTerritoryId =
       (this.engine.data.territories[0] && this.engine.data.territories[0].id) || null;
-    this.mapTool = "select"; // select, add_city, draw_land, draw_river, draw_road, draw_mountain
+    this.isMapEditMode = false; // Começa sempre em Modo de Exibição
+    this.mapTool = "select"; // select, draw_mountain, draw_tree, draw_road, draw_river, add_capital, add_city
+    this.showContinentNames = true; // Exibe ou oculta os nomes dos continentes no mapa
+    this.selectedSettlementId = null;
+    this.draggingSettlement = null;
     this.isDrawingMap = false;
     this.draggingPinId = null;
+    this.hoveredMapHandle = null;
+    this.draggingVertex = null;
+    this.draggingTerritory = null;
+    this.mapZoom = 1.0;
+    this.mapPanX = 0;
+    this.mapPanY = 0;
+    this.isPanningMap = false;
+    this.panStartX = 0;
+    this.panStartY = 0;
+    this.initialPanX = 0;
+    this.initialPanY = 0;
+
+    // Estado da Cronologia & Linha do Tempo
+    this.timelineZoom = 1.0;
+    this.timelineZoomMode = "year"; // "year", "month", "day"
+    this.timelineCategoryFilter = "ALL";
+    this.timelineSearchQuery = "";
+    this.timelineHouseFilter = "ALL";
+    this.timelineTerritoryFilter = "ALL";
+    this.timelineIncludeCharLifeEvents = true;
+    this.timelineSortOrder = "asc"; // "asc" ou "desc"
+    this.selectedMilestoneId = null;
 
     this.init();
   }
@@ -26,10 +79,19 @@ class FantasyGenealogyApp {
     this.populateFilterControls();
     this.renderTree();
     this.renderHousesAndSuccessionTab();
+    this.renderTimeline();
     this.renderGrimoire();
     this.initMapCanvasEvents();
+    this.initTimelineEvents();
     this.renderMapStudio();
     this.renderAuditHistory();
+
+    window.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        this.closeResidentsDrawer();
+        this.closeModal();
+      }
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -46,12 +108,17 @@ class FantasyGenealogyApp {
     const activeChars = d.characters.filter(c => !c.isPlaceholderEmpty).length;
     const bChar = document.getElementById("badgeCharCount");
     const bHouse = document.getElementById("badgeHouseCount");
+    const bTimeline = document.getElementById("badgeTimelineCount");
     const bCre = document.getElementById("badgeCreationCount");
     const bTerr = document.getElementById("badgeTerritoryCount");
     const bLog = document.getElementById("badgeLogCount");
 
     if (bChar) bChar.textContent = activeChars;
     if (bHouse) bHouse.textContent = d.houses.length;
+    if (bTimeline) {
+      const allEvents = this.getAllTimelineEvents ? this.getAllTimelineEvents() : (d.timelineMilestones || []);
+      bTimeline.textContent = allEvents.length;
+    }
     if (bCre) bCre.textContent = d.creations.length;
     if (bTerr) bTerr.textContent = d.territories.length;
     if (bLog) bLog.textContent = d.auditLogs.length;
@@ -80,6 +147,7 @@ class FantasyGenealogyApp {
 
     if (tabId === "tab-tree") this.renderTree();
     if (tabId === "tab-houses") this.renderHousesAndSuccessionTab();
+    if (tabId === "tab-timeline") this.renderTimeline();
     if (tabId === "tab-grimoire") this.renderGrimoire();
     if (tabId === "tab-map") this.renderMapStudio();
     if (tabId === "tab-history") this.renderAuditHistory();
@@ -620,8 +688,6 @@ class FantasyGenealogyApp {
           svgHtml += `
             <path d="M ${childPos.x} ${childPos.y + 16} Q ${midX} ${topY - 26} ${tPos.x} ${tPos.y + 16}"
                   fill="none" stroke="#a855f7" stroke-width="3.2" filter="url(#glowPurple)" />
-            <rect x="${midX - 34}" y="${topY - 26}" width="68" height="17" rx="3" fill="#1b0e26" stroke="#a855f7" stroke-width="1.5" />
-            <text x="${midX}" y="${topY - 14}" fill="#f3e8ff" font-family="Cinzel, serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="0.5">GÊMEOS</text>
           `;
         }
       }
@@ -711,14 +777,13 @@ class FantasyGenealogyApp {
                title="${sphereTooltip}">
 
             <!-- CAMAFEU HERÁLDICO COM RETRATO (SEM NOME NO INTERIOR DO CÍRCULO) -->
-            <div class="sphere-portrait-clip" onclick="app.openProfileModal('${c.id}')" title="Inspecionar códice e registros">
+            <div class="sphere-portrait-clip" onclick="app.onCharacterPhotoClick('${c.id}')" title="Clique para adicionar parentesco ou inspecionar códice">
               <img class="sphere-portrait-img" src="${portraitSrc}" alt="" />
             </div>
 
             <!-- Ações Rápidas Nobiliárquicas no Hover -->
             <div class="sphere-quick-actions">
-              <button class="quick-dot-btn" title="Adicionar Filho ou Gêmeos" onclick="app.openQuickChildModal('${c.id}')">+Filho</button>
-              <button class="quick-dot-btn" title="Adicionar Irmão Retroativo" onclick="app.openRetroactiveSiblingModal('${c.id}')">+Irmão</button>
+              <button class="quick-dot-btn" title="Adicionar Parentesco (Pai, Padrasto, Irmão, Filho, Tio...)" onclick="app.openAddRelationshipModal('${c.id}')">+Parentesco</button>
               <button class="quick-dot-btn" title="Celebrar Casamento" onclick="app.openMarriageModal('${c.id}')">Casar</button>
               <button class="quick-dot-btn" title="Editar Registro" onclick="app.openCharacterModal('${c.id}')">Editar</button>
               <button class="quick-dot-btn danger" title="Verificação de Exclusão" onclick="app.openDeleteVerificationModal('${c.id}')">&times;</button>
@@ -1037,6 +1102,13 @@ class FantasyGenealogyApp {
     const bodyHtml = `
       ${bannersHtml}
 
+      <div style="background:#1a140e; border:1px solid var(--border-gold-subtle); padding:8px 12px; border-radius:3px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span style="font-family:var(--font-serif); font-size:0.86rem; color:var(--ink-secondary);">Adicionar novos laços de sangue, casamento ou aliança a este assento:</span>
+        <button class="btn btn-sm btn-gold" onclick="app.openAddRelationshipModal('${c.id}')" title="Adicionar pai, padrasto, irmão, filho, tio ou afins">
+          🔗 Adicionar Parentesco
+        </button>
+      </div>
+
       <div class="profile-subtabs">
         <button class="profile-subtab-btn ${activeSubTab === "overview" ? "active" : ""}"
                 onclick="app.openProfileModal('${c.id}', 'overview')">
@@ -1052,15 +1124,330 @@ class FantasyGenealogyApp {
     `;
 
     const footerHtml = `
-      <button class="btn btn-sm btn-medieval" onclick="app.openQuickChildModal('${c.id}')">+Filho</button>
-      <button class="btn btn-sm btn-medieval" onclick="app.openRetroactiveSiblingModal('${c.id}')">+Irmão</button>
+      <button class="btn btn-sm btn-gold" onclick="app.openAddRelationshipModal('${c.id}')">+ Adicionar Parentesco</button>
       <button class="btn btn-sm btn-gold" onclick="app.openMarriageModal('${c.id}')">Casar</button>
-      <button class="btn btn-sm btn-primary" onclick="app.openCharacterModal('${c.id}')">Editar</button>
+      <button class="btn btn-sm btn-medieval" onclick="app.openCharacterModal('${c.id}')">Editar</button>
       <button class="btn btn-sm btn-danger" onclick="app.openDeleteVerificationModal('${c.id}')">Excluir</button>
       <button class="btn btn-sm btn-medieval" onclick="app.closeModal()">Fechar</button>
     `;
 
     this.showModal(`Assento de ${c.name}`, bodyHtml, footerHtml);
+  }
+
+  onCharacterPhotoClick(charId) {
+    this.openProfileModal(charId);
+  }
+
+  openAddRelationshipModal(charId = null) {
+    const chars = this.engine.data.characters.filter(c => !c.isPlaceholderEmpty);
+    if (chars.length === 0) {
+      alert("Nenhum personagem registrado no códice ainda.");
+      return;
+    }
+    const current = (charId && this.engine.getCharacter(charId)) || chars[0];
+
+    const charOpts = chars
+      .map(c => `<option value="${c.id}" ${c.id === current.id ? "selected" : ""}>${this.escapeHtml(c.name)} (*${c.birthYear || "?"})</option>`)
+      .join("");
+
+    const otherCharOpts = chars
+      .filter(c => c.id !== current.id)
+      .map(c => `<option value="${c.id}">${this.escapeHtml(c.name)} (*${c.birthYear || "?"})</option>`)
+      .join("");
+
+    const races = this.engine.getRaces();
+    const raceOpts = races
+      .map(r => `<option value="${this.escapeHtml(r)}">${this.escapeHtml(r)}</option>`)
+      .join("");
+
+    const houseOpts = this.engine.data.houses
+      .map(h => `<option value="${h.id}" ${h.id === (current.officialHouseId || current.birthHouseId) ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
+      .join("");
+
+    const bodyHtml = `
+      <div style="background:#17120c; border:1px solid var(--border-gold-subtle); padding:10px 14px; border-radius:3px; margin-bottom:12px;">
+        <span style="font-family:var(--font-display); font-size:0.7rem; color:var(--gold-leaf); text-transform:uppercase; letter-spacing:0.5px;">Personagem em Foco:</span>
+        <select id="rel_baseCharId" class="select-medieval" style="width:100%; font-size:0.95rem; margin-top:4px;" onchange="app.openAddRelationshipModal(this.value)">
+          ${charOpts}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Qual parentesco deseja adicionar a este personagem?</label>
+        <select id="rel_type" class="select-medieval" style="width:100%; font-size:0.95rem;" onchange="app.onRelationshipTypeChange()">
+          <option value="pai">Pai (Genitor)</option>
+          <option value="mae">Mãe (Genitora)</option>
+          <option value="padrasto">Padrasto (Casado com a Mãe)</option>
+          <option value="madrasta">Madrasta (Casada com o Pai)</option>
+          <option value="filho">Filho(a) Descendente</option>
+          <option value="irmao">Irmão / Irmã</option>
+          <option value="meio_irmao">Meio-Irmão / Meia-Irmã</option>
+          <option value="tio">Tio / Tia</option>
+          <option value="sobrinho">Sobrinho / Sobrinha</option>
+          <option value="conjuge">Cônjuge / Consorte</option>
+        </select>
+      </div>
+
+      <div class="profile-subtabs" style="margin-bottom:12px;">
+        <button type="button" class="profile-subtab-btn active" id="relTabBtnExisting" onclick="app.setRelationshipMode('existing')">
+          Vincular Personagem Existente
+        </button>
+        <button type="button" class="profile-subtab-btn" id="relTabBtnNew" onclick="app.setRelationshipMode('new')">
+          + Criar Novo Parente
+        </button>
+      </div>
+
+      <!-- Modo 1: Vincular Existente -->
+      <div id="relSectionExisting">
+        <div class="form-group">
+          <label>Selecione o parente existente no códice:</label>
+          <select id="rel_existingCharId" class="select-medieval" style="width:100%;">
+            ${otherCharOpts || `<option value="">(Nenhum outro personagem disponível)</option>`}
+          </select>
+        </div>
+      </div>
+
+      <!-- Modo 2: Criar Novo Personagem -->
+      <div id="relSectionNew" style="display:none; flex-direction:column; gap:10px;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome do Novo Parente:</label>
+            <input type="text" id="rel_newName" placeholder="Ex: Raymund Valmont" />
+          </div>
+          <div class="form-group">
+            <label>Gênero:</label>
+            <select id="rel_newGender">
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Ano de Nascimento (Aprox.):</label>
+            <input type="number" id="rel_newBirthYear" value="${(current.birthYear || 1220) - 25}" />
+          </div>
+          <div class="form-group">
+            <label>Raça / Espécie:</label>
+            <select id="rel_newRace">
+              ${raceOpts}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Casa Nobre / Origem:</label>
+          <select id="rel_newHouse">
+            ${houseOpts}
+          </select>
+        </div>
+      </div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+      <button class="btn btn-primary btn-confirm" onclick="app.confirmAddRelationship()">Confirmar Parentesco</button>
+    `;
+
+    this.showModal(`Adicionar Parentesco: ${current.name}`, bodyHtml, footerHtml);
+    this.currentRelMode = "existing";
+  }
+
+  setRelationshipMode(mode) {
+    this.currentRelMode = mode;
+    const btnEx = document.getElementById("relTabBtnExisting");
+    const btnNew = document.getElementById("relTabBtnNew");
+    const secEx = document.getElementById("relSectionExisting");
+    const secNew = document.getElementById("relSectionNew");
+
+    if (mode === "existing") {
+      if (btnEx) btnEx.classList.add("active");
+      if (btnNew) btnNew.classList.remove("active");
+      if (secEx) secEx.style.display = "block";
+      if (secNew) secNew.style.display = "none";
+    } else {
+      if (btnEx) btnEx.classList.remove("active");
+      if (btnNew) btnNew.classList.add("active");
+      if (secEx) secEx.style.display = "none";
+      if (secNew) secNew.style.display = "flex";
+    }
+  }
+
+  onRelationshipTypeChange() {
+    const relType = document.getElementById("rel_type")?.value || "pai";
+    const genderSel = document.getElementById("rel_newGender");
+    const birthInput = document.getElementById("rel_newBirthYear");
+    const baseId = document.getElementById("rel_baseCharId")?.value;
+    const base = baseId ? this.engine.getCharacter(baseId) : null;
+    const bYear = (base && base.birthYear) ? Number(base.birthYear) : 1220;
+
+    if (genderSel) {
+      if (["pai", "padrasto"].includes(relType)) genderSel.value = "M";
+      else if (["mae", "madrasta"].includes(relType)) genderSel.value = "F";
+    }
+
+    if (birthInput) {
+      if (["pai", "mae", "padrasto", "madrasta", "tio"].includes(relType)) {
+        birthInput.value = bYear - 25;
+      } else if (["filho", "sobrinho"].includes(relType)) {
+        birthInput.value = bYear + 25;
+      } else {
+        birthInput.value = bYear;
+      }
+    }
+  }
+
+  confirmAddRelationship() {
+    const baseCharId = document.getElementById("rel_baseCharId")?.value;
+    const baseChar = this.engine.getCharacter(baseCharId);
+    if (!baseChar) return;
+
+    const relType = document.getElementById("rel_type")?.value || "pai";
+    const mode = this.currentRelMode || "existing";
+
+    const snapshot = this.engine.createSnapshot();
+    let relative = null;
+
+    if (mode === "existing") {
+      const relId = document.getElementById("rel_existingCharId")?.value;
+      if (!relId) {
+        alert("Selecione um personagem para vincular.");
+        return;
+      }
+      relative = this.engine.getCharacter(relId);
+    } else {
+      const name = document.getElementById("rel_newName")?.value.trim();
+      if (!name) {
+        alert("Por favor, informe o nome do novo parente.");
+        return;
+      }
+      const gender = document.getElementById("rel_newGender")?.value || "M";
+      const birthYear = Number(document.getElementById("rel_newBirthYear")?.value) || 1200;
+      const race = document.getElementById("rel_newRace")?.value || "Humano";
+      const houseId = document.getElementById("rel_newHouse")?.value || baseChar.officialHouseId;
+
+      relative = {
+        id: "char_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        name,
+        gender,
+        birthYear,
+        deathYear: null,
+        isAlive: true,
+        socialRank: baseChar.socialRank || "lorde",
+        race,
+        creatureType: race.toLowerCase(),
+        birthHouseId: houseId,
+        officialHouseId: houseId,
+        livedInTerritoryId: baseChar.livedInTerritoryId || "terr_valoria",
+        fatherId: null,
+        motherId: null,
+        spouseIds: [],
+        marriageDetails: {},
+        twinOfId: null,
+        isBastard: false,
+        bastardLegitimizedByAuthor: false,
+        bastardAuthorNote: "",
+        isPlaceholderEmpty: false,
+        royalBranchStatus: "Familiar de " + baseChar.name,
+        appearance: "Traços nobres da Casa.",
+        deathCause: "Vivo",
+        preMarriageHistory: `Parentesco adicionado com ${baseChar.name}.`,
+        postMarriageHistory: "",
+        customTrajectoryEvents: [],
+        excludedMarriageExceptions: [],
+        linkedToExcludedLineage: null,
+        inconsistencyJustifications: []
+      };
+      this.engine.data.characters.push(relative);
+    }
+
+    if (!relative) return;
+
+    const relLabels = {
+      pai: "Pai",
+      mae: "Mãe",
+      padrasto: "Padrasto",
+      madrasta: "Madrasta",
+      filho: "Filho(a)",
+      irmao: "Irmão(ã)",
+      meio_irmao: "Meio-Irmão(ã)",
+      tio: "Tio(a)",
+      sobrinho: "Sobrinho(a)",
+      conjuge: "Cônjuge"
+    };
+
+    if (relType === "pai") {
+      baseChar.fatherId = relative.id;
+    } else if (relType === "mae") {
+      baseChar.motherId = relative.id;
+    } else if (relType === "filho") {
+      if (baseChar.gender === "F") {
+        relative.motherId = baseChar.id;
+        if (baseChar.spouseIds && baseChar.spouseIds[0]) relative.fatherId = baseChar.spouseIds[0];
+      } else {
+        relative.fatherId = baseChar.id;
+        if (baseChar.spouseIds && baseChar.spouseIds[0]) relative.motherId = baseChar.spouseIds[0];
+      }
+    } else if (relType === "padrasto") {
+      if (baseChar.motherId) {
+        const mother = this.engine.getCharacter(baseChar.motherId);
+        if (mother) {
+          if (!mother.spouseIds.includes(relative.id)) mother.spouseIds.push(relative.id);
+          if (!relative.spouseIds.includes(mother.id)) relative.spouseIds.push(mother.id);
+          mother.marriageDetails = mother.marriageDetails || {};
+          mother.marriageDetails[relative.id] = { year: (baseChar.birthYear || 1200) + 5, isNobleAssimilation: false, exceptions: [] };
+        }
+      }
+    } else if (relType === "madrasta") {
+      if (baseChar.fatherId) {
+        const father = this.engine.getCharacter(baseChar.fatherId);
+        if (father) {
+          if (!father.spouseIds.includes(relative.id)) father.spouseIds.push(relative.id);
+          if (!relative.spouseIds.includes(father.id)) relative.spouseIds.push(father.id);
+          father.marriageDetails = father.marriageDetails || {};
+          father.marriageDetails[relative.id] = { year: (baseChar.birthYear || 1200) + 5, isNobleAssimilation: false, exceptions: [] };
+        }
+      }
+    } else if (relType === "irmao") {
+      relative.fatherId = baseChar.fatherId;
+      relative.motherId = baseChar.motherId;
+    } else if (relType === "meio_irmao") {
+      if (baseChar.fatherId) relative.fatherId = baseChar.fatherId;
+      else if (baseChar.motherId) relative.motherId = baseChar.motherId;
+    } else if (relType === "tio") {
+      const parent = (baseChar.fatherId && this.engine.getCharacter(baseChar.fatherId)) || (baseChar.motherId && this.engine.getCharacter(baseChar.motherId));
+      if (parent) {
+        relative.fatherId = parent.fatherId;
+        relative.motherId = parent.motherId;
+      }
+    } else if (relType === "sobrinho") {
+      const sibs = this.engine.getSiblings(baseChar);
+      if (sibs.length > 0) {
+        if (sibs[0].gender === "F") relative.motherId = sibs[0].id;
+        else relative.fatherId = sibs[0].id;
+      } else {
+        if (baseChar.gender === "F") relative.motherId = baseChar.id;
+        else relative.fatherId = baseChar.id;
+      }
+    } else if (relType === "conjuge") {
+      if (!baseChar.spouseIds.includes(relative.id)) baseChar.spouseIds.push(relative.id);
+      if (!relative.spouseIds.includes(baseChar.id)) relative.spouseIds.push(baseChar.id);
+      baseChar.marriageDetails = baseChar.marriageDetails || {};
+      baseChar.marriageDetails[relative.id] = { year: (baseChar.birthYear || 1200) + 20, isNobleAssimilation: true, exceptions: [] };
+    }
+
+    this.engine.recordAuditLog(
+      "LINHAGEM",
+      "Vínculo de Parentesco",
+      `Parentesco (${relLabels[relType]}): ${baseChar.name} & ${relative.name}`,
+      `${relative.name} foi averbado(a) como ${relLabels[relType]} de ${baseChar.name}.`,
+      snapshot
+    );
+
+    this.closeModal();
+    this.syncHeaderAndBadges();
+    this.renderTree();
   }
 
   toggleBastardAuthorException(charId) {
@@ -1836,7 +2223,7 @@ class FantasyGenealogyApp {
 
     const footerHtml = `
       <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
-      <button class="btn btn-gold" onclick="app.confirmMarriageFromModal()">
+      <button class="btn btn-primary btn-confirm" onclick="app.confirmMarriageFromModal()">
         Celebrar Casamento
       </button>
     `;
@@ -2277,7 +2664,7 @@ class FantasyGenealogyApp {
       bodyHtml,
       `
         <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
-        <button class="btn btn-gold" onclick="app.saveHouseEventFromModal()">Averbar Marco</button>
+        <button class="btn btn-primary btn-confirm" onclick="app.saveHouseEventFromModal()">Averbar Marco</button>
       `
     );
   }
@@ -2304,6 +2691,887 @@ class FantasyGenealogyApp {
     this.engine.data.houseEvents = this.engine.data.houseEvents.filter(e => e.id !== evId);
     this.engine.saveToStorage();
     this.renderHouseEventsList();
+  }
+
+  // ==========================================================================
+  // CRONOLOGIA DO MUNDO & LINHA DO TEMPO HISTÓRICA (GUERRAS, NASCIMENTOS, MARCOS)
+  // ==========================================================================
+  getTimelineCategoryMeta(cat) {
+    return TIMELINE_CATEGORIES[cat] || { label: cat || "Crônica", icon: "📜", color: "#d97706", badgeClass: "badge-bastard" };
+  }
+
+  formatTimelineDate(year, month, day, mode = this.timelineZoomMode) {
+    const mNum = Number(month);
+    const dNum = Number(day);
+    const mInfo = mNum >= 1 && mNum <= 12 ? FANTASY_MONTHS[mNum - 1] : null;
+
+    if (mode === "day") {
+      if (dNum > 0 && mInfo) {
+        return `Dia ${dNum} de ${mInfo.name} (Mês ${mNum}), Ano ${year}`;
+      }
+      if (mInfo) {
+        return `${mInfo.name} (Mês ${mNum}), Ano ${year}`;
+      }
+      return `Ano ${year}`;
+    }
+
+    if (mode === "month") {
+      if (mInfo) {
+        return `${mInfo.name} (Mês ${mNum}), Ano ${year}`;
+      }
+      return `Ano ${year}`;
+    }
+
+    // mode === "year" ou padrão
+    return `Ano ${year}`;
+  }
+
+  getAllTimelineEvents() {
+    const list = [...(this.engine.data.timelineMilestones || [])];
+
+    if (this.timelineIncludeCharLifeEvents) {
+      (this.engine.data.characters || []).forEach(c => {
+        if (c.birthYear !== undefined && c.birthYear !== null) {
+          list.push({
+            id: `char_birth_${c.id}`,
+            isSynthetic: true,
+            syntheticType: "birth",
+            title: `Nascimento de ${c.name}`,
+            category: "birth",
+            year: c.birthYear,
+            month: c.birthMonth || 1,
+            day: c.birthDay || 1,
+            characterId: c.id,
+            houseId: c.houseId,
+            territoryId: c.territoryId,
+            importance: c.isDead ? "normal" : "notable",
+            description: `Nascimento de ${c.name}${c.title ? ", " + c.title : ""} nos anais da dinastia.`,
+            imageUrl: c.photoUrl || ""
+          });
+        }
+        if (c.isDead && c.deathYear !== undefined && c.deathYear !== null) {
+          list.push({
+            id: `char_death_${c.id}`,
+            isSynthetic: true,
+            syntheticType: "death",
+            title: `Falecimento de ${c.name}`,
+            category: "death",
+            year: c.deathYear,
+            month: c.deathMonth || 12,
+            day: c.deathDay || 30,
+            characterId: c.id,
+            houseId: c.houseId,
+            territoryId: c.territoryId,
+            importance: "notable",
+            description: `Falecimento e memória de ${c.name}${c.title ? ", " + c.title : ""}. ${c.causeOfDeath ? "Causa: " + c.causeOfDeath : "Registrado nos anais do reino."}`,
+            imageUrl: c.photoUrl || ""
+          });
+        }
+      });
+    }
+
+    return list;
+  }
+
+  getFilteredTimelineEvents() {
+    const events = this.getAllTimelineEvents();
+    const query = (this.timelineSearchQuery || "").toLowerCase().trim();
+
+    const filtered = events.filter(ev => {
+      if (this.timelineCategoryFilter && this.timelineCategoryFilter !== "ALL" && ev.category !== this.timelineCategoryFilter) {
+        return false;
+      }
+      if (this.timelineHouseFilter && this.timelineHouseFilter !== "ALL" && ev.houseId !== this.timelineHouseFilter) {
+        return false;
+      }
+      if (this.timelineTerritoryFilter && this.timelineTerritoryFilter !== "ALL" && ev.territoryId !== this.timelineTerritoryFilter) {
+        return false;
+      }
+      if (query) {
+        const titleMatch = (ev.title || "").toLowerCase().includes(query);
+        const descMatch = (ev.description || "").toLowerCase().includes(query);
+        const charMatch = ev.characterId ? (this.engine.getCharacter(ev.characterId)?.name || "").toLowerCase().includes(query) : false;
+        const houseMatch = ev.houseId ? (this.engine.getHouse(ev.houseId)?.name || "").toLowerCase().includes(query) : false;
+        const terrMatch = ev.territoryId ? (this.engine.getTerritory(ev.territoryId)?.name || "").toLowerCase().includes(query) : false;
+        if (!titleMatch && !descMatch && !charMatch && !houseMatch && !terrMatch) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const mult = this.timelineSortOrder === "asc" ? 1 : -1;
+    filtered.sort((a, b) => {
+      const ya = Number(a.year) || 0;
+      const yb = Number(b.year) || 0;
+      if (ya !== yb) return (ya - yb) * mult;
+
+      const ma = Number(a.month) || 1;
+      const mb = Number(b.month) || 1;
+      if (ma !== mb) return (ma - mb) * mult;
+
+      const da = Number(a.day) || 1;
+      const db = Number(b.day) || 1;
+      return (da - db) * mult;
+    });
+
+    return filtered;
+  }
+
+  renderTimeline() {
+    const badge = document.getElementById("badgeTimelineCount");
+    if (badge) badge.textContent = (this.engine.data.timelineMilestones || []).length;
+
+    ["year", "month", "day"].forEach(m => {
+      const btn = document.getElementById("btnZoom" + m.charAt(0).toUpperCase() + m.slice(1));
+      if (btn) btn.classList.toggle("active", this.timelineZoomMode === m);
+    });
+
+    const zoomLbl = document.getElementById("timelineZoomLabel");
+    if (zoomLbl) zoomLbl.textContent = Math.round(this.timelineZoom * 100) + "%";
+
+    const sortLbl = document.getElementById("timelineSortLabel");
+    if (sortLbl) {
+      sortLbl.innerHTML = this.timelineSortOrder === "asc"
+        ? "Mais Antigos &rarr; Mais Recentes"
+        : "Mais Recentes &rarr; Mais Antigos";
+    }
+
+    const chk = document.getElementById("chkIncludeCharLifeEvents");
+    if (chk) chk.checked = this.timelineIncludeCharLifeEvents;
+
+    const houseSel = document.getElementById("timelineHouseFilterSelect");
+    if (houseSel && (houseSel.options.length <= 1 || houseSel.dataset.loaded !== "1")) {
+      const currentVal = this.timelineHouseFilter || "ALL";
+      houseSel.innerHTML = `<option value="ALL">Todas as Casas Nobres</option>` +
+        (this.engine.data.houses || []).map(h => `<option value="${h.id}">${this.escapeHtml(h.name)}</option>`).join("");
+      houseSel.value = currentVal;
+      houseSel.dataset.loaded = "1";
+    }
+
+    const terrSel = document.getElementById("timelineTerritoryFilterSelect");
+    if (terrSel && (terrSel.options.length <= 1 || terrSel.dataset.loaded !== "1")) {
+      const currentVal = this.timelineTerritoryFilter || "ALL";
+      terrSel.innerHTML = `<option value="ALL">Todos os Territórios</option>` +
+        (this.engine.data.territories || []).map(t => `<option value="${t.id}">${this.escapeHtml(t.name)}</option>`).join("");
+      terrSel.value = currentVal;
+      terrSel.dataset.loaded = "1";
+    }
+
+    const allEvents = this.getAllTimelineEvents();
+    const pillsBox = document.getElementById("timelineCategoryPillsContainer");
+    if (pillsBox) {
+      const catsList = [
+        { id: "ALL", label: "Todas as Crônicas", icon: "📜" },
+        { id: "war", label: "Guerras & Conflitos", icon: "⚔️" },
+        { id: "battle", label: "Batalhas", icon: "🛡️" },
+        { id: "birth", label: "Nascimentos", icon: "🌱" },
+        { id: "death", label: "Mortes & Martírios", icon: "🪦" },
+        { id: "coronation", label: "Coroações", icon: "👑" },
+        { id: "wedding", label: "Matrimônios", icon: "💍" },
+        { id: "foundation", label: "Fundações", icon: "🏰" },
+        { id: "arcane", label: "Arcanos", icon: "✨" },
+        { id: "general", label: "Crônica Geral", icon: "📜" }
+      ];
+
+      pillsBox.innerHTML = catsList.map(c => {
+        const count = c.id === "ALL" ? allEvents.length : allEvents.filter(e => e.category === c.id).length;
+        const isActive = (this.timelineCategoryFilter || "ALL") === c.id;
+        return `
+          <button class="timeline-cat-pill ${isActive ? "active" : ""}" onclick="app.setTimelineCategoryFilter('${c.id}')">
+            <span>${c.icon}</span>
+            <span>${c.label}</span>
+            <span class="nav-badge" style="margin-left:4px; font-size:0.65rem;">${count}</span>
+          </button>
+        `;
+      }).join("");
+    }
+
+    const filteredEvents = this.getFilteredTimelineEvents();
+    const statsInfo = document.getElementById("timelineStatsInfo");
+    if (statsInfo) {
+      statsInfo.textContent = `${filteredEvents.length} acontecimentos lavrados`;
+    }
+    const scaleBadge = document.getElementById("timelineScaleBadge");
+    if (scaleBadge) {
+      scaleBadge.textContent = this.timelineZoomMode === "day"
+        ? "Escala: Dias Exatos & Luas"
+        : this.timelineZoomMode === "month"
+        ? "Escala: Luas & Meses das Estações"
+        : "Escala: Anos & Décadas";
+    }
+
+    this.renderTimelineRuler(filteredEvents);
+    this.renderTimelineCards(filteredEvents);
+  }
+
+  renderTimelineRuler(filteredEvents) {
+    const track = document.getElementById("timelineRulerTrack");
+    if (!track) return;
+
+    if (filteredEvents.length === 0) {
+      track.style.width = "100%";
+      track.innerHTML = `<div style="color:var(--ink-dim); padding:20px; font-style:italic;">Sem marcos para exibir na régua.</div>`;
+      return;
+    }
+
+    let minYear = Infinity;
+    let maxYear = -Infinity;
+    filteredEvents.forEach(e => {
+      const y = Number(e.year);
+      if (!isNaN(y)) {
+        if (y < minYear) minYear = y;
+        if (y > maxYear) maxYear = y;
+      }
+    });
+
+    if (minYear === Infinity) {
+      minYear = (this.engine.data.currentYear || 1220) - 20;
+      maxYear = (this.engine.data.currentYear || 1220) + 10;
+    }
+
+    const startYear = Math.floor((minYear - 5) / 5) * 5;
+    const endYear = Math.ceil((maxYear + 5) / 5) * 5;
+    const totalYears = Math.max(15, endYear - startYear);
+
+    let pixelsPerYear = 38 * this.timelineZoom;
+    if (this.timelineZoomMode === "month") pixelsPerYear = 120 * this.timelineZoom;
+    if (this.timelineZoomMode === "day") pixelsPerYear = 420 * this.timelineZoom;
+
+    const totalWidth = Math.max(800, totalYears * pixelsPerYear);
+    track.style.width = `${totalWidth}px`;
+
+    let html = "";
+    for (let yr = startYear; yr <= endYear; yr++) {
+      const leftPx = (yr - startYear) * pixelsPerYear;
+      const isDecade = yr % 10 === 0;
+      const isFive = yr % 5 === 0;
+
+      if (this.timelineZoomMode === "year") {
+        if (isFive) {
+          html += `
+            <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
+              <div class="${isDecade ? "ruler-tick-major" : "ruler-tick-minor"}"></div>
+              <div class="ruler-label-year">${yr}</div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
+              <div class="ruler-tick-sub"></div>
+            </div>
+          `;
+        }
+      } else if (this.timelineZoomMode === "month") {
+        html += `
+          <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
+            <div class="ruler-tick-major"></div>
+            <div class="ruler-label-year">${yr}</div>
+          </div>
+        `;
+        for (let m = 1; m <= 12; m++) {
+          const mLeft = leftPx + (m / 12) * pixelsPerYear;
+          const mInfo = FANTASY_MONTHS[m - 1];
+          html += `
+            <div class="ruler-segment" style="position:absolute; left:${mLeft}px;">
+              <div class="ruler-tick-minor"></div>
+              <div class="ruler-label-sub" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
+            </div>
+          `;
+        }
+      } else if (this.timelineZoomMode === "day") {
+        html += `
+          <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
+            <div class="ruler-tick-major"></div>
+            <div class="ruler-label-year">${yr}</div>
+          </div>
+        `;
+        for (let m = 1; m <= 12; m++) {
+          const mStart = leftPx + ((m - 1) / 12) * pixelsPerYear;
+          const mInfo = FANTASY_MONTHS[m - 1];
+          html += `
+            <div class="ruler-segment" style="position:absolute; left:${mStart}px;">
+              <div class="ruler-tick-minor"></div>
+              <div class="ruler-label-sub">${mInfo.name}</div>
+            </div>
+          `;
+          for (let d = 5; d <= 30; d += 5) {
+            const dLeft = mStart + (d / 30) * (pixelsPerYear / 12);
+            html += `
+              <div class="ruler-segment" style="position:absolute; left:${dLeft}px;">
+                <div class="ruler-tick-sub"></div>
+                <div class="ruler-label-sub" style="font-size:0.55rem;">d${d}</div>
+              </div>
+            `;
+          }
+        }
+      }
+    }
+
+    filteredEvents.forEach(ev => {
+      const yr = Number(ev.year) || startYear;
+      const m = Number(ev.month) || 1;
+      const d = Number(ev.day) || 1;
+
+      const yrFrac = yr - startYear;
+      const mFrac = (m - 1) / 12;
+      const dFrac = (d - 1) / (12 * 30);
+      const pinLeft = (yrFrac + mFrac + dFrac) * pixelsPerYear;
+
+      const meta = this.getTimelineCategoryMeta(ev.category);
+      const isEpic = ev.importance === "epic";
+      const dateText = this.formatTimelineDate(yr, m, d, this.timelineZoomMode);
+
+      html += `
+        <div class="ruler-event-pin ${isEpic ? "pin-epic" : ""}"
+             style="left:${pinLeft}px; border-color:${meta.color}; color:${meta.color};"
+             onclick="app.jumpTimelineToEvent('${ev.id}')"
+             title="${this.escapeHtml(ev.title)} &bull; ${dateText}">
+          <span class="pin-icon">${meta.icon}</span>
+        </div>
+      `;
+    });
+
+    track.innerHTML = html;
+  }
+
+  renderTimelineCards(filteredEvents) {
+    const container = document.getElementById("timelineEventsContainer");
+    if (!container) return;
+
+    if (filteredEvents.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:50px 20px; color:var(--ink-dim); font-style:italic;">
+          <div style="font-size:2rem; margin-bottom:10px;">📜</div>
+          Nenhum acontecimento histórico coincide com os filtros da crônica.
+          <div style="margin-top:12px;">
+            <button class="btn btn-sm btn-medieval" onclick="app.setTimelineCategoryFilter('ALL')">Limpar Filtros</button>
+            <button class="btn btn-sm btn-gold" onclick="app.openCreateMilestoneModal()" style="margin-left:6px;">+ Lavrar Novo Marco</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    let lastHeaderYear = null;
+    let cardsHtml = "";
+
+    filteredEvents.forEach(ev => {
+      const yr = Number(ev.year);
+      const meta = this.getTimelineCategoryMeta(ev.category);
+      const isEpic = ev.importance === "epic";
+      const dateText = this.formatTimelineDate(ev.year, ev.month, ev.day, this.timelineZoomMode);
+
+      if (lastHeaderYear !== yr) {
+        lastHeaderYear = yr;
+        const decade = Math.floor(yr / 10) * 10;
+        cardsHtml += `
+          <div class="timeline-era-header">
+            <span class="timeline-era-badge">
+              <span>📅 Ano ${yr}</span>
+              <span style="opacity:0.6; font-size:0.75rem;">(Década de ${decade})</span>
+            </span>
+          </div>
+        `;
+      }
+
+      let charCameoHtml = "";
+      if (ev.characterId) {
+        const char = this.engine.getCharacter(ev.characterId);
+        if (char) {
+          charCameoHtml = `
+            <span class="badge-pill badge-noble" style="cursor:pointer;" onclick="app.openProfileModal('${char.id}')" title="Inspecionar códice de ${this.escapeHtml(char.name)}">
+              ${char.photoUrl ? `<img class="timeline-cameo-thumb" src="${char.photoUrl}" onerror="this.style.display='none'" alt="" />` : "👤"}
+              <span>${this.escapeHtml(char.name)}</span>
+            </span>
+          `;
+        }
+      }
+
+      let houseHtml = "";
+      if (ev.houseId) {
+        const house = this.engine.getHouse(ev.houseId);
+        if (house) {
+          houseHtml = `
+            <span class="badge-pill badge-twin" title="Dinastia vinculada">
+              🏰 ${this.escapeHtml(house.name)}
+            </span>
+          `;
+        }
+      }
+
+      let territoryHtml = "";
+      if (ev.territoryId) {
+        const terr = this.engine.getTerritory(ev.territoryId);
+        if (terr) {
+          territoryHtml = `
+            <span class="badge-pill badge-avuncular" style="cursor:pointer;" onclick="app.switchTab('tab-map'); app.jumpToTerritoryOnMap('${terr.id}')" title="Ver no Mapa Cartográfico">
+              🗺️ ${this.escapeHtml(terr.name)}
+            </span>
+          `;
+        }
+      }
+
+      const imgHtml = ev.imageUrl
+        ? `<img class="timeline-image-preview" src="${this.escapeHtml(ev.imageUrl)}" alt="${this.escapeHtml(ev.title)}" onerror="this.style.display='none'" />`
+        : "";
+
+      cardsHtml += `
+        <div class="timeline-item" id="timeline-card-${ev.id}">
+          <div class="timeline-node-icon" style="border-color:${meta.color}; color:${meta.color};">
+            ${meta.icon}
+          </div>
+          <div class="timeline-card ${isEpic ? "card-epic" : ""}">
+            <div class="timeline-card-header">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="badge-pill ${meta.badgeClass}" style="border-color:${meta.color}; color:${meta.color};">
+                  ${meta.icon} ${meta.label}
+                </span>
+                <span class="timeline-date-tag">
+                  ${dateText}
+                </span>
+                ${isEpic ? `<span class="badge-pill badge-bastard" style="border-color:var(--gold-leaf); color:var(--gold-leaf); font-weight:700;">★ Grande Marco Histórico</span>` : ""}
+              </div>
+            </div>
+
+            <div class="timeline-card-title">${this.escapeHtml(ev.title)}</div>
+
+            ${(charCameoHtml || houseHtml || territoryHtml) ? `
+              <div class="timeline-meta-row">
+                ${charCameoHtml}
+                ${houseHtml}
+                ${territoryHtml}
+              </div>
+            ` : ""}
+
+            ${imgHtml}
+
+            <div class="timeline-desc">${this.escapeHtml(ev.description || "")}</div>
+
+            <div class="timeline-card-footer">
+              <div>
+                ${ev.isSynthetic ? `
+                  <span style="font-size:0.75rem; color:var(--ink-dim); font-style:italic;">Registro originário da árvore genealógica</span>
+                ` : `
+                  <span style="font-size:0.75rem; color:var(--ink-dim); font-style:italic;">Marco lavrado nos Anais do Reino</span>
+                `}
+              </div>
+              <div style="display:flex; gap:6px;">
+                ${ev.isSynthetic ? `
+                  <button class="btn btn-sm btn-medieval" onclick="app.openProfileModal('${ev.characterId}')" title="Inspecionar personagem">Ver Códice</button>
+                  <button class="btn btn-sm btn-medieval" onclick="app.switchTab('tab-tree')" title="Localizar na árvore">Ver na Árvore</button>
+                ` : `
+                  <button class="btn btn-sm btn-medieval" onclick="app.openEditMilestoneModal('${ev.id}')" title="Editar este acontecimento">Editar Marco</button>
+                  <button class="btn btn-sm btn-danger" onclick="app.confirmDeleteMilestone('${ev.id}')" title="Excluir marco da história">Excluir</button>
+                `}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = cardsHtml;
+  }
+
+  jumpTimelineToEvent(eventId) {
+    this.selectedMilestoneId = eventId;
+    const card = document.getElementById(`timeline-card-${eventId}`);
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      const innerCard = card.querySelector(".timeline-card");
+      if (innerCard) {
+        innerCard.classList.remove("card-highlight-pulse");
+        void innerCard.offsetWidth;
+        innerCard.classList.add("card-highlight-pulse");
+      }
+    }
+  }
+
+  jumpTimelineToYear(year) {
+    const yr = Number(year);
+    if (isNaN(yr)) return;
+
+    const events = this.getFilteredTimelineEvents();
+    const targetEv = events.find(e => Number(e.year) >= yr) || events[events.length - 1];
+    if (targetEv) {
+      this.jumpTimelineToEvent(targetEv.id);
+    }
+
+    const track = document.getElementById("timelineRulerTrack");
+    const viewport = document.getElementById("timelineRulerViewport");
+    if (track && viewport) {
+      const pin = track.querySelector(`[title*="Ano ${yr}"]`);
+      if (pin) {
+        pin.scrollIntoView({ behavior: "smooth", inline: "center" });
+      }
+    }
+  }
+
+  jumpTimelineToInputYear() {
+    const inp = document.getElementById("timelineJumpYearInput");
+    if (inp && inp.value) {
+      this.jumpTimelineToYear(inp.value);
+    }
+  }
+
+  setTimelineZoomMode(mode) {
+    if (mode === "year") this.timelineZoom = 1.0;
+    else if (mode === "month") this.timelineZoom = 2.2;
+    else if (mode === "day") this.timelineZoom = 3.8;
+    this.timelineZoomMode = mode;
+    this.renderTimeline();
+  }
+
+  adjustTimelineZoom(delta) {
+    this.timelineZoom = Math.max(0.5, Math.min(8.0, Number((this.timelineZoom + delta).toFixed(2))));
+    if (this.timelineZoom >= 3.2) {
+      this.timelineZoomMode = "day";
+    } else if (this.timelineZoom >= 1.8) {
+      this.timelineZoomMode = "month";
+    } else {
+      this.timelineZoomMode = "year";
+    }
+    this.renderTimeline();
+  }
+
+  resetTimelineZoom() {
+    this.timelineZoom = 1.0;
+    this.timelineZoomMode = "year";
+    this.renderTimeline();
+  }
+
+  toggleTimelineSortOrder() {
+    this.timelineSortOrder = this.timelineSortOrder === "asc" ? "desc" : "asc";
+    this.renderTimeline();
+  }
+
+  toggleIncludeCharLifeEvents(checked) {
+    this.timelineIncludeCharLifeEvents = !!checked;
+    this.renderTimeline();
+  }
+
+  onTimelineSearchInput(val) {
+    this.timelineSearchQuery = val;
+    this.renderTimeline();
+  }
+
+  onTimelineHouseFilterChange(val) {
+    this.timelineHouseFilter = val;
+    this.renderTimeline();
+  }
+
+  onTimelineTerritoryFilterChange(val) {
+    this.timelineTerritoryFilter = val;
+    this.renderTimeline();
+  }
+
+  setTimelineCategoryFilter(cat) {
+    this.timelineCategoryFilter = cat;
+    this.renderTimeline();
+  }
+
+  openCreateMilestoneModal(presetYear = null, presetCategory = "war") {
+    const curYear = presetYear !== null ? Number(presetYear) : (this.engine.data.currentYear || 1220);
+    const m = {
+      title: "",
+      category: presetCategory,
+      importance: "normal",
+      year: curYear,
+      month: 1,
+      day: 1,
+      characterId: "",
+      houseId: "",
+      territoryId: "",
+      description: "",
+      imageUrl: ""
+    };
+    this.renderMilestoneModalForm(m, "");
+  }
+
+  openEditMilestoneModal(milestoneId) {
+    const m = (this.engine.data.timelineMilestones || []).find(e => e.id === milestoneId);
+    if (!m) return;
+    this.renderMilestoneModalForm(m, milestoneId);
+  }
+
+  renderMilestoneModalForm(m, editId = "") {
+    const chars = this.engine.data.characters || [];
+    const houses = this.engine.data.houses || [];
+    const terrs = this.engine.data.territories || [];
+
+    const catsOptions = Object.entries(TIMELINE_CATEGORIES).map(([k, meta]) => {
+      return `<option value="${k}" ${m.category === k ? "selected" : ""}>${meta.icon} ${meta.label}</option>`;
+    }).join("");
+
+    const monthsOptions = FANTASY_MONTHS.map(mo => {
+      return `<option value="${mo.num}" ${Number(m.month) === mo.num ? "selected" : ""}>Mês ${mo.num}: ${mo.name} (${mo.season})</option>`;
+    }).join("");
+
+    const charsOptions = `<option value="">Nenhum personagem vinculado</option>` +
+      chars.map(c => `<option value="${c.id}" ${m.characterId === c.id ? "selected" : ""}>${this.escapeHtml(c.name)}${c.title ? " &bull; " + this.escapeHtml(c.title) : ""}</option>`).join("");
+
+    const housesOptions = `<option value="">Nenhuma casa nobre vinculada</option>` +
+      houses.map(h => `<option value="${h.id}" ${m.houseId === h.id ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`).join("");
+
+    const terrOptions = `<option value="">Nenhum território vinculado</option>` +
+      terrs.map(t => `<option value="${t.id}" ${m.territoryId === t.id ? "selected" : ""}>${this.escapeHtml(t.name)}</option>`).join("");
+
+    const bodyHtml = `
+      <div class="form-group">
+        <label>Título do Acontecimento Histórico / Guerra / Marco:</label>
+        <input type="text" id="mf_title" value="${this.escapeHtml(m.title || "")}" placeholder="Ex: Início da Guerra das Três Pontes, Coroação de Aldric I..." />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>Categoria:</label>
+          <select id="mf_category">
+            ${catsOptions}
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Importância Histórica:</label>
+          <select id="mf_importance">
+            <option value="normal" ${m.importance === "normal" ? "selected" : ""}>Comum / Notável</option>
+            <option value="notable" ${m.importance === "notable" ? "selected" : ""}>Grande Acontecimento</option>
+            <option value="epic" ${m.importance === "epic" ? "selected" : ""}>★ Marco Lendário / Épico</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>Ano Histórico:</label>
+          <input type="number" id="mf_year" value="${m.year || 1200}" />
+        </div>
+        <div class="form-group" style="flex:1.5;">
+          <label>Lua / Mês das Estações:</label>
+          <select id="mf_month">
+            ${monthsOptions}
+          </select>
+        </div>
+        <div class="form-group" style="flex:0.8;">
+          <label>Dia (1 a 30):</label>
+          <input type="number" id="mf_day" min="1" max="30" value="${m.day || 1}" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>Personagem Central (Opcional):</label>
+          <select id="mf_charId">
+            ${charsOptions}
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Casa Nobre / Facção (Opcional):</label>
+          <select id="mf_houseId">
+            ${housesOptions}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Território / Feudo no Mapa (Opcional):</label>
+        <select id="mf_territoryId">
+          ${terrOptions}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Crônica &amp; Detalhes Históricos:</label>
+        <textarea id="mf_desc" rows="4" placeholder="Descreva os fatores que desencadearam a guerra, as consequências políticas, a morte de personagens ou o legado do acontecimento...">${this.escapeHtml(m.description || "")}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Ilustração / Gravura Histórica (URL da Imagem - Opcional):</label>
+        <input type="text" id="mf_imageUrl" value="${this.escapeHtml(m.imageUrl || "")}" placeholder="https://..." />
+      </div>
+    `;
+
+    const title = editId ? "Editar Marco nos Anais da História" : "Lavrar Novo Marco na Cronologia";
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="app.saveMilestoneFromModal('${editId || ""}')">
+        ${editId ? "Salvar Alterações" : "Gravar nos Anais da História"}
+      </button>
+    `;
+
+    this.showModal(title, bodyHtml, footerHtml);
+  }
+
+  saveMilestoneFromModal(editId = "") {
+    const title = document.getElementById("mf_title")?.value.trim();
+    if (!title) {
+      alert("Por favor, forneça um título para o marco histórico.");
+      return;
+    }
+
+    const category = document.getElementById("mf_category")?.value || "general";
+    const importance = document.getElementById("mf_importance")?.value || "normal";
+    const year = Number(document.getElementById("mf_year")?.value) || this.engine.data.currentYear || 1220;
+    const month = Number(document.getElementById("mf_month")?.value) || 1;
+    const day = Math.max(1, Math.min(30, Number(document.getElementById("mf_day")?.value) || 1));
+    const characterId = document.getElementById("mf_charId")?.value || null;
+    const houseId = document.getElementById("mf_houseId")?.value || null;
+    const territoryId = document.getElementById("mf_territoryId")?.value || null;
+    const description = document.getElementById("mf_desc")?.value.trim() || "";
+    const imageUrl = document.getElementById("mf_imageUrl")?.value.trim() || "";
+
+    const snapshot = this.engine.createSnapshot();
+
+    if (!Array.isArray(this.engine.data.timelineMilestones)) {
+      this.engine.data.timelineMilestones = [];
+    }
+
+    const meta = this.getTimelineCategoryMeta(category);
+
+    if (editId) {
+      const idx = this.engine.data.timelineMilestones.findIndex(m => m.id === editId);
+      if (idx !== -1) {
+        const old = this.engine.data.timelineMilestones[idx];
+        this.engine.data.timelineMilestones[idx] = {
+          ...old,
+          title,
+          category,
+          importance,
+          year,
+          month,
+          day,
+          characterId,
+          houseId,
+          territoryId,
+          description,
+          imageUrl
+        };
+
+        this.engine.recordAuditLog(
+          "CRONOLOGIA",
+          "Alteração de Marco Histórico",
+          `Marco Atualizado: "${title}" (Ano ${year})`,
+          `O marco histórico "${title}" teve suas propriedades atualizadas nos anais da cronologia.`,
+          snapshot
+        );
+      }
+    } else {
+      const newMilestone = {
+        id: "ms_" + Date.now(),
+        title,
+        category,
+        importance,
+        year,
+        month,
+        day,
+        characterId,
+        houseId,
+        territoryId,
+        description,
+        imageUrl
+      };
+      this.engine.data.timelineMilestones.push(newMilestone);
+
+      this.engine.recordAuditLog(
+        "CRONOLOGIA",
+        "Inscrição de Marco Histórico",
+        `Novo Marco nos Anais: "${title}" (Ano ${year})`,
+        `Lavrado nos anais do mundo: "${title}" sob a categoria ${meta.label}.`,
+        snapshot
+      );
+    }
+
+    this.engine.saveToStorage();
+    this.closeModal();
+    this.syncHeaderAndBadges();
+    this.renderTimeline();
+    this.renderAuditHistory();
+  }
+
+  confirmDeleteMilestone(milestoneId) {
+    const m = (this.engine.data.timelineMilestones || []).find(e => e.id === milestoneId);
+    if (!m) return;
+
+    this.showModal(
+      `Confirmar Exclusão de Marco Histórico`,
+      `
+        <div class="alert-banner alert-danger" style="margin-bottom:12px;">
+          <strong>Atenção:</strong> Você está prestes a apagar o marco <strong>"${this.escapeHtml(m.title)}"</strong> (Ano ${m.year}) da cronologia do mundo.
+        </div>
+        <p style="color:var(--parchment-bright); font-size:0.9rem;">
+          Esta ação ficará documentada nos <strong>Anais do Reino</strong> e poderá ser revogada a qualquer momento se desejar recuperar o registro histórico.
+        </p>
+      `,
+      `
+        <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+        <button class="btn btn-danger" onclick="app.deleteMilestone('${m.id}')">Confirmar Exclusão</button>
+      `
+    );
+  }
+
+  deleteMilestone(milestoneId) {
+    const m = (this.engine.data.timelineMilestones || []).find(e => e.id === milestoneId);
+    if (!m) {
+      this.closeModal();
+      return;
+    }
+
+    const snapshot = this.engine.createSnapshot();
+    this.engine.data.timelineMilestones = this.engine.data.timelineMilestones.filter(e => e.id !== milestoneId);
+
+    this.engine.recordAuditLog(
+      "CRONOLOGIA",
+      "Exclusão de Marco Histórico",
+      `Marco Excluído: "${m.title}" (Ano ${m.year})`,
+      `O marco histórico "${m.title}" foi removido da cronologia. Ação revogável.`,
+      snapshot
+    );
+
+    this.engine.saveToStorage();
+    this.closeModal();
+    this.syncHeaderAndBadges();
+    this.renderTimeline();
+    this.renderAuditHistory();
+  }
+
+  initTimelineEvents() {
+    const viewport = document.getElementById("timelineRulerViewport");
+    if (!viewport) return;
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    viewport.addEventListener("mousedown", e => {
+      isDown = true;
+      startX = e.pageX - viewport.offsetLeft;
+      scrollLeft = viewport.scrollLeft;
+    });
+
+    viewport.addEventListener("mouseleave", () => {
+      isDown = false;
+    });
+
+    viewport.addEventListener("mouseup", () => {
+      isDown = false;
+    });
+
+    viewport.addEventListener("mousemove", e => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - viewport.offsetLeft;
+      const walk = (x - startX) * 1.5;
+      viewport.scrollLeft = scrollLeft - walk;
+    });
+
+    viewport.addEventListener("wheel", e => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.25 : -0.25;
+        this.adjustTimelineZoom(delta);
+      } else {
+        viewport.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
   }
 
   // --------------------------------------------------------------------------
@@ -2718,51 +3986,207 @@ class FantasyGenealogyApp {
   }
 
   // --------------------------------------------------------------------------
-  // CARTOGRAFIA DO REINO (EDITOR DE TERRITÓRIOS / CONTINENTES E OCEANO COM ONDAS)
+  // CARTOGRAFIA DO REINO (EDITOR DE TERRITÓRIOS, RELEVO E OCEANO COM ONDAS)
   // --------------------------------------------------------------------------
+  toggleMapEditMode() {
+    this.isMapEditMode = !this.isMapEditMode;
+    this.updateMapEditModeUI();
+    if (!this.isMapEditMode) {
+      this.hoveredMapHandle = null;
+      this.draggingVertex = null;
+      this.draggingTerritory = null;
+      this.isDrawingMap = false;
+      this.mapTool = "select";
+    } else {
+      this.setMapTool("select");
+    }
+    this.renderMapStudio();
+  }
+
+  updateMapEditModeUI() {
+    const btn = document.getElementById("btnToggleMapEdit");
+    const textEl = document.getElementById("toggleMapEditText");
+    const iconEl = document.getElementById("iconToggleMapEdit");
+    const badgeEl = document.getElementById("mapModeBadge");
+    const badgeTextEl = document.getElementById("mapModeBadgeText");
+    const controls = document.getElementById("mapEditControls");
+    const helperBar = document.getElementById("mapHelperBar");
+
+    if (this.isMapEditMode) {
+      if (btn) {
+        btn.classList.add("btn-editing-active");
+        btn.title = "Clique para concluir a edição e retornar ao modo de exibição limpo";
+      }
+      if (textEl) textEl.textContent = "Concluir Edição";
+      if (iconEl) {
+        iconEl.innerHTML = `<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>`;
+      }
+      if (badgeEl) {
+        badgeEl.className = "map-mode-badge edit-mode";
+      }
+      if (badgeTextEl) badgeTextEl.textContent = "Modo de Edição";
+      if (controls) controls.style.display = "flex";
+      if (helperBar) helperBar.style.display = "flex";
+    } else {
+      if (btn) {
+        btn.classList.remove("btn-editing-active");
+        btn.title = "Clique no lápis para habilitar a edição do mapa, continentes e traços";
+      }
+      if (textEl) textEl.textContent = "Habilitar Edição";
+      if (iconEl) {
+        iconEl.innerHTML = `<path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>`;
+      }
+      if (badgeEl) {
+        badgeEl.className = "map-mode-badge view-mode";
+      }
+      if (badgeTextEl) badgeTextEl.textContent = "Modo de Exibição";
+      if (controls) controls.style.display = "none";
+      if (helperBar) helperBar.style.display = "none";
+    }
+  }
+
+  toggleContinentNames() {
+    this.showContinentNames = !this.showContinentNames;
+    const btnText = document.getElementById("toggleContinentNamesText");
+    const btnIcon = document.getElementById("iconToggleContinentNames");
+    const btn = document.getElementById("btnToggleContinentNames");
+    if (this.showContinentNames) {
+      if (btnText) btnText.textContent = "Ocultar Nomes";
+      if (btn) {
+        btn.classList.remove("btn-names-hidden");
+        btn.title = "Ocultar os nomes dos continentes no mapa";
+      }
+      if (btnIcon) {
+        btnIcon.innerHTML = `<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>`;
+      }
+    } else {
+      if (btnText) btnText.textContent = "Exibir Nomes";
+      if (btn) {
+        btn.classList.add("btn-names-hidden");
+        btn.title = "Exibir os nomes dos continentes no mapa";
+      }
+      if (btnIcon) {
+        btnIcon.innerHTML = `<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>`;
+      }
+    }
+    this.drawMapCanvas();
+  }
+
   setMapTool(tool) {
+    if (!this.isMapEditMode) {
+      this.isMapEditMode = true;
+      this.updateMapEditModeUI();
+    }
     this.mapTool = tool;
-    ["Select", "River", "Road", "Mountain"].forEach(suffix => {
+    ["Select", "Mountain", "Tree", "Road", "River", "Capital", "City"].forEach(suffix => {
       const btn = document.getElementById("mapTool" + suffix);
       if (btn) {
-        btn.classList.remove("btn-gold");
         btn.classList.remove("active-tool");
       }
     });
     const mapIds = {
       select: "mapToolSelect",
-      draw_river: "mapToolRiver",
+      draw_mountain: "mapToolMountain",
+      draw_tree: "mapToolTree",
       draw_road: "mapToolRoad",
-      draw_mountain: "mapToolMountain"
+      draw_river: "mapToolRiver",
+      add_capital: "mapToolCapital",
+      add_city: "mapToolCity"
     };
     const activeBtn = document.getElementById(mapIds[tool]);
     if (activeBtn) {
       activeBtn.classList.add("active-tool");
     }
+    this.drawMapCanvas();
   }
 
-  // Adiciona na tela um novo elemento Território (Continente / Terra) cheio de pontos nas bordas
+  // ------------------------------------------------------------------------
+  // SISTEMA DE NAVEGAÇÃO & VISUALIZAÇÃO DO MINI MAPA INFINITO
+  // ------------------------------------------------------------------------
+
+  adjustMapZoom(delta) {
+    const canvas = document.getElementById("fantasyMapCanvas");
+    const cx = canvas ? canvas.width / 2 : 480;
+    const cy = canvas ? canvas.height / 2 : 280;
+    const factor = delta > 0 ? 1 + delta : 1 / (1 - delta);
+    this.zoomMapAt(cx, cy, factor);
+  }
+
+  resetMapZoom() {
+    this.mapZoom = 1.0;
+    this.mapPanX = 0;
+    this.mapPanY = 0;
+    this.updateMapZoomUI();
+    this.drawMapCanvas();
+    this.renderMapStudio();
+  }
+
+  updateMapZoomUI() {
+    const label = document.getElementById("mapZoomLabel");
+    if (label) {
+      label.textContent = `${Math.round(this.mapZoom * 100)}%`;
+    }
+  }
+
+  // Converte coordenadas da tela para as coordenadas do mundo infinito
+  getMapWorldCoords(e) {
+    const canvas = document.getElementById("fantasyMapCanvas");
+    if (!canvas) return { x: 0, y: 0, screenX: 0, screenY: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const screenX = (e.clientX - rect.left) * scaleX;
+    const screenY = (e.clientY - rect.top) * scaleY;
+    return {
+      x: Math.round((screenX - this.mapPanX) / this.mapZoom),
+      y: Math.round((screenY - this.mapPanY) / this.mapZoom),
+      screenX,
+      screenY
+    };
+  }
+
+  // Converte coordenadas do mundo para a tela
+  worldToMapScreen(wx, wy) {
+    return {
+      x: wx * this.mapZoom + this.mapPanX,
+      y: wy * this.mapZoom + this.mapPanY
+    };
+  }
+
+  zoomMapAt(screenX, screenY, factor) {
+    const newZoom = Math.max(0.18, Math.min(4.5, this.mapZoom * factor));
+    if (Math.abs(newZoom - this.mapZoom) < 0.001) return;
+    const worldX = (screenX - this.mapPanX) / this.mapZoom;
+    const worldY = (screenY - this.mapPanY) / this.mapZoom;
+    this.mapPanX = Math.round(screenX - worldX * newZoom);
+    this.mapPanY = Math.round(screenY - worldY * newZoom);
+    this.mapZoom = Number(newZoom.toFixed(3));
+    this.updateMapZoomUI();
+    this.drawMapCanvas();
+    this.renderMapStudio();
+  }
+
+  // Adiciona na tela um novo elemento Território (Continente / Terra) sobre o oceano infinito
   addContinentOnMap(customX = null, customY = null) {
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
     const snapshot = this.engine.createSnapshot();
 
-    const count = this.engine.data.territories.length;
-    const offsets = [
-      { x: 480, y: 280 },
-      { x: 320, y: 230 },
-      { x: 630, y: 270 },
-      { x: 450, y: 390 },
-      { x: 270, y: 360 },
-      { x: 670, y: 170 }
-    ];
-    const pos = offsets[count % offsets.length];
-    const cx = customX !== null ? customX : pos.x;
-    const cy = customY !== null ? customY : pos.y;
+    const canvas = document.getElementById("fantasyMapCanvas");
+    const cw = canvas ? canvas.width : 960;
+    const ch = canvas ? canvas.height : 560;
 
-    const palette = ["#d97706", "#e11d48", "#38bdf8", "#10b981", "#a855f7", "#f59e0b", "#ec4899"];
+    // Se não especificado, insere no centro visível do viewport da autora no oceano infinito
+    const viewportCenterWorldX = Math.round((cw / 2 - this.mapPanX) / this.mapZoom);
+    const viewportCenterWorldY = Math.round((ch / 2 - this.mapPanY) / this.mapZoom);
+
+    const count = this.engine.data.territories.length;
+    const cx = customX !== null ? customX : viewportCenterWorldX;
+    const cy = customY !== null ? customY : viewportCenterWorldY;
+
+    const palette = ["#d97706", "#e11d48", "#38bdf8", "#10b981", "#a855f7", "#f59e0b", "#ec4899", "#14b8a6"];
     const color = palette[count % palette.length];
     const defaultHouseId = (this.engine.data.houses[0] && this.engine.data.houses[0].id) || "";
-    const points = this.engine.generateContinentPoints(cx, cy, 98, 76, 24, count + 3);
+    const points = this.engine.generateContinentPoints(cx, cy, 110, 85, 24, count + 3);
 
     const newTerr = {
       id: "terr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -2773,7 +4197,7 @@ class FantasyGenealogyApp {
       x: cx,
       y: cy,
       points,
-      description: "Território modelável adicionado pela autora sobre o oceano.",
+      description: "Território modelável adicionado pela autora sobre o oceano infinito.",
       notablePassages: []
     };
 
@@ -2785,10 +4209,11 @@ class FantasyGenealogyApp {
       "TERRITÓRIO",
       "Novo Território (Continente)",
       `Território Criado: ${newTerr.name}`,
-      `Elemento território (terra) adicionado ao mapa com ${points.length} pontos de modelagem nas bordas.`,
+      `Elemento território (terra) adicionado ao mapa infinito com ${points.length} pontos de modelagem nas bordas.`,
       snapshot
     );
 
+    this.engine.saveToStorage();
     this.syncHeaderAndBadges();
     this.renderMapStudio();
     this.renderTree();
@@ -2823,25 +4248,28 @@ class FantasyGenealogyApp {
   }
 
   findHitVertex(pt) {
+    if (!this.isMapEditMode) return null;
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
     const selected = this.engine.getTerritory(this.selectedTerritoryId);
+    const hitThreshold = 12 / this.mapZoom;
+    const midThreshold = 10 / this.mapZoom;
 
     // 1. Pontos principais da borda do território selecionado
     if (selected && Array.isArray(selected.points)) {
       for (let i = 0; i < selected.points.length; i++) {
         const p = selected.points[i];
-        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= 10) {
+        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= hitThreshold) {
           return { kind: "vertex", terr: selected, index: i };
         }
       }
-      // 2. Pontos intermediários (midpoints) da borda do território selecionado para criar novo vértice
+      // 2. Pontos intermediários (midpoints) da borda para criar novo vértice
       const len = selected.points.length;
       for (let i = 0; i < len; i++) {
         const p1 = selected.points[i];
         const p2 = selected.points[(i + 1) % len];
         const mx = (p1.x + p2.x) / 2;
         const my = (p1.y + p2.y) / 2;
-        if (Math.hypot(pt.x - mx, pt.y - my) <= 8) {
+        if (Math.hypot(pt.x - mx, pt.y - my) <= midThreshold) {
           return { kind: "midpoint", terr: selected, index: i, mx, my };
         }
       }
@@ -2853,7 +4281,7 @@ class FantasyGenealogyApp {
       if (!t || !Array.isArray(t.points)) continue;
       for (let i = 0; i < t.points.length; i++) {
         const p = t.points[i];
-        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= 9) {
+        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= hitThreshold) {
           return { kind: "vertex", terr: t, index: i };
         }
       }
@@ -2867,18 +4295,31 @@ class FantasyGenealogyApp {
     for (let i = this.engine.data.territories.length - 1; i >= 0; i--) {
       const t = this.engine.data.territories[i];
       if (!t) continue;
-      if (Math.hypot(pt.x - t.x, pt.y - t.y) <= 26 || this.isPointInPolygon(pt, t.points)) {
+      // Hit-testing preciso no corpo do continente ou no centro onde fica o nome
+      let maxDist = 35;
+      if (Array.isArray(t.points)) {
+        t.points.forEach(p => {
+          const d = Math.hypot(p.x - t.x, p.y - t.y);
+          if (d > maxDist) maxDist = d;
+        });
+      }
+      const centerHitDist = Math.max(38, maxDist * 0.45);
+      if (Math.hypot(pt.x - t.x, pt.y - t.y) <= centerHitDist || this.isPointInPolygon(pt, t.points)) {
         return t;
       }
     }
     return null;
   }
 
+  // Dobra a quantidade de pontos de modelagem inserindo novos vértices nos intervalos
   subdivideSelectedTerritoryPoints() {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
     this.engine.ensureTerritoryPolygons([t]);
-    if (t.points.length >= 64) return;
+    if (t.points.length >= 128) {
+      if (typeof this.showToast === "function") this.showToast("Limite de 128 pontos de modelagem atingido.");
+      return;
+    }
 
     const snapshot = this.engine.createSnapshot();
     const newPts = [];
@@ -2902,9 +4343,38 @@ class FantasyGenealogyApp {
       `O território "${t.name}" passou a ter ${t.points.length} pontos de modelagem em sua borda.`,
       snapshot
     );
+    this.engine.saveToStorage();
     this.renderMapStudio();
   }
 
+  // Reduz a quantidade de pontos da borda (remove pontos extras sem perder o formato)
+  reduceSelectedTerritoryPoints() {
+    const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
+    if (!t) return;
+    this.engine.ensureTerritoryPolygons([t]);
+    if (t.points.length <= 8) {
+      if (typeof this.showToast === "function") this.showToast("Mínimo de 8 pontos mantido para preservar o formato da terra.");
+      return;
+    }
+
+    const snapshot = this.engine.createSnapshot();
+    const oldLen = t.points.length;
+    // Decima pontos preservando os índices pares
+    t.points = t.points.filter((_, i) => i % 2 === 0);
+    this.updateTerritoryCentroid(t);
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Redução de Pontos da Borda",
+      `Menos Pontos na Borda: ${t.name}`,
+      `Os pontos da borda de "${t.name}" foram reduzidos de ${oldLen} para ${t.points.length}.`,
+      snapshot
+    );
+    this.engine.saveToStorage();
+    this.renderMapStudio();
+  }
+
+  // Redimensiona o continente sem limites artificiais de tamanho
   scaleSelectedTerritory(factor = 1.15) {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
@@ -2916,8 +4386,8 @@ class FantasyGenealogyApp {
     const cy = t.y;
 
     t.points = t.points.map(p => ({
-      x: Math.round(Math.max(10, Math.min(950, cx + (p.x - cx) * factor))),
-      y: Math.round(Math.max(10, Math.min(550, cy + (p.y - cy) * factor)))
+      x: Math.round(cx + (p.x - cx) * factor),
+      y: Math.round(cy + (p.y - cy) * factor)
     }));
     this.updateTerritoryCentroid(t);
 
@@ -2928,9 +4398,11 @@ class FantasyGenealogyApp {
       `O território "${t.name}" foi redimensionado (${factor > 1 ? "ampliado" : "reduzido"}) pela autora.`,
       snapshot
     );
+    this.engine.saveToStorage();
     this.renderMapStudio();
   }
 
+  // Suaviza o contorno costeiro da massa de terra
   smoothSelectedTerritoryPoints() {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
@@ -2958,6 +4430,7 @@ class FantasyGenealogyApp {
       `Os pontos de borda do território "${t.name}" foram suavizados.`,
       snapshot
     );
+    this.engine.saveToStorage();
     this.renderMapStudio();
   }
 
@@ -2965,7 +4438,7 @@ class FantasyGenealogyApp {
     const t = this.engine.getTerritory(terrId);
     if (!t) return;
     const snapshot = this.engine.createSnapshot();
-    t.points = this.engine.generateContinentPoints(t.x || 480, t.y || 280, 92, 72, 24, Date.now() % 19);
+    t.points = this.engine.generateContinentPoints(t.x || 480, t.y || 280, 110, 85, 24, Date.now() % 19);
     this.updateTerritoryCentroid(t);
 
     this.engine.recordAuditLog(
@@ -2975,35 +4448,242 @@ class FantasyGenealogyApp {
       `O contorno do território "${t.name}" foi redefinido com 24 pontos de borda.`,
       snapshot
     );
+    this.engine.saveToStorage();
     this.renderMapStudio();
   }
 
   updateMapPinPosition(terr) {
     if (!terr) return;
-    const canvas = document.getElementById("fantasyMapCanvas");
-    const pinEl = document.querySelector(`.map-city-pin[data-terr-id="${terr.id}"]`);
-    if (pinEl && canvas) {
-      pinEl.style.left = ((terr.x / canvas.width) * 100).toFixed(2) + "%";
-      pinEl.style.top = ((terr.y / canvas.height) * 100).toFixed(2) + "%";
+    this.drawMapCanvas();
+  }
+
+  // Interpola pontos equidistantes ao longo de uma linha traçada
+  getEquidistantPointsAlongPath(points, spacing = 20) {
+    if (!Array.isArray(points) || points.length === 0) return [];
+    if (points.length === 1) return [{ x: points[0].x, y: points[0].y, index: 0 }];
+
+    const result = [{ x: points[0].x, y: points[0].y, index: 0 }];
+    let accumulatedDist = 0;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const segDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (segDist === 0) continue;
+
+      let distCovered = 0;
+      while (accumulatedDist + (segDist - distCovered) >= spacing) {
+        const needed = spacing - accumulatedDist;
+        const t = (distCovered + needed) / segDist;
+        const ix = Math.round(p1.x + (p2.x - p1.x) * t);
+        const iy = Math.round(p1.y + (p2.y - p1.y) * t);
+        result.push({ x: ix, y: iy, index: result.length });
+        distCovered += needed;
+        accumulatedDist = 0;
+      }
+      accumulatedDist += segDist - distCovered;
     }
+    return result;
+  }
+
+  // Desenha um ícone clássico de montanha estilo pergaminho medieval
+  drawMountainIcon(ctx, x, y, size = 18, seed = 0) {
+    const h = size;
+    const halfW = size * 0.95;
+    const ridgeCurve = seed % 2 === 0 ? 2 : -1.5;
+
+    ctx.save();
+    // 1. Sombra da base
+    ctx.beginPath();
+    ctx.ellipse(x, y + h * 0.45, halfW * 0.9, h * 0.22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(18, 12, 7, 0.35)";
+    ctx.fill();
+
+    // 2. Silhueta e encosta esquerda (iluminada)
+    ctx.beginPath();
+    ctx.moveTo(x, y - h);
+    ctx.quadraticCurveTo(x + ridgeCurve, y, x, y + h * 0.45);
+    ctx.lineTo(x - halfW, y + h * 0.45);
+    ctx.closePath();
+    ctx.fillStyle = "#4a3b2c";
+    ctx.fill();
+
+    // 3. Encosta direita (sombra)
+    ctx.beginPath();
+    ctx.moveTo(x, y - h);
+    ctx.quadraticCurveTo(x + ridgeCurve, y, x, y + h * 0.45);
+    ctx.lineTo(x + halfW, y + h * 0.45);
+    ctx.closePath();
+    ctx.fillStyle = "#271b12";
+    ctx.fill();
+
+    // 4. Hachuras de relevo na vertente de sombra
+    ctx.strokeStyle = "rgba(10, 7, 4, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 1, y - h * 0.35);
+    ctx.lineTo(x + halfW * 0.55, y + h * 0.15);
+    ctx.moveTo(x + 2, y);
+    ctx.lineTo(x + halfW * 0.8, y + h * 0.35);
+    ctx.stroke();
+
+    // 5. Cume com neve / reflexo de marfim no pico
+    ctx.beginPath();
+    ctx.moveTo(x, y - h);
+    ctx.lineTo(x - halfW * 0.26, y - h * 0.5);
+    ctx.lineTo(x + ridgeCurve * 0.4, y - h * 0.4);
+    ctx.lineTo(x + halfW * 0.26, y - h * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(245, 238, 220, 0.85)";
+    ctx.fill();
+
+    // 6. Contorno exterior e cume central a nanquim
+    ctx.strokeStyle = "#140c06";
+    ctx.lineWidth = 1.35;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - halfW, y + h * 0.45);
+    ctx.lineTo(x, y - h);
+    ctx.lineTo(x + halfW, y + h * 0.45);
+    // Linha do cume
+    ctx.moveTo(x, y - h);
+    ctx.quadraticCurveTo(x + ridgeCurve, y, x, y + h * 0.45);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Desenha um autêntico pinheiro conífero estilo cartografia de fantasia medieval
+  drawPineTreeIcon(ctx, x, y, size = 16, seed = 0) {
+    const h = size * 1.35;
+    const halfW = size * 0.72;
+    const trunkW = Math.max(1.6, size * 0.16);
+    const trunkH = size * 0.38;
+
+    ctx.save();
+
+    // 1. Sombra suave na base do pinheiro
+    ctx.beginPath();
+    ctx.ellipse(x, y + trunkH * 0.9, halfW * 0.85, trunkH * 0.45, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(10, 16, 11, 0.42)";
+    ctx.fill();
+
+    // 2. Tronco de madeira resistente
+    ctx.beginPath();
+    ctx.rect(x - trunkW / 2, y, trunkW, trunkH);
+    ctx.fillStyle = "#382314";
+    ctx.fill();
+    ctx.strokeStyle = "#1b1008";
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+
+    // 3. Três camadas coníferas de folhagem triangular serrilhada
+    // Camada Inferior (mais larga)
+    const yB = y + 2;
+    const wB = halfW;
+    ctx.beginPath();
+    ctx.moveTo(x, yB - h * 0.52);
+    ctx.lineTo(x + wB, yB);
+    ctx.lineTo(x + wB * 0.65, yB - 1);
+    ctx.lineTo(x + wB * 0.35, yB + 0.5);
+    ctx.lineTo(x, yB - 0.8);
+    ctx.lineTo(x - wB * 0.35, yB + 0.5);
+    ctx.lineTo(x - wB * 0.65, yB - 1);
+    ctx.lineTo(x - wB, yB);
+    ctx.closePath();
+    ctx.fillStyle = "#1b381d";
+    ctx.fill();
+    ctx.strokeStyle = "#0d1f10";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Camada Intermediária
+    const yM = y - h * 0.28;
+    const wM = halfW * 0.78;
+    ctx.beginPath();
+    ctx.moveTo(x, yM - h * 0.48);
+    ctx.lineTo(x + wM, yM);
+    ctx.lineTo(x + wM * 0.55, yM - 1);
+    ctx.lineTo(x, yM - 0.5);
+    ctx.lineTo(x - wM * 0.55, yM - 1);
+    ctx.lineTo(x - wM, yM);
+    ctx.closePath();
+    ctx.fillStyle = "#224725";
+    ctx.fill();
+    ctx.strokeStyle = "#0d1f10";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Camada Superior / Ápice do Pinheiro
+    const yT = y - h * 0.58;
+    const wT = halfW * 0.54;
+    ctx.beginPath();
+    ctx.moveTo(x, y - h);
+    ctx.lineTo(x + wT, yT);
+    ctx.lineTo(x, yT - 0.5);
+    ctx.lineTo(x - wT, yT);
+    ctx.closePath();
+    ctx.fillStyle = "#2d5e32";
+    ctx.fill();
+    ctx.strokeStyle = "#0d1f10";
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+
+    // 4. Iluminação nas acículas da esquerda e sombra na vertente direita
+    ctx.save();
+    // Destaque de luz nas agulhas do lado iluminado
+    ctx.strokeStyle = "rgba(165, 220, 150, 0.38)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 1, y - h * 0.9);
+    ctx.lineTo(x - wT * 0.5, yT);
+    ctx.moveTo(x - 2, yM - h * 0.3);
+    ctx.lineTo(x - wM * 0.6, yM);
+    ctx.moveTo(x - 2, yB - h * 0.35);
+    ctx.lineTo(x - wB * 0.7, yB);
+    ctx.stroke();
+
+    // Hachura de sombra no lado direito
+    ctx.strokeStyle = "rgba(8, 18, 10, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 1, y - h * 0.7);
+    ctx.lineTo(x + wT * 0.6, yT);
+    ctx.moveTo(x + 1, yM - h * 0.2);
+    ctx.lineTo(x + wM * 0.6, yM);
+    ctx.moveTo(x + 1, yB - h * 0.25);
+    ctx.lineTo(x + wB * 0.7, yB);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
   }
 
   initMapCanvasEvents() {
     const canvas = document.getElementById("fantasyMapCanvas");
     if (!canvas) return;
 
-    const getCoords = e => {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      return {
-        x: Math.round((e.clientX - rect.left) * scaleX),
-        y: Math.round((e.clientY - rect.top) * scaleY)
-      };
-    };
+    // Zoom infinito através da roda do mouse (centrado na posição do cursor)
+    canvas.addEventListener(
+      "wheel",
+      e => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const screenX = (e.clientX - rect.left) * scaleX;
+        const screenY = (e.clientY - rect.top) * scaleY;
+        const factor = e.deltaY < 0 ? 1.14 : 0.88;
+        this.zoomMapAt(screenX, screenY, factor);
+      },
+      { passive: false }
+    );
 
+    // Menu de contexto no canvas (botão direito): remove vértice clicado se houver mais de 6
     canvas.addEventListener("contextmenu", e => {
-      const pt = getCoords(e);
+      if (!this.isMapEditMode) return;
+      const pt = this.getMapWorldCoords(e);
       const hit = this.findHitVertex(pt);
       if (hit && hit.kind === "vertex" && hit.terr && hit.terr.points.length > 6) {
         e.preventDefault();
@@ -3023,8 +4703,17 @@ class FantasyGenealogyApp {
     });
 
     canvas.addEventListener("dblclick", e => {
-      if (this.mapTool !== "select") return;
-      const pt = getCoords(e);
+      const pt = this.getMapWorldCoords(e);
+      const hitSettle = this.findHitSettlement(pt);
+      if (hitSettle) {
+        if (this.isMapEditMode) {
+          this.openEditSettlementModal(hitSettle.id);
+        } else {
+          this.focusSettlementOnMap(hitSettle.id);
+        }
+        return;
+      }
+      if (!this.isMapEditMode || this.mapTool !== "select") return;
       const hitVertex = this.findHitVertex(pt);
       if (hitVertex) return;
       const hitTerr = this.findHitTerritoryBody(pt);
@@ -3035,22 +4724,80 @@ class FantasyGenealogyApp {
     });
 
     canvas.addEventListener("mousedown", e => {
-      if (e.button === 2) return;
-      const pt = getCoords(e);
+      if (e.button === 2) return; // Ignora clique direito para o contextmenu
+      const pt = this.getMapWorldCoords(e);
 
+      // Clique com botão do meio (roda) inicia navegação panorâmica imediatamente
+      if (e.button === 1) {
+        e.preventDefault();
+        this.isPanningMap = true;
+        this.panStartX = e.clientX;
+        this.panStartY = e.clientY;
+        this.initialPanX = this.mapPanX;
+        this.initialPanY = this.mapPanY;
+        canvas.style.cursor = "grabbing";
+        return;
+      }
+
+      // Adicionar Capital Real ou Cidade/Vila no mapa no ponto clicado
+      if (this.mapTool === "add_capital" || this.mapTool === "add_city") {
+        const defaultType = this.mapTool === "add_capital" ? "capital" : "city";
+        this.openSettlementModal(pt.x, pt.y, defaultType);
+        return;
+      }
+
+      // Em modo de exibição pura, clicar em um assentamento ou território o seleciona; clicar no oceano arrasta o mapa
+      if (!this.isMapEditMode) {
+        const hitSettle = this.findHitSettlement(pt);
+        if (hitSettle) {
+          this.selectedSettlementId = hitSettle.id;
+          if (hitSettle.territoryId) {
+            this.selectedTerritoryId = hitSettle.territoryId;
+          }
+          this.renderMapStudio();
+          return;
+        }
+        const hitTerr = this.findHitTerritoryBody(pt);
+        if (hitTerr) {
+          this.selectedTerritoryId = hitTerr.id;
+          this.renderMapStudio();
+        } else {
+          this.isPanningMap = true;
+          this.panStartX = e.clientX;
+          this.panStartY = e.clientY;
+          this.initialPanX = this.mapPanX;
+          this.initialPanY = this.mapPanY;
+          canvas.style.cursor = "grabbing";
+        }
+        return;
+      }
+
+      // Modo de edição: traçado livre de montanhas, pinheiros, estradas ou rios
       if (this.mapTool && this.mapTool.startsWith("draw_")) {
         this.mapDragSnapshot = this.engine.createSnapshot();
         this.isDrawingMap = true;
         this.engine.data.mapStrokes = this.engine.data.mapStrokes || [];
         this.engine.data.mapStrokes.push({
           type: this.mapTool,
-          points: [pt]
+          points: [{ x: pt.x, y: pt.y }]
         });
         this.drawMapCanvas();
         return;
       }
 
-      // Modo de modelagem e seleção de territórios
+      // Modo de modelagem e seleção de territórios & assentamentos
+      const hitSettle = this.findHitSettlement(pt);
+      if (hitSettle) {
+        this.selectedSettlementId = hitSettle.id;
+        if (hitSettle.territoryId) {
+          this.selectedTerritoryId = hitSettle.territoryId;
+        }
+        this.mapDragSnapshot = this.engine.createSnapshot();
+        this.mapDragModified = false;
+        this.draggingSettlement = { id: hitSettle.id, lastX: pt.x, lastY: pt.y };
+        this.renderMapStudio();
+        return;
+      }
       const hit = this.findHitVertex(pt);
       if (hit && hit.kind === "vertex") {
         this.selectedTerritoryId = hit.terr.id;
@@ -3084,17 +4831,61 @@ class FantasyGenealogyApp {
         this.renderMapStudio();
         return;
       }
+
+      // Se clicou na água/oceano no modo select, arrasta a visão do mapa infinito
+      this.isPanningMap = true;
+      this.panStartX = e.clientX;
+      this.panStartY = e.clientY;
+      this.initialPanX = this.mapPanX;
+      this.initialPanY = this.mapPanY;
+      canvas.style.cursor = "grabbing";
     });
 
     canvas.addEventListener("mousemove", e => {
-      const pt = getCoords(e);
+      const pt = this.getMapWorldCoords(e);
 
-      // 1. Arrastando um ponto da borda para modelar o território
+      // 1. Arrastando a visão do mapa infinito (Pan)
+      if (this.isPanningMap) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const dx = (e.clientX - this.panStartX) * scaleX;
+        const dy = (e.clientY - this.panStartY) * scaleY;
+        this.mapPanX = Math.round(this.initialPanX + dx);
+        this.mapPanY = Math.round(this.initialPanY + dy);
+        canvas.style.cursor = "grabbing";
+        this.drawMapCanvas();
+        this.renderMapStudio();
+        return;
+      }
+
+      // 1.5. Arrastando assentamento (Capital ou Cidade) pelo mapa
+      if (this.draggingSettlement) {
+        const settle = (this.engine.data.settlements || []).find(s => s.id === this.draggingSettlement.id);
+        if (settle) {
+          settle.x = Math.round(pt.x);
+          settle.y = Math.round(pt.y);
+          this.mapDragModified = true;
+          canvas.style.cursor = "grabbing";
+          this.drawMapCanvas();
+        }
+        return;
+      }
+
+      // Em modo de exibição, altera o cursor se passar sobre uma cidade/território ou oceano
+      if (!this.isMapEditMode) {
+        const hitSettle = this.findHitSettlement(pt);
+        const hitTerr = this.findHitTerritoryBody(pt);
+        canvas.style.cursor = hitSettle || hitTerr ? "pointer" : "grab";
+        return;
+      }
+
+      // 2. Arrastando um ponto da borda para modelar o território livremente
       if (this.draggingVertex) {
         const terr = this.engine.getTerritory(this.draggingVertex.terrId);
         if (terr && Array.isArray(terr.points) && terr.points[this.draggingVertex.index]) {
-          terr.points[this.draggingVertex.index].x = Math.max(8, Math.min(canvas.width - 8, pt.x));
-          terr.points[this.draggingVertex.index].y = Math.max(8, Math.min(canvas.height - 8, pt.y));
+          terr.points[this.draggingVertex.index].x = pt.x;
+          terr.points[this.draggingVertex.index].y = pt.y;
           this.updateTerritoryCentroid(terr);
           this.mapDragModified = true;
           canvas.style.cursor = "grabbing";
@@ -3104,7 +4895,7 @@ class FantasyGenealogyApp {
         return;
       }
 
-      // 2. Arrastando o território inteiro pelo oceano
+      // 3. Arrastando o território inteiro pelo oceano infinito
       if (this.draggingTerritory) {
         const terr = this.engine.getTerritory(this.draggingTerritory.terrId);
         if (terr && Array.isArray(terr.points)) {
@@ -3112,8 +4903,8 @@ class FantasyGenealogyApp {
           const dy = pt.y - this.draggingTerritory.lastY;
           if (dx !== 0 || dy !== 0) {
             terr.points.forEach(p => {
-              p.x = Math.max(8, Math.min(canvas.width - 8, p.x + dx));
-              p.y = Math.max(8, Math.min(canvas.height - 8, p.y + dy));
+              p.x += dx;
+              p.y += dy;
             });
             this.updateTerritoryCentroid(terr);
             this.draggingTerritory.lastX = pt.x;
@@ -3127,43 +4918,89 @@ class FantasyGenealogyApp {
         return;
       }
 
-      // 3. Desenhando traço livre (rio, estrada, montanha)
+      // 4. Desenhando traço livre (rio, estrada, montanhas, pinheiros) com mini-correção anti-tremor
       if (this.isDrawingMap) {
         const strokes = this.engine.data.mapStrokes;
         if (strokes && strokes.length > 0) {
-          strokes[strokes.length - 1].points.push(pt);
-          this.drawMapCanvas();
+          const curStroke = strokes[strokes.length - 1];
+          const pts = curStroke.points;
+          const lastPt = pts[pts.length - 1];
+          const dist = Math.hypot(pt.x - lastPt.x, pt.y - lastPt.y);
+
+          // Filtro anti-tremor: só registra novo ponto se houver deslocamento mínimo (evita micro-vibrações)
+          if (dist >= 3.8 / this.mapZoom) {
+            // Mini-amortecimento suave entre o ponto anterior e a nova coordenada
+            const smoothX = Math.round(lastPt.x + (pt.x - lastPt.x) * 0.84);
+            const smoothY = Math.round(lastPt.y + (pt.y - lastPt.y) * 0.84);
+            pts.push({ x: smoothX, y: smoothY });
+            this.drawMapCanvas();
+          }
         }
         return;
       }
 
-      // 4. Feedback visual de cursor ao passar o mouse sobre os pontos da borda ou território
+      // 5. Feedback visual de cursor ao passar o mouse sobre os pontos da borda ou território
       if (this.mapTool && this.mapTool.startsWith("draw_")) {
         canvas.style.cursor = "crosshair";
         return;
       }
 
+      if (this.mapTool === "add_capital" || this.mapTool === "add_city") {
+        canvas.style.cursor = "cell";
+        return;
+      }
+
+      const hitSettle = this.findHitSettlement(pt);
       const hit = this.findHitVertex(pt);
       const prevHover = this.hoveredMapHandle;
       this.hoveredMapHandle = hit;
       if (
         (prevHover && !hit) ||
         (!prevHover && hit) ||
-        (prevHover && hit && (prevHover.index !== hit.index || prevHover.kind !== hit.kind || prevHover.terr.id !== hit.terr.id))
+        (prevHover &&
+          hit &&
+          (prevHover.index !== hit.index ||
+            prevHover.kind !== hit.kind ||
+            prevHover.terr.id !== hit.terr.id))
       ) {
         this.drawMapCanvas();
       }
 
-      if (hit) {
+      if (hitSettle) {
+        canvas.style.cursor = "pointer";
+      } else if (hit) {
         canvas.style.cursor = hit.kind === "midpoint" ? "copy" : "grab";
       } else if (this.findHitTerritoryBody(pt)) {
         canvas.style.cursor = "move";
       } else {
-        canvas.style.cursor = "default";
+        canvas.style.cursor = "grab";
       }
     });
 
     window.addEventListener("mouseup", () => {
+      if (this.isPanningMap) {
+        this.isPanningMap = false;
+        canvas.style.cursor = this.isMapEditMode ? "grab" : "default";
+      }
+
+      if (this.draggingSettlement) {
+        const settle = (this.engine.data.settlements || []).find(s => s.id === this.draggingSettlement.id);
+        this.draggingSettlement = null;
+        if (this.mapDragModified && settle) {
+          this.engine.recordAuditLog(
+            "TERRITÓRIO",
+            "Movimentação de Assentamento",
+            `Assentamento Movido: ${settle.name}`,
+            `O assentamento "${settle.name}" (${settle.type === "capital" ? "Capital Real" : "Cidade / Vila"}) foi reposicionado para (${settle.x}, ${settle.y}) no mapa.`,
+            this.mapDragSnapshot
+          );
+          this.engine.saveToStorage();
+          this.renderMapStudio();
+        }
+        this.mapDragSnapshot = null;
+        this.mapDragModified = false;
+      }
+
       if (this.draggingVertex) {
         const terr = this.engine.getTerritory(this.draggingVertex.terrId);
         this.draggingVertex = null;
@@ -3202,15 +5039,32 @@ class FantasyGenealogyApp {
 
       if (this.isDrawingMap) {
         this.isDrawingMap = false;
+        const currentStroke =
+          this.engine.data.mapStrokes &&
+          this.engine.data.mapStrokes[this.engine.data.mapStrokes.length - 1];
+
+        if (currentStroke && Array.isArray(currentStroke.points) && currentStroke.points.length > 2) {
+          // Mini-correção automática anti-tremor: remove serrilhado e suaviza a linha
+          currentStroke.points = this.smoothStrokePoints(currentStroke.points, 2);
+        }
+
+        const strokeNames = {
+          draw_mountain: "Cordilheira de Montanhas",
+          draw_tree: "Bosque de Pinheiros / Floresta",
+          draw_road: "Estrada / Via",
+          draw_river: "Curso d'Água / Rio"
+        };
+        const sName = (currentStroke && strokeNames[currentStroke.type]) || "Elemento Geográfico";
         this.engine.recordAuditLog(
           "TERRITÓRIO",
           "Traço Cartográfico",
-          `Traço Adicionado ao Mapa`,
-          `Um novo elemento hidrográfico/relevo foi desenhado sobre o mapa.`,
+          `${sName} Adicionado(a)`,
+          `Um novo elemento cartográfico (${sName}) foi desenhado sobre o mapa com mini-correções anti-tremor.`,
           this.mapDragSnapshot
         );
         this.mapDragSnapshot = null;
         this.engine.saveToStorage();
+        this.drawMapCanvas();
       }
     });
   }
@@ -3238,10 +5092,95 @@ class FantasyGenealogyApp {
       "TERRITÓRIO",
       "Limpeza de Traços",
       "Traços Livres do Mapa Limpos",
-      "Todos os traços livres (rios, estradas e montanhas) foram removidos.",
+      "Todos os traços livres (montanhas, pinheiros, rios e estradas) foram removidos.",
       snapshot
     );
     this.drawMapCanvas();
+  }
+
+  // Aplica mini correções e suavização ponderada anti-tremor a uma linha de pontos
+  smoothStrokePoints(points, iterations = 2) {
+    if (!Array.isArray(points) || points.length <= 2) return points;
+
+    // 1. Filtro de redundância: elimina pontos excessivamente colados (< 3.5px)
+    const cleaned = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+      const p = points[i];
+      const prev = cleaned[cleaned.length - 1];
+      const d = Math.hypot(p.x - prev.x, p.y - prev.y);
+      if (d >= 3.5 || i === points.length - 1) {
+        cleaned.push(p);
+      }
+    }
+
+    if (cleaned.length <= 2) return cleaned;
+
+    // 2. Filtro gaussiano ponderado (Moving Average 0.22 - 0.56 - 0.22)
+    // Preserva rigorosamente os pontos de início e fim da linha onde a autora clicou
+    let current = cleaned;
+    for (let iter = 0; iter < iterations; iter++) {
+      const nextPts = [current[0]];
+      for (let i = 1; i < current.length - 1; i++) {
+        const prev = current[i - 1];
+        const curr = current[i];
+        const next = current[i + 1];
+        nextPts.push({
+          x: Math.round(prev.x * 0.22 + curr.x * 0.56 + next.x * 0.22),
+          y: Math.round(prev.y * 0.22 + curr.y * 0.56 + next.y * 0.22)
+        });
+      }
+      nextPts.push(current[current.length - 1]);
+      current = nextPts;
+    }
+
+    return current;
+  }
+
+  // Suaviza o último traço desenhado (botão da barra de ferramentas)
+  smoothLastMapStroke() {
+    if (!this.engine.data.mapStrokes || this.engine.data.mapStrokes.length === 0) return;
+    const lastStroke = this.engine.data.mapStrokes[this.engine.data.mapStrokes.length - 1];
+    if (lastStroke && Array.isArray(lastStroke.points) && lastStroke.points.length > 2) {
+      const snapshot = this.engine.createSnapshot();
+      lastStroke.points = this.smoothStrokePoints(lastStroke.points, 2);
+      this.engine.recordAuditLog(
+        "TERRITÓRIO",
+        "Suavização de Traço",
+        "Traço Cartográfico Suavizado",
+        "Mini correções anti-tremor aplicadas ao último traço desenhado.",
+        snapshot
+      );
+      this.engine.saveToStorage();
+      this.drawMapCanvas();
+    }
+  }
+
+  // Traça um caminho de curvas suaves através de pontos médios quadráticos
+  // Elimina arestas duras e tremores de mão na renderização de linhas
+  traceSmoothStrokePath(ctx, points) {
+    if (!Array.isArray(points) || points.length === 0) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    if (points.length === 1) {
+      ctx.arc(points[0].x, points[0].y, 1, 0, Math.PI * 2);
+      return;
+    }
+
+    if (points.length === 2) {
+      ctx.lineTo(points[1].x, points[1].y);
+      return;
+    }
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const xc = (points[i].x + points[i + 1].x) / 2;
+      const yc = (points[i].y + points[i + 1].y) / 2;
+      ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+    }
+
+    const last = points[points.length - 1];
+    const prev = points[points.length - 2];
+    ctx.quadraticCurveTo(prev.x, prev.y, last.x, last.y);
   }
 
   // Traça o caminho fechado suave passando exatamente por todos os pontos da borda do território
@@ -3292,6 +5231,238 @@ class FantasyGenealogyApp {
     ctx.stroke();
   }
 
+  // Identifica se um ponto no mundo do mapa colidiu com um assentamento (Capital ou Cidade)
+  findHitSettlement(pt) {
+    const settlements = this.engine.data.settlements || [];
+    const hitRadius = 22;
+    for (let i = settlements.length - 1; i >= 0; i--) {
+      const s = settlements[i];
+      const d = Math.hypot(pt.x - s.x, pt.y - s.y);
+      if (d <= hitRadius) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  // Desenha uma Capital Real com o ícone autêntico de castelo medieval ("castelinho")
+  drawCastleIcon(ctx, x, y, size = 22, isSelected = false, name = "") {
+    ctx.save();
+    ctx.translate(x, y);
+
+    if (isSelected) {
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 14;
+    }
+
+    const s = size / 22;
+
+    // Sombra de chão do castelo
+    ctx.beginPath();
+    ctx.ellipse(0, 10 * s, 16 * s, 5 * s, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.fill();
+
+    // Paredes base em pedra antiga
+    ctx.fillStyle = "#2d2319";
+    ctx.strokeStyle = isSelected ? "#f59e0b" : "#c5a059";
+    ctx.lineWidth = 1.2;
+
+    // Muralha central
+    ctx.beginPath();
+    ctx.rect(-10 * s, -4 * s, 20 * s, 14 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Torre esquerda
+    ctx.beginPath();
+    ctx.rect(-14 * s, -8 * s, 6.5 * s, 18 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Torre direita
+    ctx.beginPath();
+    ctx.rect(7.5 * s, -8 * s, 6.5 * s, 18 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Torre central / Torre de Menagem (mais alta)
+    ctx.beginPath();
+    ctx.rect(-5 * s, -14 * s, 10 * s, 12 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Ameias / Merlões das torres
+    ctx.fillStyle = isSelected ? "#f59e0b" : "#dfba73";
+    // Ameias torre central
+    ctx.fillRect(-5 * s, -16.5 * s, 3 * s, 2.8 * s);
+    ctx.fillRect(2 * s, -16.5 * s, 3 * s, 2.8 * s);
+    // Ameias torre esquerda
+    ctx.fillRect(-14 * s, -10.5 * s, 2.8 * s, 2.5 * s);
+    ctx.fillRect(-10.2 * s, -10.5 * s, 2.8 * s, 2.5 * s);
+    // Ameias torre direita
+    ctx.fillRect(7.5 * s, -10.5 * s, 2.8 * s, 2.5 * s);
+    ctx.fillRect(11.2 * s, -10.5 * s, 2.8 * s, 2.5 * s);
+
+    // Portão com arco gótico
+    ctx.fillStyle = "#120e0a";
+    ctx.beginPath();
+    ctx.arc(0, 5 * s, 3.5 * s, Math.PI, 0, false);
+    ctx.lineTo(3.5 * s, 10 * s);
+    ctx.lineTo(-3.5 * s, 10 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#c5a059";
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Grades do portão
+    ctx.beginPath();
+    ctx.moveTo(0, 2 * s);
+    ctx.lineTo(0, 10 * s);
+    ctx.moveTo(-2.5 * s, 6 * s);
+    ctx.lineTo(2.5 * s, 6 * s);
+    ctx.stroke();
+
+    // Mastro e Flâmula Real Carmesim
+    ctx.beginPath();
+    ctx.moveTo(0, -16.5 * s);
+    ctx.lineTo(0, -24 * s);
+    ctx.strokeStyle = "#dfba73";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, -24 * s);
+    ctx.lineTo(8 * s, -21 * s);
+    ctx.lineTo(0, -18 * s);
+    ctx.closePath();
+    ctx.fillStyle = "#dc2626";
+    ctx.fill();
+
+    // Nome da Capital (placa heráldica de cartografia antiga)
+    if (name) {
+      ctx.font = "700 10px Cinzel, Georgia, serif";
+      const metrics = ctx.measureText(name);
+      const tw = metrics.width;
+      const bw = tw + 10;
+      const bh = 15;
+      const by = 13 * s;
+
+      ctx.fillStyle = "rgba(16, 12, 8, 0.88)";
+      ctx.fillRect(-bw / 2, by, bw, bh);
+
+      ctx.strokeStyle = isSelected ? "#f59e0b" : "#c5a059";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-bw / 2, by, bw, bh);
+
+      ctx.fillStyle = "#fff8e7";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(name, 0, by + bh / 2 + 0.5);
+    }
+
+    ctx.restore();
+  }
+
+  // Desenha uma Cidade com o ícone autêntico de aldeia medieval ("vila")
+  drawVillageIcon(ctx, x, y, size = 18, isSelected = false, name = "") {
+    ctx.save();
+    ctx.translate(x, y);
+
+    if (isSelected) {
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 12;
+    }
+
+    const s = size / 18;
+
+    // Sombra de chão da vila
+    ctx.beginPath();
+    ctx.ellipse(0, 8 * s, 15 * s, 4.5 * s, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.fill();
+
+    // 1. Casa da Direita (principal)
+    ctx.fillStyle = "#3a2d20";
+    ctx.strokeStyle = isSelected ? "#38bdf8" : "#a88448";
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.rect(0 * s, 0 * s, 11 * s, 8 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Telhado de terracota
+    ctx.fillStyle = "#9a3412";
+    ctx.beginPath();
+    ctx.moveTo(-1 * s, 0 * s);
+    ctx.lineTo(5.5 * s, -7 * s);
+    ctx.lineTo(12 * s, 0 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Porta da casa da direita
+    ctx.fillStyle = "#18120b";
+    ctx.fillRect(4 * s, 3 * s, 3 * s, 5 * s);
+
+    // 2. Casa da Esquerda (menor / adjacente)
+    ctx.fillStyle = "#2c2217";
+    ctx.beginPath();
+    ctx.rect(-10 * s, 1 * s, 9 * s, 7 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Telhado de palha/madeira
+    ctx.fillStyle = "#b45309";
+    ctx.beginPath();
+    ctx.moveTo(-11 * s, 1 * s);
+    ctx.lineTo(-5.5 * s, -5 * s);
+    ctx.lineTo(0 * s, 1 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Janela iluminada
+    ctx.fillStyle = "#fef08a";
+    ctx.fillRect(-7.5 * s, 3.5 * s, 2.5 * s, 2.5 * s);
+
+    // Pequena chaminé com fumaça
+    ctx.fillStyle = "#221910";
+    ctx.fillRect(8 * s, -6 * s, 2 * s, 4 * s);
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(9 * s, -6 * s);
+    ctx.quadraticCurveTo(11 * s, -9 * s, 10 * s, -12 * s);
+    ctx.stroke();
+
+    // 3. Nome da Cidade / Vila
+    if (name) {
+      ctx.font = "600 9.5px Cinzel, Georgia, serif";
+      const metrics = ctx.measureText(name);
+      const tw = metrics.width;
+      const bw = tw + 8;
+      const bh = 14;
+      const by = 11 * s;
+
+      ctx.fillStyle = "rgba(16, 12, 8, 0.85)";
+      ctx.fillRect(-bw / 2, by, bw, bh);
+
+      ctx.strokeStyle = isSelected ? "#38bdf8" : "rgba(197, 160, 89, 0.6)";
+      ctx.lineWidth = 0.9;
+      ctx.strokeRect(-bw / 2, by, bw, bh);
+
+      ctx.fillStyle = "#e8dcbc";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(name, 0, by + bh / 2 + 0.5);
+    }
+
+    ctx.restore();
+  }
+
   drawMapCanvas() {
     const canvas = document.getElementById("fantasyMapCanvas");
     if (!canvas) return;
@@ -3300,43 +5471,65 @@ class FantasyGenealogyApp {
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
 
     // ------------------------------------------------------------------------
-    // 1. CAMADA BASE DE ÁGUA (OCEANO AUTOMÁTICO COM ÍCONES DE MINI ONDAS)
+    // 1. CAMADA BASE DE ÁGUA (OCEANO INFINITO COM MINI ONDAS DINÂMICAS)
     // Onde não houver elemento território (terra), é automaticamente Água!
     // ------------------------------------------------------------------------
-    const waterGrad = ctx.createRadialGradient(480, 280, 50, 480, 280, 580);
+    const waterGrad = ctx.createRadialGradient(
+      canvas.width / 2,
+      canvas.height / 2,
+      50,
+      canvas.width / 2,
+      canvas.height / 2,
+      Math.max(canvas.width, canvas.height)
+    );
     waterGrad.addColorStop(0, "#152c42");
     waterGrad.addColorStop(0.65, "#0e1f30");
-    waterGrad.addColorStop(1, "#08131f");
+    waterGrad.addColorStop(1, "#07121d");
     ctx.fillStyle = waterGrad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Linhas de rumo náuticas sutis sobre a água
-    ctx.strokeStyle = "rgba(120, 180, 230, 0.06)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x < canvas.width; x += 60) {
+    ctx.save();
+    // Aplicação da matriz de transformação de Zoom e Pan do mundo infinito
+    ctx.translate(this.mapPanX, this.mapPanY);
+    ctx.scale(this.mapZoom, this.mapZoom);
+
+    // Bounding box das coordenadas visíveis do mundo infinito
+    const minWX = Math.floor(-this.mapPanX / this.mapZoom) - 100;
+    const maxWX = Math.ceil((canvas.width - this.mapPanX) / this.mapZoom) + 100;
+    const minWY = Math.floor(-this.mapPanY / this.mapZoom) - 100;
+    const maxWY = Math.ceil((canvas.height - this.mapPanY) / this.mapZoom) + 100;
+
+    // Linhas de rumo náuticas e meridianos sobre as águas infinitas
+    const gridStep = 80;
+    const gStartX = Math.floor(minWX / gridStep) * gridStep;
+    const gStartY = Math.floor(minWY / gridStep) * gridStep;
+    ctx.strokeStyle = "rgba(120, 180, 230, 0.05)";
+    ctx.lineWidth = 1 / this.mapZoom;
+    for (let gx = gStartX; gx <= maxWX; gx += gridStep) {
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
+      ctx.moveTo(gx, minWY);
+      ctx.lineTo(gx, maxWY);
       ctx.stroke();
     }
-    for (let y = 0; y < canvas.height; y += 60) {
+    for (let gy = gStartY; gy <= maxWY; gy += gridStep) {
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.moveTo(minWX, gy);
+      ctx.lineTo(maxWX, gy);
       ctx.stroke();
     }
 
-    // Preenchimento de toda a área de Água com Ícones de Mini Ondas
-    ctx.save();
-    const stepX = 42;
-    const stepY = 26;
-    for (let row = 0, wy = 18; wy < canvas.height - 10; row++, wy += stepY) {
-      const offsetX = row % 2 === 1 ? stepX / 2 : 0;
-      for (let wx = 22 + offsetX; wx < canvas.width - 14; wx += stepX) {
+    // Preenchimento de todo o Oceano visível com Ícones de Mini Ondas
+    const stepX = 46;
+    const stepY = 28;
+    const startX = Math.floor(minWX / stepX) * stepX;
+    const startY = Math.floor(minWY / stepY) * stepY;
+    for (let wy = startY; wy <= maxWY; wy += stepY) {
+      const row = Math.round(wy / stepY);
+      const offsetX = row % 2 === 0 ? 0 : stepX / 2;
+      for (let wx = startX + offsetX; wx <= maxWX; wx += stepX) {
         this.drawMiniWaveIcon(ctx, wx, wy);
       }
     }
-    ctx.restore();
 
     // ------------------------------------------------------------------------
     // 2. CAMADA DE ELEMENTOS TERRITÓRIO (TERRA / CONTINENTES MODELÁVEIS)
@@ -3354,17 +5547,17 @@ class FantasyGenealogyApp {
       ctx.save();
       this.traceTerritoryPolygonPath(ctx, t.points);
 
-      // Espuma / Maré rasa ao redor da costa do território
+      // Espuma e rebentação costeira ao redor do continente
       ctx.strokeStyle = "rgba(110, 192, 242, 0.18)";
-      ctx.lineWidth = 12;
+      ctx.lineWidth = 12 / this.mapZoom;
       ctx.stroke();
 
       ctx.strokeStyle = "rgba(170, 224, 252, 0.30)";
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 5 / this.mapZoom;
       ctx.stroke();
 
-      // Preenchimento opaco de Terra (substitui a água e esconde as ondas embaixo da terra)
-      const landGrad = ctx.createRadialGradient(t.x, t.y, 10, t.x, t.y, 220);
+      // Preenchimento opaco de Terra (esconde as mini ondas de água abaixo)
+      const landGrad = ctx.createRadialGradient(t.x, t.y, 10, t.x, t.y, 380);
       landGrad.addColorStop(0, "#3b2e20");
       landGrad.addColorStop(0.7, "#2e2318");
       landGrad.addColorStop(1, "#241b12");
@@ -3376,155 +5569,306 @@ class FantasyGenealogyApp {
       ctx.clip();
       ctx.fillStyle = t.color || "#c5a059";
       ctx.globalAlpha = isSelected ? 0.16 : 0.10;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(minWX, minWY, maxWX - minWX, maxWY - minWY);
 
-      // Textura cartográfica de solo (hachuras sutis de terra firme)
+      // Textura cartográfica de solo
       ctx.globalAlpha = 0.08;
       ctx.strokeStyle = "#dfba73";
-      ctx.lineWidth = 1;
-      for (let ty = 0; ty < canvas.height; ty += 16) {
+      ctx.lineWidth = 1 / this.mapZoom;
+      const hatchStart = Math.floor(minWY / 16) * 16;
+      for (let ty = hatchStart; ty <= maxWY; ty += 16) {
         ctx.beginPath();
-        ctx.moveTo(0, ty);
-        ctx.lineTo(canvas.width, ty);
+        ctx.moveTo(minWX, ty);
+        ctx.lineTo(maxWX, ty);
         ctx.stroke();
       }
       ctx.restore();
 
-      // Contorno costeiro da massa de terra
+      // Contorno costeiro a nanquim
       this.traceTerritoryPolygonPath(ctx, t.points);
-      ctx.strokeStyle = isSelected ? (t.color || "#dfba73") : "#9c7c44";
-      ctx.lineWidth = isSelected ? 2.8 : 2.0;
+      ctx.strokeStyle = isSelected && this.isMapEditMode ? t.color || "#dfba73" : "#9c7c44";
+      ctx.lineWidth = (isSelected && this.isMapEditMode ? 2.8 : 2.0) / this.mapZoom;
       ctx.stroke();
       ctx.restore();
     });
 
     // ------------------------------------------------------------------------
-    // 3. TRAÇOS DO CARTÓGRAFO (RIOS, ESTRADAS E MONTANHAS)
+    // 3. TRAÇOS DO CARTÓGRAFO (MONTANHAS, PINHEIROS, ESTRADAS E RIOS)
     // ------------------------------------------------------------------------
-    (this.engine.data.mapStrokes || []).forEach(s => {
-      if (!s.points || s.points.length < 2) return;
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(s.points[0].x, s.points[0].y);
-      for (let i = 1; i < s.points.length; i++) {
-        ctx.lineTo(s.points[i].x, s.points[i].y);
+    (this.engine.data.mapStrokes || []).forEach((s, sIdx) => {
+      if (!s.points || s.points.length === 0) return;
+
+      // Traçado de Montanhas: adiciona ícones de montanha ao longo da linha traçada
+      if (s.type === "draw_mountain") {
+        const pts = this.getEquidistantPointsAlongPath(s.points, 22);
+        const sorted = pts.slice().sort((a, b) => a.y - b.y);
+        sorted.forEach((p, pIdx) => {
+          this.drawMountainIcon(ctx, p.x, p.y, 18, (sIdx + 1) * 7 + pIdx);
+        });
+        return;
       }
 
+      // Traçado de Pinheiros: adiciona ícones de pinheiros autênticos de fantasia
+      if (s.type === "draw_tree") {
+        const pts = this.getEquidistantPointsAlongPath(s.points, 16);
+        const sorted = pts.slice().sort((a, b) => a.y - b.y);
+        sorted.forEach((p, pIdx) => {
+          this.drawPineTreeIcon(ctx, p.x, p.y, 16, (sIdx + 1) * 5 + pIdx);
+        });
+        return;
+      }
+
+      if (s.points.length < 2) return;
+
       if (s.type === "draw_land") {
+        ctx.save();
+        this.traceSmoothStrokePath(ctx, s.points);
         ctx.strokeStyle = "#a38248";
-        ctx.lineWidth = 16;
+        ctx.lineWidth = 16 / this.mapZoom;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
+        ctx.stroke();
+        ctx.restore();
       } else if (s.type === "draw_river") {
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 4.2;
+        // Linha de água / Rio: traço fluido multicamada sem serrilhado nem tremidos
+        ctx.save();
+        // 1. Leito profundo da água (halo sutil)
+        this.traceSmoothStrokePath(ctx, s.points);
+        ctx.strokeStyle = "rgba(14, 116, 144, 0.38)";
+        ctx.lineWidth = 6.6 / this.mapZoom;
         ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // 2. Correnteza principal do rio
+        this.traceSmoothStrokePath(ctx, s.points);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 3.6 / this.mapZoom;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // 3. Brilho límpido no centro do curso d'água
+        this.traceSmoothStrokePath(ctx, s.points);
+        ctx.strokeStyle = "rgba(224, 242, 254, 0.65)";
+        ctx.lineWidth = 1.2 / this.mapZoom;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+        ctx.restore();
       } else if (s.type === "draw_road") {
+        // Estrada / Rodovia: traço suave com linha pontilhada sem quinas duras
+        ctx.save();
+        this.traceSmoothStrokePath(ctx, s.points);
         ctx.strokeStyle = "#d6c7b2";
-        ctx.lineWidth = 2.2;
-        ctx.setLineDash([5, 5]);
-      } else if (s.type === "draw_mountain") {
-        ctx.strokeStyle = "#8a765c";
-        ctx.lineWidth = 7;
-        ctx.setLineDash([3, 7]);
+        ctx.lineWidth = 2.4 / this.mapZoom;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.setLineDash([5 / this.mapZoom, 5 / this.mapZoom]);
+        ctx.stroke();
+        ctx.restore();
       }
-      ctx.stroke();
-      ctx.restore();
+    });
+
+    // ------------------------------------------------------------------------
+    // 3.5. ASSENTAMENTOS CARTOGRÁFICOS (CAPITAIS COM CASTELO & CIDADES COM VILA)
+    // ------------------------------------------------------------------------
+    const settlements = this.engine.data.settlements || [];
+    settlements.forEach(settle => {
+      const isSelected = this.selectedSettlementId === settle.id;
+      if (settle.type === "capital") {
+        this.drawCastleIcon(ctx, settle.x, settle.y, 22, isSelected, settle.name);
+      } else {
+        this.drawVillageIcon(ctx, settle.x, settle.y, 18, isSelected, settle.name);
+      }
     });
 
     // ------------------------------------------------------------------------
     // 4. PONTOS DE CONTROLE NAS BORDAS DOS TERRITÓRIOS (MODELAGEM PELA AUTORA)
+    // Apenas visíveis quando o MODO DE EDIÇÃO estiver ativado!
     // ------------------------------------------------------------------------
-    territories.forEach(t => {
-      if (!Array.isArray(t.points) || t.points.length < 3) return;
-      const isSelected = t.id === this.selectedTerritoryId;
+    if (this.isMapEditMode) {
+      territories.forEach(t => {
+        if (!Array.isArray(t.points) || t.points.length < 3) return;
+        const isSelected = t.id === this.selectedTerritoryId;
 
-      if (isSelected) {
-        ctx.save();
-        // Anel pontilhado guia ligando os pontos da borda
-        ctx.beginPath();
-        ctx.moveTo(t.points[0].x, t.points[0].y);
-        for (let i = 1; i < t.points.length; i++) {
-          ctx.lineTo(t.points[i].x, t.points[i].y);
-        }
-        ctx.closePath();
-        ctx.strokeStyle = "rgba(223, 186, 115, 0.45)";
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Pontos intermediários (midpoints) nas bordas para adicionar mais vértices ao puxar
-        const len = t.points.length;
-        for (let i = 0; i < len; i++) {
-          const p1 = t.points[i];
-          const p2 = t.points[(i + 1) % len];
-          const mx = (p1.x + p2.x) / 2;
-          const my = (p1.y + p2.y) / 2;
-          const isHoveredMid =
-            this.hoveredMapHandle &&
-            this.hoveredMapHandle.kind === "midpoint" &&
-            this.hoveredMapHandle.terr.id === t.id &&
-            this.hoveredMapHandle.index === i;
-
+        if (isSelected) {
+          ctx.save();
+          // Anel pontilhado guia ligando os pontos da borda
           ctx.beginPath();
-          ctx.arc(mx, my, isHoveredMid ? 5.2 : 3.0, 0, Math.PI * 2);
-          ctx.fillStyle = isHoveredMid ? "#38bdf8" : "rgba(223, 186, 115, 0.65)";
-          ctx.fill();
-          ctx.strokeStyle = "#120e0a";
-          ctx.lineWidth = 1;
+          ctx.moveTo(t.points[0].x, t.points[0].y);
+          for (let i = 1; i < t.points.length; i++) {
+            ctx.lineTo(t.points[i].x, t.points[i].y);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = "rgba(223, 186, 115, 0.45)";
+          ctx.lineWidth = 1.2 / this.mapZoom;
+          ctx.setLineDash([4 / this.mapZoom, 4 / this.mapZoom]);
           ctx.stroke();
-        }
+          ctx.setLineDash([]);
 
-        // Pontos principais na borda do território (cheio de pontos modeláveis)
-        t.points.forEach((p, idx) => {
-          const isHoveredVertex =
-            (this.hoveredMapHandle &&
-              this.hoveredMapHandle.kind === "vertex" &&
+          // Pontos intermediários (midpoints) nas bordas para adicionar mais vértices ao puxar
+          const len = t.points.length;
+          for (let i = 0; i < len; i++) {
+            const p1 = t.points[i];
+            const p2 = t.points[(i + 1) % len];
+            const mx = (p1.x + p2.x) / 2;
+            const my = (p1.y + p2.y) / 2;
+            const isHoveredMid =
+              this.hoveredMapHandle &&
+              this.hoveredMapHandle.kind === "midpoint" &&
               this.hoveredMapHandle.terr.id === t.id &&
-              this.hoveredMapHandle.index === idx) ||
-            (this.draggingVertex &&
-              this.draggingVertex.terrId === t.id &&
-              this.draggingVertex.index === idx);
+              this.hoveredMapHandle.index === i;
 
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, isHoveredVertex ? 7.2 : 5.4, 0, Math.PI * 2);
-          ctx.fillStyle = isHoveredVertex ? "#f43f5e" : "#fff3d1";
-          ctx.fill();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = isHoveredVertex ? "#ffffff" : (t.color || "#c5a059");
-          ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(mx, my, (isHoveredMid ? 5.2 : 3.0) / this.mapZoom, 0, Math.PI * 2);
+            ctx.fillStyle = isHoveredMid ? "#38bdf8" : "rgba(223, 186, 115, 0.65)";
+            ctx.fill();
+            ctx.strokeStyle = "#120e0a";
+            ctx.lineWidth = 1 / this.mapZoom;
+            ctx.stroke();
+          }
 
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, isHoveredVertex ? 2.6 : 1.8, 0, Math.PI * 2);
-          ctx.fillStyle = "#16110c";
-          ctx.fill();
-        });
-        ctx.restore();
-      } else {
-        // Pontos discretos nos outros territórios indicando que também são modeláveis
-        ctx.save();
-        t.points.forEach(p => {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 3.0, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(223, 186, 115, 0.55)";
-          ctx.fill();
-          ctx.strokeStyle = "rgba(18, 14, 10, 0.8)";
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        });
-        ctx.restore();
+          // Pontos principais na borda do território (cheio de pontos modeláveis)
+          t.points.forEach((p, idx) => {
+            const isHoveredVertex =
+              (this.hoveredMapHandle &&
+                this.hoveredMapHandle.kind === "vertex" &&
+                this.hoveredMapHandle.terr.id === t.id &&
+                this.hoveredMapHandle.index === idx) ||
+              (this.draggingVertex &&
+                this.draggingVertex.terrId === t.id &&
+                this.draggingVertex.index === idx);
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, (isHoveredVertex ? 7.2 : 5.4) / this.mapZoom, 0, Math.PI * 2);
+            ctx.fillStyle = isHoveredVertex ? "#f43f5e" : "#fff3d1";
+            ctx.fill();
+            ctx.lineWidth = 2 / this.mapZoom;
+            ctx.strokeStyle = isHoveredVertex ? "#ffffff" : t.color || "#c5a059";
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, (isHoveredVertex ? 2.6 : 1.8) / this.mapZoom, 0, Math.PI * 2);
+            ctx.fillStyle = "#16110c";
+            ctx.fill();
+          });
+          ctx.restore();
+        } else {
+          // Pontos discretos nos outros territórios indicando que também são modeláveis
+          ctx.save();
+          t.points.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3.0 / this.mapZoom, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(223, 186, 115, 0.55)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(18, 14, 10, 0.8)";
+            ctx.lineWidth = 1 / this.mapZoom;
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // 5. NOMES DOS CONTINENTES ATRELADOS AO CENTRO (RESPONSIVOS AO TAMANHO E AO ZOOM)
+    // ------------------------------------------------------------------------
+    if (this.showContinentNames) {
+      // Regra de zoom cartográfico padrão: ao aproximar do continente (zoom >= 1.25), o nome some
+      let zoomAlpha = 1.0;
+      if (this.mapZoom > 1.0) {
+        zoomAlpha = Math.max(0, 1.0 - (this.mapZoom - 1.0) / 0.25);
       }
-    });
 
-    // Legenda Náutica & Rosa dos Ventos
-    ctx.fillStyle = "rgba(165, 216, 250, 0.82)";
+      if (zoomAlpha > 0.01) {
+        territories.forEach(t => {
+          if (!Array.isArray(t.points) || t.points.length < 3) return;
+          const isSelected = t.id === this.selectedTerritoryId;
+
+          // Se o usuário selecionou o continente em específico, o nome dele deve sumir de imediato!
+          if (isSelected) return;
+
+          // 1. Calcula o raio/envergadura do continente
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          let maxDist = 0;
+          t.points.forEach(p => {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+            const d = Math.hypot(p.x - t.x, p.y - t.y);
+            if (d > maxDist) maxDist = d;
+          });
+
+          const spanW = maxX - minX;
+          const spanH = maxY - minY;
+          const contRadius = Math.max(35, (maxDist + Math.min(spanW, spanH) / 2) / 2);
+
+          // 2. Limita o tamanho do texto para NÃO ultrapassar o tamanho do continente
+          const maxAllowedTextW = Math.max(30, spanW * 0.72);
+          let fontSize = Math.max(10, Math.min(32, Math.round(contRadius * 0.15)));
+          const nameText = (t.name || "Território").toUpperCase();
+
+          ctx.save();
+          // CLIP OBRIGATÓRIO: Garante que o nome fique estritamente dentro do continente
+          // Não transborda para o oceano nem além da terra sob nenhuma hipótese!
+          this.traceTerritoryPolygonPath(ctx, t.points);
+          ctx.clip();
+
+          ctx.font = `700 ${fontSize}px Cinzel, Georgia, serif`;
+          let measuredW = ctx.measureText(nameText).width;
+          if (measuredW > maxAllowedTextW && measuredW > 0) {
+            fontSize = Math.max(8.5, Math.round(fontSize * (maxAllowedTextW / measuredW)));
+            ctx.font = `700 ${fontSize}px Cinzel, Georgia, serif`;
+          }
+
+          // Meio transparente para não ficar na frente dos desenhos do mapa (árvores, montanhas, estradas, rios)
+          // Sem caixa sólida/opaca por trás cobrindo os traços
+          ctx.globalAlpha = 0.42 * zoomAlpha;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          // Sombra cartográfica sutil gravada no relevo
+          ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+          ctx.shadowBlur = 4;
+          ctx.fillStyle = t.color || "#dfba73";
+          ctx.fillText(nameText, t.x, t.y);
+
+          ctx.restore();
+        });
+      }
+    }
+
+    ctx.restore(); // Fecha o contexto transformado pelo mundo
+
+    // ------------------------------------------------------------------------
+    // 6. ELEMENTOS DO PAINEL DE NAVEGAÇÃO & ROSA DOS VENTOS (FIXOS NA TELA)
+    // ------------------------------------------------------------------------
+    ctx.fillStyle = "rgba(165, 216, 250, 0.85)";
     ctx.font = "600 11px Cinzel, serif";
-    ctx.fillText("≈ ÁGUA (OCEANO)", 16, 28);
+    ctx.fillText("≈ ÁGUA (OCEANO INFINITO)", 16, 28);
 
-    ctx.fillStyle = "rgba(223, 186, 115, 0.80)";
+    ctx.fillStyle = "rgba(223, 186, 115, 0.85)";
     ctx.font = "600 12px Cinzel, serif";
     ctx.fillText("SEPTENTRIO (N)", canvas.width - 130, 28);
+
+    // Indicador sutil de escala do mapa
+    ctx.strokeStyle = "rgba(223, 186, 115, 0.65)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(16, canvas.height - 18);
+    ctx.lineTo(86, canvas.height - 18);
+    ctx.moveTo(16, canvas.height - 23);
+    ctx.lineTo(16, canvas.height - 13);
+    ctx.moveTo(86, canvas.height - 23);
+    ctx.lineTo(86, canvas.height - 13);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(223, 186, 115, 0.80)";
+    ctx.font = "500 10px Cinzel, serif";
+    const scaleLeagues = Math.round(70 / this.mapZoom);
+    ctx.fillText(`${scaleLeagues} léguas`, 24, canvas.height - 24);
   }
 
   renderMapStudio() {
@@ -3538,32 +5882,16 @@ class FantasyGenealogyApp {
     }
 
     this.drawMapCanvas();
+
+    // Limpa a camada HTML legada de pins para que os nomes fiquem atrelados nativamente ao canvas
     const pinsLayer = document.getElementById("mapPinsLayer");
-    if (!pinsLayer) return;
-
-    const canvas = document.getElementById("fantasyMapCanvas");
-    pinsLayer.innerHTML = this.engine.data.territories
-      .map(t => {
-        const leftPct = ((t.x / (canvas ? canvas.width : 960)) * 100).toFixed(2);
-        const topPct = ((t.y / (canvas ? canvas.height : 560)) * 100).toFixed(2);
-        const isSelected = t.id === this.selectedTerritoryId;
-
-        return `
-          <div class="map-city-pin ${isSelected ? "selected" : ""}"
-               data-terr-id="${t.id}"
-               style="left:${leftPct}%; top:${topPct}%; --pin-color:${t.color || "#8b202e"};">
-            <div class="pin-marker"></div>
-            <div class="pin-label">${this.escapeHtml(t.name)}</div>
-          </div>
-        `;
-      })
-      .join("");
+    if (pinsLayer) pinsLayer.innerHTML = "";
 
     this.renderSelectedTerritoryPanel();
   }
 
   startPinDrag(event, terrId) {
-    if (this.mapTool === "select") {
+    if (this.isMapEditMode && this.mapTool === "select") {
       event.stopPropagation();
       this.selectedTerritoryId = terrId;
       this.renderMapStudio();
@@ -3601,6 +5929,9 @@ class FantasyGenealogyApp {
     const residents = this.engine.data.characters.filter(
       c => !c.isPlaceholderEmpty && c.livedInTerritoryId === t.id
     );
+    const terrSettlements = (this.engine.data.settlements || []).filter(
+      s => s.territoryId === t.id
+    );
 
     const passages = t.notablePassages || [];
 
@@ -3612,12 +5943,12 @@ class FantasyGenealogyApp {
     panel.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
         <div>
-          <span class="creation-cat-tag">${this.escapeHtml(t.type || "Território / Continente")} &bull; ${borderPointsCount} pontos na borda</span>
+          <span class="creation-cat-tag">${this.escapeHtml(t.type || "Território / Continente")}${this.isMapEditMode ? ` &bull; ${borderPointsCount} pontos na borda` : ""}</span>
           <h2 style="font-family:var(--font-display); font-size:1rem; margin-top:6px; color:var(--gold-leaf); text-transform:uppercase;">${this.escapeHtml(t.name)}</h2>
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn btn-sm btn-medieval" onclick="app.openTerritoryModal('${t.id}')" title="Alterar nome, cor e casa deste território">Editar</button>
-          <button class="btn btn-sm btn-danger" onclick="app.openDeleteTerritoryModal('${t.id}')" title="Apagar território">&times;</button>
+          ${this.isMapEditMode ? `<button class="btn btn-sm btn-danger" onclick="app.openDeleteTerritoryModal('${t.id}')" title="Apagar território">&times;</button>` : ""}
         </div>
       </div>
 
@@ -3626,32 +5957,85 @@ class FantasyGenealogyApp {
         ${this.escapeHtml(t.description || "")}
       </p>
 
-      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-        <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Dobrar a quantidade de pontos na borda">+ Pontos na Borda</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar o contorno costeiro">Suavizar Costa</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.resetTerritoryPolygonShape('${t.id}')" title="Restaurar formato circular de continente">Redefinir Formato</button>
+      ${
+        this.isMapEditMode
+          ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+              <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Dobrar a quantidade de pontos na borda">+ Pontos na Borda</button>
+              <button class="btn btn-sm btn-medieval" onclick="app.reduceSelectedTerritoryPoints()" title="Reduzir pela metade a quantidade de pontos da borda">&minus; Pontos na Borda</button>
+              <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.2)" title="Ampliar território em 20%">+ Expandir</button>
+              <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.85)" title="Reduzir território em 15%">&minus; Reduzir</button>
+              <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar o contorno costeiro">Suavizar Costa</button>
+              <button class="btn btn-sm btn-medieval" onclick="app.resetTerritoryPolygonShape('${t.id}')" title="Restaurar formato circular de continente">Redefinir Formato</button>
+            </div>`
+          : ""
+      }
+
+      <div class="card-box" style="padding:10px 12px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold-leaf); flex-shrink:0;">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <h4 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.8rem; text-transform:uppercase; margin:0;">
+                Habitantes deste Território
+              </h4>
+            </div>
+            <div style="font-size:0.82rem; color:var(--ink-secondary); margin-top:3px;">
+              ${residents.length} ${residents.length === 1 ? "habitante registrado" : "habitantes registrados"}
+            </div>
+          </div>
+          <button class="btn btn-sm btn-gold" onclick="app.openTerritoryResidentsDrawer('${t.id}')" title="Ver mais: abrir canto com todos os habitantes">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            Ver Mais
+          </button>
+        </div>
       </div>
 
-      <div class="card-box" style="padding:10px; margin-bottom:12px;">
-        <h4 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.8rem; text-transform:uppercase; margin-bottom:8px;">
-          Habitantes deste Território (${residents.length})
-        </h4>
-        ${
-          residents.length > 0
-            ? `<div style="display:flex; flex-direction:column; gap:5px;">
-                ${residents
-                  .map(
-                    r => `
-                    <div style="display:flex; justify-content:space-between; align-items:center; background:#140f0b; padding:5px 8px; border-radius:2px; border:1px solid var(--border-brass); font-size:0.86rem;">
-                      <span><strong>${this.escapeHtml(r.name)}</strong> (*${r.birthYear || "?"} &bull; ${r.isAlive ? "Vivo" : "†" + r.deathYear})</span>
-                      <button class="btn btn-sm btn-medieval" onclick="app.openProfileModal('${r.id}')">Perfil</button>
-                    </div>
-                  `
-                  )
-                  .join("")}
-              </div>`
-            : `<p style="font-size:0.84rem; color:var(--ink-dim); font-style:italic;">Nenhum membro registrado como morador fixo.</p>`
-        }
+      <div class="card-box" style="padding:10px 12px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold-leaf); flex-shrink:0;">
+              <path d="M4 21h16M5 21V9l3 2 4-4 4 4 3-2v12M9 21v-4a3 3 0 0 1 6 0v4"/>
+            </svg>
+            <h4 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.8rem; text-transform:uppercase; margin:0;">
+              Assentamentos &amp; Vilas (${terrSettlements.length})
+            </h4>
+          </div>
+          ${this.isMapEditMode ? `
+            <div style="display:flex; gap:4px;">
+              <button class="btn btn-sm btn-gold" onclick="app.openSettlementModal(${t.x}, ${t.y}, 'capital')" title="Fundar Capital Real neste continente">+ Capital</button>
+              <button class="btn btn-sm btn-medieval" onclick="app.openSettlementModal(${t.x}, ${t.y}, 'city')" title="Fundar Cidade ou Vila neste continente">+ Cidade</button>
+            </div>
+          ` : ""}
+        </div>
+        ${terrSettlements.length === 0 ? `
+          <p style="font-size:0.8rem; color:var(--ink-secondary); margin:0;">Nenhum assentamento registrado neste território. Use os botões Capital ou Cidade da barra de ferramentas para fundar um centro urbano!</p>
+        ` : `
+          <div style="display:flex; flex-direction:column; gap:5px;">
+            ${terrSettlements.map(s => `
+              <div style="display:flex; justify-content:space-between; align-items:center; background:#140f0b; border:1px solid var(--border-brass); border-radius:3px; padding:6px 8px;">
+                <div style="display:flex; align-items:center; gap:7px;">
+                  <span style="font-size:1.1rem; line-height:1;">${s.type === "capital" ? "🏰" : "🏡"}</span>
+                  <div>
+                    <strong style="color:var(--parchment-bright); font-size:0.82rem;">${this.escapeHtml(s.name)}</strong>
+                    <div style="font-size:0.7rem; color:var(--gold-leaf); text-transform:uppercase;">${s.type === "capital" ? "Capital Real" : "Cidade / Vila"} &bull; (${s.x}, ${s.y})</div>
+                  </div>
+                </div>
+                <div style="display:flex; gap:4px;">
+                  <button class="btn btn-sm btn-medieval" onclick="app.focusSettlementOnMap('${s.id}')" title="Focar e centralizar no mapa">Ver</button>
+                  ${this.isMapEditMode ? `<button class="btn btn-sm btn-medieval" onclick="app.openEditSettlementModal('${s.id}')" title="Editar assentamento">Editar</button>` : ""}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `}
       </div>
 
       <div class="card-box" style="padding:10px;">
@@ -3733,6 +6117,85 @@ class FantasyGenealogyApp {
 
     this.syncHeaderAndBadges();
     this.renderSelectedTerritoryPanel();
+  }
+
+  // --------------------------------------------------------------------------
+  // CANTO LATERAL: HABITANTES DO TERRITÓRIO (DRAWER)
+  // --------------------------------------------------------------------------
+  openTerritoryResidentsDrawer(terrId) {
+    const t = this.engine.getTerritory(terrId) || this.engine.getTerritory(this.selectedTerritoryId);
+    if (!t) return;
+
+    const drawer = document.getElementById("residentsCornerDrawer");
+    const backdrop = document.getElementById("residentsDrawerBackdrop");
+    const titleEl = document.getElementById("residentsDrawerTitle");
+    const typeEl = document.getElementById("residentsDrawerTerrType");
+    const bodyEl = document.getElementById("residentsDrawerBody");
+    if (!drawer || !bodyEl) return;
+
+    const residents = this.engine.data.characters.filter(
+      c => !c.isPlaceholderEmpty && c.livedInTerritoryId === t.id
+    );
+
+    if (typeEl) typeEl.textContent = t.type || "Território";
+    if (titleEl) titleEl.textContent = `Habitantes de ${t.name} (${residents.length})`;
+
+    if (residents.length === 0) {
+      bodyEl.innerHTML = `
+        <div style="text-align:center; padding:44px 16px; color:var(--ink-secondary);">
+          <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px; opacity:0.6; color:var(--gold-leaf);">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+          </svg>
+          <p style="font-size:0.92rem; margin-bottom:8px; color:var(--ink-parchment);">Nenhum habitante registrado neste território.</p>
+          <p style="font-size:0.82rem; color:var(--ink-dim); font-style:italic;">Ao cadastrar ou editar personagens, defina seu território de moradia para vinculá-los aqui.</p>
+        </div>
+      `;
+    } else {
+      bodyEl.innerHTML = residents
+        .map(r => {
+          const portrait = this.getCharacterPortraitSrc(r);
+          const house = this.engine.getHouse(r.officialHouseId || r.birthHouseId);
+          const houseName = house ? house.name : "Independente";
+          const houseColor = (house && house.color) || "#c5a059";
+          const rankDisplay = this.engine.getSocialRankDisplay ? this.engine.getSocialRankDisplay(r.socialRank, r.gender) : (r.socialRank || "");
+
+          return `
+            <div class="resident-card-item">
+              <img src="${portrait}" class="resident-card-avatar" alt="${this.escapeHtml(r.name)}" />
+              <div class="resident-card-info">
+                <div class="resident-card-name">${this.escapeHtml(r.name)}</div>
+                <div class="resident-card-meta">
+                  <span>*${r.birthYear || "?"} &bull; ${r.isAlive ? "Vivo" : "†" + (r.deathYear || "")}</span>
+                  ${rankDisplay ? ` &bull; <em>${this.escapeHtml(rankDisplay)}</em>` : ""}
+                </div>
+                <div style="display:flex; gap:5px; margin-top:5px; flex-wrap:wrap;">
+                  <span class="badge-pill" style="background:#1c1611; border-color:${houseColor}; color:${houseColor}; font-size:0.62rem;">
+                    ${this.escapeHtml(houseName)}
+                  </span>
+                  <span class="badge-pill badge-twin" style="font-size:0.62rem;">
+                    ${this.escapeHtml(r.race || "Humano")}
+                  </span>
+                </div>
+              </div>
+              <button class="btn btn-sm btn-medieval" onclick="app.openProfileModal('${r.id}')" title="Inspecionar registro e linhagem">
+                Perfil
+              </button>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    drawer.classList.add("open");
+    if (backdrop) backdrop.classList.add("open");
+  }
+
+  closeResidentsDrawer() {
+    const drawer = document.getElementById("residentsCornerDrawer");
+    const backdrop = document.getElementById("residentsDrawerBackdrop");
+    if (drawer) drawer.classList.remove("open");
+    if (backdrop) backdrop.classList.remove("open");
   }
 
   openTerritoryModal(editId = null, defaultX = 480, defaultY = 280) {
@@ -3916,6 +6379,283 @@ class FantasyGenealogyApp {
   }
 
   // --------------------------------------------------------------------------
+  // GESTÃO DE ASSENTAMENTOS (CAPITAIS REAIS & CIDADES / VILAS)
+  // --------------------------------------------------------------------------
+  focusSettlementOnMap(settleId) {
+    const settle = (this.engine.data.settlements || []).find(s => s.id === settleId);
+    if (!settle) return;
+    this.selectedSettlementId = settle.id;
+    const canvas = document.getElementById("fantasyMapCanvas");
+    const cx = canvas ? canvas.width / 2 : 480;
+    const cy = canvas ? canvas.height / 2 : 280;
+    this.mapPanX = Math.round(cx - settle.x * this.mapZoom);
+    this.mapPanY = Math.round(cy - settle.y * this.mapZoom);
+    this.drawMapCanvas();
+  }
+
+  openSettlementModal(x, y, defaultType = "city") {
+    const houses = this.engine.data.houses || [];
+    const territories = this.engine.data.territories || [];
+    const hitTerr = this.findHitTerritoryBody({ x, y });
+    const selectedTerrId = hitTerr
+      ? hitTerr.id
+      : this.selectedTerritoryId || (territories[0] && territories[0].id) || "";
+
+    const houseOpts = houses
+      .map(h => `<option value="${h.id}">${this.escapeHtml(h.name)}</option>`)
+      .join("");
+
+    const terrOpts = territories
+      .map(
+        t =>
+          `<option value="${t.id}" ${t.id === selectedTerrId ? "selected" : ""}>${this.escapeHtml(
+            t.name
+          )}</option>`
+      )
+      .join("");
+
+    const isCapital = defaultType === "capital";
+
+    const bodyHtml = `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome do Assentamento:</label>
+          <input type="text" id="sf_name" placeholder="Ex: ${
+            isCapital ? "Cidadela Real de Ébano" : "Vila das Pedras Altas"
+          }" autofocus />
+        </div>
+        <div class="form-group">
+          <label>Tipo de Assentamento:</label>
+          <select id="sf_type">
+            <option value="capital" ${isCapital ? "selected" : ""}>🏰 Capital Real (Ícone de Castelinho)</option>
+            <option value="city" ${!isCapital ? "selected" : ""}>🏡 Cidade / Vila (Ícone de Aldeia)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Território / Continente:</label>
+          <select id="sf_territoryId">${terrOpts}</select>
+        </div>
+        <div class="form-group">
+          <label>Casa Nobre Soberana:</label>
+          <select id="sf_houseId">${houseOpts}</select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Posição no Mapa X:</label>
+          <input type="number" id="sf_x" value="${Math.round(x)}" />
+        </div>
+        <div class="form-group">
+          <label>Posição no Mapa Y:</label>
+          <input type="number" id="sf_y" value="${Math.round(y)}" />
+        </div>
+      </div>
+      <p style="font-size:0.82rem; color:var(--ink-secondary); margin-top:4px;">
+        ${
+          isCapital
+            ? "Uma <strong>Capital Real</strong> é o coração administrativo e dinástico de seu reino no mapa (representada por um castelinho medieval)."
+            : "Uma <strong>Cidade ou Vila</strong> representa portos, burgos ou centros comerciais regionais (representada por um conjunto de casas de aldeia)."
+        }
+      </p>
+    `;
+
+    this.showModal(
+      isCapital ? "Fundar Nova Capital Real" : "Fundar Nova Cidade / Vila",
+      bodyHtml,
+      `
+        <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="app.saveSettlementFromModal()">Fundar no Mapa</button>
+      `
+    );
+  }
+
+  saveSettlementFromModal(editId = null) {
+    const nameEl = document.getElementById("sf_name");
+    const name =
+      (nameEl && nameEl.value.trim()) || (editId ? "Assentamento" : "Nova Fundação");
+    const type = document.getElementById("sf_type").value;
+    const territoryId = document.getElementById("sf_territoryId").value;
+    const houseId = document.getElementById("sf_houseId").value;
+    const x = Number(document.getElementById("sf_x").value) || 0;
+    const y = Number(document.getElementById("sf_y").value) || 0;
+
+    const snapshot = this.engine.createSnapshot();
+    this.engine.data.settlements = this.engine.data.settlements || [];
+
+    const house = this.engine.getHouse(houseId);
+    const houseName = house ? house.name : "Coroa Real";
+    const typeLabel = type === "capital" ? "Capital Real" : "Cidade / Vila";
+
+    if (editId) {
+      const existing = this.engine.data.settlements.find(s => s.id === editId);
+      if (existing) {
+        existing.name = name;
+        existing.type = type;
+        existing.territoryId = territoryId;
+        existing.houseId = houseId;
+        existing.x = x;
+        existing.y = y;
+      }
+      this.engine.recordAuditLog(
+        "TERRITÓRIO",
+        "Edição de Assentamento",
+        `Assentamento Atualizado: ${name}`,
+        `O assentamento "${name}" (${typeLabel}) foi atualizado sob o domínio da ${houseName}.`,
+        snapshot
+      );
+    } else {
+      const newSettlement = {
+        id: "settle_" + Date.now(),
+        type,
+        name,
+        x,
+        y,
+        territoryId,
+        houseId
+      };
+      this.engine.data.settlements.push(newSettlement);
+      this.selectedSettlementId = newSettlement.id;
+      this.engine.recordAuditLog(
+        "TERRITÓRIO",
+        "Fundação de Assentamento",
+        `Novo Assentamento: ${name}`,
+        `A fundação de "${name}" (${typeLabel}) foi estabelecida no mapa em (${x}, ${y}) sob a regência da ${houseName}.`,
+        snapshot
+      );
+    }
+
+    this.engine.saveToStorage();
+    this.closeModal();
+    this.setMapTool("select");
+    this.renderMapStudio();
+  }
+
+  openEditSettlementModal(settleId) {
+    const settle = (this.engine.data.settlements || []).find(s => s.id === settleId);
+    if (!settle) return;
+
+    const houses = this.engine.data.houses || [];
+    const territories = this.engine.data.territories || [];
+
+    const houseOpts = houses
+      .map(
+        h =>
+          `<option value="${h.id}" ${h.id === settle.houseId ? "selected" : ""}>${this.escapeHtml(
+            h.name
+          )}</option>`
+      )
+      .join("");
+
+    const terrOpts = territories
+      .map(
+        t =>
+          `<option value="${t.id}" ${t.id === settle.territoryId ? "selected" : ""}>${this.escapeHtml(
+            t.name
+          )}</option>`
+      )
+      .join("");
+
+    const isCapital = settle.type === "capital";
+
+    const bodyHtml = `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome do Assentamento:</label>
+          <input type="text" id="sf_name" value="${this.escapeHtml(settle.name)}" />
+        </div>
+        <div class="form-group">
+          <label>Tipo de Assentamento:</label>
+          <select id="sf_type">
+            <option value="capital" ${isCapital ? "selected" : ""}>🏰 Capital Real (Ícone de Castelinho)</option>
+            <option value="city" ${!isCapital ? "selected" : ""}>🏡 Cidade / Vila (Ícone de Aldeia)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Território / Continente:</label>
+          <select id="sf_territoryId">${terrOpts}</select>
+        </div>
+        <div class="form-group">
+          <label>Casa Nobre Soberana:</label>
+          <select id="sf_houseId">${houseOpts}</select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Posição no Mapa X:</label>
+          <input type="number" id="sf_x" value="${settle.x}" />
+        </div>
+        <div class="form-group">
+          <label>Posição no Mapa Y:</label>
+          <input type="number" id="sf_y" value="${settle.y}" />
+        </div>
+      </div>
+    `;
+
+    this.showModal(
+      `Editar Assentamento: ${settle.name}`,
+      bodyHtml,
+      `
+        <button class="btn btn-danger" onclick="app.confirmDeleteSettlement('${settle.id}')">Excluir Assentamento</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="app.saveSettlementFromModal('${settle.id}')">Salvar Alterações</button>
+      `
+    );
+  }
+
+  confirmDeleteSettlement(settleId) {
+    const settle = (this.engine.data.settlements || []).find(s => s.id === settleId);
+    if (!settle) return;
+
+    this.showModal(
+      `Confirmar Exclusão de Assentamento`,
+      `
+        <div class="alert-banner alert-danger" style="margin-bottom:10px;">
+          <strong>Confirmação de Exclusão:</strong><br/>
+          Tem certeza que deseja remover o assentamento <strong>"${this.escapeHtml(settle.name)}"</strong> (${
+            settle.type === "capital" ? "Capital Real" : "Cidade / Vila"
+          }) do mapa?
+        </div>
+        <p style="font-size:0.88rem; color:var(--ink-secondary); line-height:1.5;">
+          Esta remoção será registrada nos Anais do Reino e poderá ser revertida a qualquer momento.
+        </p>
+      `,
+      `
+        <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+        <button class="btn btn-danger" onclick="app.deleteSettlement('${settle.id}')">Confirmar Exclusão</button>
+      `
+    );
+  }
+
+  deleteSettlement(settleId) {
+    const idx = (this.engine.data.settlements || []).findIndex(s => s.id === settleId);
+    if (idx === -1) return;
+    const snapshot = this.engine.createSnapshot();
+    const [removed] = this.engine.data.settlements.splice(idx, 1);
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Remoção de Assentamento",
+      `Assentamento Removido: ${removed.name}`,
+      `O assentamento "${removed.name}" (${
+        removed.type === "capital" ? "Capital Real" : "Cidade / Vila"
+      }) foi removido da cartografia.`,
+      snapshot
+    );
+    this.engine.saveToStorage();
+    this.closeModal();
+    this.renderMapStudio();
+  }
+
+  // --------------------------------------------------------------------------
   // ANAIS DO REINO & REVERSÃO
   // --------------------------------------------------------------------------
   setHistoryFilter(cat) {
@@ -3927,7 +6667,7 @@ class FantasyGenealogyApp {
     const container = document.getElementById("auditLogsContainer");
     if (!container) return;
 
-    ["ALL", "LINHAGEM", "CASA", "TERRITORIO", "GRIMORIO"].forEach(k => {
+    ["ALL", "LINHAGEM", "CASA", "TERRITORIO", "CRONOLOGIA", "GRIMORIO"].forEach(k => {
       const btn = document.getElementById("histFilter" + k);
       if (btn) btn.classList.toggle("btn-primary", this.activeHistoryFilter === k);
     });
@@ -3935,7 +6675,18 @@ class FantasyGenealogyApp {
     const logs = this.engine.data.auditLogs.filter(l => {
       if (this.activeHistoryFilter === "ALL") return true;
       if (this.activeHistoryFilter === "TERRITORIO") {
-        return l.category === "TERRITÓRIO" || l.category === "TERRITORIO";
+        return (
+          l.category === "TERRITÓRIO" ||
+          l.category === "TERRITORIO" ||
+          l.category === "ASSENTAMENTO"
+        );
+      }
+      if (this.activeHistoryFilter === "CRONOLOGIA") {
+        return (
+          l.category === "CRONOLOGIA" ||
+          l.category === "GUERRA" ||
+          l.category === "HISTÓRIA"
+        );
       }
       if (this.activeHistoryFilter === "GRIMORIO") {
         return l.category === "GRIMÓRIO" || l.category === "GRIMORIO";
@@ -3951,7 +6702,8 @@ class FantasyGenealogyApp {
     container.innerHTML = logs
       .map(l => {
         let cleanCat = l.category;
-        if (cleanCat === "TERRITÓRIO") cleanCat = "TERRITORIO";
+        if (cleanCat === "TERRITÓRIO" || cleanCat === "ASSENTAMENTO") cleanCat = "TERRITORIO";
+        if (cleanCat === "GUERRA" || cleanCat === "HISTÓRIA") cleanCat = "CRONOLOGIA";
         if (cleanCat === "GRIMÓRIO") cleanCat = "GRIMORIO";
         return `
           <div class="audit-log-item cat-${cleanCat}">
@@ -3989,6 +6741,7 @@ class FantasyGenealogyApp {
       this.renderTree();
       this.renderHousesAndSuccessionTab();
       this.renderMapStudio();
+      this.renderTimeline();
       this.renderGrimoire();
       this.renderAuditHistory();
     }

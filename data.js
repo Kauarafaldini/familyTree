@@ -180,6 +180,19 @@ const DEFAULT_WORLD_DATA = {
   // Traços desenhados no rascunho do mapa (polígonos/caminhos para o mapa já vir bonito!)
   mapStrokes: [],
 
+  // Assentamentos Cartográficos (Cidades e Capitais)
+  settlements: [
+    {
+      id: "settle_valoria",
+      type: "capital",
+      name: "Cidadela de Valória",
+      x: 450,
+      y: 250,
+      territoryId: "terr_valoria",
+      houseId: "house_valmont"
+    }
+  ],
+
   // Eventos Históricos das Casas (usados para alimentar casamentos e irmãos retroativos!)
   houseEvents: [
     { id: "ev_1", houseId: "house_valmont", year: 1195, title: "Grande Colheita Carmesim", description: "Prosperidade nos domínios reais sob o reinado de Theron Valmont." },
@@ -189,6 +202,122 @@ const DEFAULT_WORLD_DATA = {
     { id: "ev_5", houseId: "house_valmont", year: 1246, title: "Batalha das Ruínas de Âmbar", description: "Queda do Rei Aldric I e transição da coroa na família real." },
     { id: "ev_6", houseId: "house_ravencrest", year: 1210, title: "Inverno das Asas Brancas", description: "A princesa Elena liderou os suprimentos do Forte Ninho do Corvo." },
     { id: "ev_7", houseId: "house_solarius", year: 1238, title: "Conclave do Sangue Solar", description: "Renovação do pacto de casamento avuncular entre tio e sobrinha." }
+  ],
+
+  // Cronologia & Linha do Tempo da História do Mundo (Anos, Meses, Dias e Acontecimentos)
+  timelineMilestones: [
+    {
+      id: "tl_1",
+      title: "Nascimento de Theron Valmont",
+      category: "birth",
+      year: 1170,
+      month: 3,
+      day: 12,
+      importance: "epic",
+      characterId: "char_theron",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "Sob a constelação da Serpente Carmesim, nasce Theron Valmont, futuro Rei e patriarca que unificou as linhagens sob o Trono de Rubi.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_2",
+      title: "Grande Colheita Carmesim",
+      category: "foundation",
+      year: 1195,
+      month: 8,
+      day: 20,
+      importance: "major",
+      characterId: "char_theron",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "Período de imensa abundância nos domínios reais de Valória, inaugurando celeiros subterrâneos e os primeiros feudos formais da coroa.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_3",
+      title: "Inverno das Asas Brancas",
+      category: "chronicle",
+      year: 1210,
+      month: 11,
+      day: 5,
+      importance: "major",
+      characterId: "char_elena",
+      houseId: "house_ravencrest",
+      territoryId: "terr_ravencrest",
+      description: "Nevasca implacável isolou as fortalezas do norte. A jovem princesa Elena Ravencrest organizou caravanas de suprimento e salvou centenas de aldeões.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_4",
+      title: "Início da Guerra das Três Pontes",
+      category: "war",
+      year: 1215,
+      month: 4,
+      day: 14,
+      importance: "epic",
+      characterId: "char_theron",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "Invasores das terras desoladas avançam sobre os passos fluviais. A coroa mobilizou todas as legiões de cavaleiros para uma guerra de resistência de cinco anos.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_5",
+      title: "Fim da Guerra e Morte do Patriarca Theron",
+      category: "death",
+      year: 1220,
+      month: 6,
+      day: 2,
+      importance: "epic",
+      characterId: "char_theron",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "Com a vitória assegurada na terceira ponte, o Rei Theron falece pacificamente no acampamento real aos 50 anos de idade, deixando o trono a seus herdeiros.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_6",
+      title: "Casamento Real de Aldric e Elena",
+      category: "marriage",
+      year: 1225,
+      month: 5,
+      day: 18,
+      importance: "major",
+      characterId: "char_aldric",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "União dinástica e selamento do Tratado de Aliança Perpétua entre a Casa Valmont e a Casa Ravencrest na Cidadela de Valória.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_7",
+      title: "Nascimento dos Príncipes Herdeiros & Torneio do Solstício",
+      category: "birth",
+      year: 1234,
+      month: 6,
+      day: 21,
+      importance: "major",
+      characterId: "char_edward",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "Nascimento festejado na corte com o Grande Torneio do Solstício de Rubi, recebendo embaixadores de todos os continentes conhecidos.",
+      imageUrl: ""
+    },
+    {
+      id: "tl_8",
+      title: "Batalha das Ruínas de Âmbar & Morte do Rei Aldric I",
+      category: "war",
+      year: 1246,
+      month: 9,
+      day: 9,
+      importance: "epic",
+      characterId: "char_aldric",
+      houseId: "house_valmont",
+      territoryId: "terr_valoria",
+      description: "Feroz confronto fronteiriço nas ruínas arcanas. O Rei Aldric tomba heroicamente na linha de frente, precipitando a atual crise e debates sobre a sucessão do Trono.",
+      imageUrl: ""
+    }
   ],
 
   // Personagens da Árvore Genealógica

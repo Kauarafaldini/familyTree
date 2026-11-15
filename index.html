@@ -37,6 +37,10 @@
         <span class="tab-label">Casas & Dinastias</span>
         <span class="nav-badge" id="badgeHouseCount">0</span>
       </button>
+      <button class="nav-tab" data-tab="tab-timeline" onclick="app.switchTab('tab-timeline')">
+        <span class="tab-label">Cronologia</span>
+        <span class="nav-badge" id="badgeTimelineCount">0</span>
+      </button>
       <button class="nav-tab" data-tab="tab-grimoire" onclick="app.switchTab('tab-grimoire')">
         <span class="tab-label">Grimório Arcano</span>
         <span class="nav-badge" id="badgeCreationCount">0</span>
@@ -145,11 +149,8 @@
         <button class="btn btn-gold" onclick="app.openMarriageModal()">
           Celebrar Casamento
         </button>
-        <button class="btn btn-medieval" onclick="app.openTwinsModal()">
-          Registrar Gêmeos
-        </button>
-        <button class="btn btn-medieval" onclick="app.openRetroactiveSiblingModal()">
-          Irmão Retroativo
+        <button class="btn btn-gold" onclick="app.openAddRelationshipModal()" title="Adicionar um pai, padrasto, irmão, filho, tio ou afins a qualquer personagem">
+          Adicionar Parentesco
         </button>
       </div>
 
@@ -239,7 +240,107 @@
   </section>
 
   <!-- ====================================================================
-       ABA 3: GRIMÓRIO (MAGIAS, POÇÕES, ENCANTAMENTOS E ARCANOS)
+       ABA: CRONOLOGIA (LINHA DO TEMPO HISTÓRICA, GUERRAS, NASCIMENTOS E MARCOS)
+       ==================================================================== -->
+  <section id="tab-timeline" class="tab-panel">
+    <!-- Barra Superior da Cronologia -->
+    <div class="tree-toolbar timeline-toolbar">
+      <!-- Ação Principal: Novo Marco Histórico -->
+      <div class="toolbar-section">
+        <button class="btn btn-gold" onclick="app.openCreateMilestoneModal()" title="Registrar um novo marco histórico (nascimento, guerra, morte, aliança ou crônica)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          <span>+ Novo Marco Histórico</span>
+        </button>
+      </div>
+
+      <!-- Controles de Zoom Dinâmico da Cronologia (Anos -> Meses -> Dias) -->
+      <div class="toolbar-section timeline-zoom-group">
+        <span class="toolbar-section-label">Nível de Detalhe:</span>
+        <button class="btn btn-sm btn-medieval active" id="btnZoomYear" onclick="app.setTimelineZoomMode('year')" title="Escala ampla por Anos e Décadas">
+          <span>📅 Anos</span>
+        </button>
+        <button class="btn btn-sm btn-medieval" id="btnZoomMonth" onclick="app.setTimelineZoomMode('month')" title="Escala intermediária por Luas &amp; Meses das Estações">
+          <span>🌙 Meses</span>
+        </button>
+        <button class="btn btn-sm btn-medieval" id="btnZoomDay" onclick="app.setTimelineZoomMode('day')" title="Escala detalhada por Dias exatos da história">
+          <span>☀️ Dias</span>
+        </button>
+
+        <div style="display:inline-flex; align-items:center; gap:4px; margin-left:6px;">
+          <button class="btn btn-sm btn-medieval" onclick="app.adjustTimelineZoom(-0.3)" title="Diminuir zoom da cronologia">&minus;</button>
+          <span id="timelineZoomLabel" class="zoom-readout">100%</span>
+          <button class="btn btn-sm btn-medieval" onclick="app.adjustTimelineZoom(0.3)" title="Aumentar zoom da cronologia">+</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.resetTimelineZoom()" title="Redefinir escala padrão">1:1</button>
+        </div>
+      </div>
+
+      <!-- Salto Rápido no Tempo -->
+      <div class="toolbar-section">
+        <span class="toolbar-section-label">Ir ao Ano:</span>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <input type="number" id="timelineJumpYearInput" class="input-medieval" style="width:85px; padding:4px 8px; font-size:0.85rem;" placeholder="Ano..." />
+          <button class="btn btn-sm btn-medieval" onclick="app.jumpTimelineToInputYear()" title="Navegar até o ano especificado">Ir</button>
+        </div>
+      </div>
+
+      <!-- Ordenação & Alternador de Nascimentos da Árvore -->
+      <div class="toolbar-section">
+        <button class="btn btn-sm btn-medieval" id="btnToggleTimelineSort" onclick="app.toggleTimelineSortOrder()" title="Alternar ordem cronológica">
+          <span id="timelineSortLabel">Mais Antigos &rarr; Mais Recentes</span>
+        </button>
+        <label class="timeline-checkbox-label" title="Exibe também os nascimentos e mortes registrados nos personagens da árvore genealógica">
+          <input type="checkbox" id="chkIncludeCharLifeEvents" checked onchange="app.toggleIncludeCharLifeEvents(this.checked)" />
+          <span>Vincular Linhagem</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Barra de Filtros e Busca de Categorias -->
+    <div class="timeline-filters-bar">
+      <div class="timeline-category-pills" id="timelineCategoryPillsContainer">
+        <!-- Pílulas de filtro geradas dinamicamente: Todos, Guerras, Nascimentos, Mortes, etc. -->
+      </div>
+      <div class="timeline-search-box">
+        <input
+          type="text"
+          id="timelineSearchInput"
+          placeholder="Filtrar por título, guerra, personagem, local..."
+          class="input-medieval"
+          oninput="app.onTimelineSearchInput(this.value)"
+        />
+        <select id="timelineHouseFilterSelect" class="select-medieval" onchange="app.onTimelineHouseFilterChange(this.value)" title="Filtrar por Casa Nobre"></select>
+        <select id="timelineTerritoryFilterSelect" class="select-medieval" onchange="app.onTimelineTerritoryFilterChange(this.value)" title="Filtrar por Território / Continente"></select>
+      </div>
+    </div>
+
+    <!-- Régua do Tempo Interativa (Visual Time Track) -->
+    <div class="timeline-ruler-wrapper" id="timelineRulerWrapper">
+      <div class="timeline-ruler-header">
+        <div class="timeline-ruler-title">
+          <span class="badge-pill badge-avuncular" id="timelineScaleBadge">Escala: Anos</span>
+          <span style="font-size:0.8rem; color:var(--ink-secondary);">Arraste horizontalmente ou use a roda do mouse sobre a régua para aproximar / afastar</span>
+        </div>
+        <div id="timelineStatsInfo" style="font-size:0.82rem; color:var(--gold-leaf);"></div>
+      </div>
+      <div class="timeline-ruler-viewport" id="timelineRulerViewport">
+        <div class="timeline-ruler-track" id="timelineRulerTrack">
+          <!-- Marcas de anos, luas e dias geradas dinamicamente -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Trilha Central de Crônicas & Cartões Históricos -->
+    <div class="timeline-events-container" id="timelineEventsContainer">
+      <!-- Cartões cronológicos gerados dinamicamente por renderTimeline() -->
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       ABA 4: GRIMÓRIO (MAGIAS, POÇÕES, ENCANTAMENTOS E ARCANOS)
        ==================================================================== -->
   <section id="tab-grimoire" class="tab-panel">
     <div class="tree-toolbar">
@@ -265,43 +366,140 @@
        ABA 4: CARTOGRAFIA DO REINO (FEUDOS, CIDADES E MARCOS)
        ==================================================================== -->
   <section id="tab-map" class="tab-panel">
-    <div class="tree-toolbar">
-      <div class="toolbar-section">
-        <span class="toolbar-section-label">Territórios &amp; Continentes:</span>
-        <button class="btn btn-sm btn-gold map-continent-btn" id="mapToolAddContinent" onclick="app.addContinentOnMap()" title="Adicionar um novo elemento Território (Terra / Continente) cheio de pontos nas bordas para você modelar do jeito e tamanho que quiser">
-          <svg class="continent-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4.5 9.5C4.5 6.5 7.5 4 11 4.5C13.5 4.8 15.5 3.5 18 5C20.5 6.5 21 9.5 19.5 12C18 14.5 19.5 17 17.5 19C15.5 21 12 19.5 9.5 20C7 20.5 4.5 18.5 4 16C3.5 13.5 6 12.5 4.5 9.5Z" fill="rgba(223, 186, 115, 0.3)" />
-            <path d="M19.2 19.2C20 18.9 21.2 19.5 21.2 20.5C21.2 21.3 19.8 21.8 19 21.2C18.4 20.7 18.5 19.5 19.2 19.2Z" fill="rgba(223, 186, 115, 0.3)" />
-            <circle cx="11" cy="4.5" r="1.3" fill="currentColor" />
-            <circle cx="18" cy="5" r="1.3" fill="currentColor" />
-            <circle cx="19.5" cy="12" r="1.3" fill="currentColor" />
-            <circle cx="17.5" cy="19" r="1.3" fill="currentColor" />
-            <circle cx="9.5" cy="20" r="1.3" fill="currentColor" />
-            <circle cx="4" cy="16" r="1.3" fill="currentColor" />
-            <circle cx="4.5" cy="9.5" r="1.3" fill="currentColor" />
+    <div class="tree-toolbar map-main-toolbar">
+      <!-- Seção Principal: Alternar Modo de Exibição / Edição -->
+      <div class="toolbar-section map-mode-section">
+        <button class="btn btn-sm btn-gold map-edit-toggle-btn" id="btnToggleMapEdit" onclick="app.toggleMapEditMode()" title="Clique no lápis para habilitar a edição do mapa, continentes e traços">
+          <svg class="btn-icon" id="iconToggleMapEdit" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+            <path d="m15 5 4 4"/>
           </svg>
-          <span>+ Novo Território (Continente)</span>
+          <span id="toggleMapEditText">Habilitar Edição</span>
         </button>
-        <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')" title="Arraste os pontos nas bordas para modelar o território ou arraste o centro para movê-lo">Modelar Bordas / Mover</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Adicionar mais pontos de controle na borda do território selecionado">+ Pontos na Borda</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.15)" title="Aumentar tamanho do território selecionado">Aumentar (+)</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.86)" title="Diminuir tamanho do território selecionado">Diminuir (-)</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar curvas da costa do território selecionado">Suavizar Costa</button>
+        <div class="map-mode-badge view-mode" id="mapModeBadge">
+          <span class="badge-dot"></span>
+          <span id="mapModeBadgeText">Modo de Exibição</span>
+        </div>
       </div>
+
+      <!-- Seção de Visão / Zoom Infinito -->
+      <div class="toolbar-section map-zoom-section">
+        <span class="toolbar-section-label">Visão:</span>
+        <div class="zoom-controls">
+          <button class="btn btn-sm btn-medieval" onclick="app.adjustMapZoom(-0.2)" title="Diminuir zoom (afastar visão)">&minus;</button>
+          <span id="mapZoomLabel" class="zoom-readout">100%</span>
+          <button class="btn btn-sm btn-medieval" onclick="app.adjustMapZoom(0.2)" title="Aumentar zoom (aproximar visão)">+</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.resetMapZoom()" title="Redefinir escala e centralizar mapa">1:1</button>
+        </div>
+      </div>
+
+      <!-- Ocultar / Exibir Nomes dos Continentes -->
       <div class="toolbar-section">
-        <span class="toolbar-section-label">Traços Sobre a Terra:</span>
-        <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')">Rio</button>
-        <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')">Estrada</button>
-        <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')">Montanhas</button>
-        <button class="btn btn-sm btn-medieval" onclick="app.undoLastMapStroke()">Desfazer Traço</button>
-        <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()">Limpar Traços</button>
+        <button class="btn btn-sm btn-medieval" id="btnToggleContinentNames" onclick="app.toggleContinentNames()" title="Ocultar ou exibir os nomes dos continentes no mapa">
+          <svg id="iconToggleContinentNames" class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span id="toggleContinentNamesText">Ocultar Nomes</span>
+        </button>
+      </div>
+
+      <!-- Controles de Edição (Apenas visíveis quando o usuário clica no lápis) -->
+      <div class="map-edit-controls" id="mapEditControls" style="display: none;">
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Territórios &amp; Continentes:</span>
+          <button class="btn btn-sm btn-gold map-continent-btn" id="mapToolAddContinent" onclick="app.addContinentOnMap()" title="Adicionar um novo elemento Território (Terra / Continente) cheio de pontos nas bordas para você modelar do jeito e tamanho que quiser">
+            <svg class="continent-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4.5 9.5C4.5 6.5 7.5 4 11 4.5C13.5 4.8 15.5 3.5 18 5C20.5 6.5 21 9.5 19.5 12C18 14.5 19.5 17 17.5 19C15.5 21 12 19.5 9.5 20C7 20.5 4.5 18.5 4 16C3.5 13.5 6 12.5 4.5 9.5Z" fill="rgba(223, 186, 115, 0.3)" />
+              <path d="M19.2 19.2C20 18.9 21.2 19.5 21.2 20.5C21.2 21.3 19.8 21.8 19 21.2C18.4 20.7 18.5 19.5 19.2 19.2Z" fill="rgba(223, 186, 115, 0.3)" />
+              <circle cx="11" cy="4.5" r="1.3" fill="currentColor" />
+              <circle cx="18" cy="5" r="1.3" fill="currentColor" />
+              <circle cx="19.5" cy="12" r="1.3" fill="currentColor" />
+              <circle cx="17.5" cy="19" r="1.3" fill="currentColor" />
+              <circle cx="9.5" cy="20" r="1.3" fill="currentColor" />
+              <circle cx="4" cy="16" r="1.3" fill="currentColor" />
+              <circle cx="4.5" cy="9.5" r="1.3" fill="currentColor" />
+            </svg>
+            <span>+ Novo Território (Continente)</span>
+          </button>
+          <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')" title="Arraste os pontos nas bordas para modelar o território ou arraste o centro para movê-lo">Modelar Bordas / Mover</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Adicionar mais pontos de controle na borda do território selecionado">+ Pontos na Borda</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.reduceSelectedTerritoryPoints()" title="Remover pontos excedentes da borda do território selecionado">- Pontos na Borda</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.2)" title="Aumentar tamanho do território selecionado">Aumentar (+)</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.83)" title="Diminuir tamanho do território selecionado">Diminuir (-)</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar curvas da costa do território selecionado">Suavizar Costa</button>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Assentamentos:</span>
+          <!-- Botão Capital com Ícone de Castelinho -->
+          <button class="btn btn-sm btn-medieval" id="mapToolCapital" onclick="app.setMapTool('add_capital')" title="Fundar uma Capital Real no mapa com ícone de castelo">
+            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 21h16M5 21V9l3 2 4-4 4 4 3-2v12M9 21v-4a3 3 0 0 1 6 0v4"/>
+              <path d="M4 9V6l2-1 2 1v3M16 9V6l2-1 2 1v3M11 7V3l1-1 1 1v4"/>
+            </svg>
+            <span>Capital</span>
+          </button>
+
+          <!-- Botão Cidade com Ícone de Vila -->
+          <button class="btn btn-sm btn-medieval" id="mapToolCity" onclick="app.setMapTool('add_city')" title="Fundar uma Cidade ou Vila no mapa com ícone de aldeia medieval">
+            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 21h18M3 10l5-4 5 4v11H3V10zM13 13l4-3 4 3v8h-8v-8zM6 16v5M17 17v4"/>
+            </svg>
+            <span>Cidade</span>
+          </button>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Elementos &amp; Relevo:</span>
+          <!-- Botão Montanhas com Ícone de Montanha -->
+          <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')" title="Traçar cordilheiras de montanhas sobre o mapa">
+            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m2 20 7-12 5 7 3-5 5 10H2z"/>
+              <path d="m7 11.5 2 3.5 4-1"/>
+            </svg>
+            <span>Montanhas</span>
+          </button>
+
+          <!-- Botão Pinheiros com Ícone de Pinheiro -->
+          <button class="btn btn-sm btn-medieval" id="mapToolTree" onclick="app.setMapTool('draw_tree')" title="Traçar bosques e florestas de pinheiros sobre o mapa">
+            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 22v-4"/>
+              <path d="M12 2 7 9h3l-4 6h4l-4 5h12l-4-5h4l-4-6h3z"/>
+            </svg>
+            <span>Pinheiros</span>
+          </button>
+
+          <!-- Botão Estrada com Ícone de Rodovia -->
+          <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')" title="Traçar estradas pontilhadas entre cidades e províncias">
+            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 19 8 5h8l4 14H4z"/>
+              <path d="M12 6v3"/>
+              <path d="M12 12v3"/>
+              <path d="M12 18v2"/>
+            </svg>
+            <span>Estrada</span>
+          </button>
+
+          <!-- Botão Rio com Ícone de Rio -->
+          <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')" title="Traçar rios e cursos d'água">
+            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6c3 0 4 3 7 3s4-3 7-3 4 3 4 3"/>
+              <path d="M3 12c3 0 4 3 7 3s4-3 7-3 4 3 4 3"/>
+              <path d="M3 18c3 0 4 3 7 3s4-3 7-3 4 3 4 3"/>
+            </svg>
+            <span>Rio</span>
+          </button>
+
+          <button class="btn btn-sm btn-medieval" onclick="app.smoothLastMapStroke()" title="Aplicar mini correções no último traço desenhado para deixá-lo menos torto e sem tremidos">Suavizar Linha</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.undoLastMapStroke()" title="Desfazer o último traço desenhado">Desfazer</button>
+          <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()" title="Limpar todos os traços, montanhas e pinheiros desenhados">Limpar</button>
+        </div>
       </div>
     </div>
 
-    <div class="map-helper-bar">
-      <span><strong>Oceano (Água):</strong> Onde não houver território, o mapa é automaticamente <em>Água</em> preenchida com mini ondas.</span>
-      <span>&bull;</span>
-      <span><strong>Modelagem Livre:</strong> Arraste os <strong>pontos dourados nas bordas</strong> para esculpir o formato e tamanho do território, arraste o interior para movê-lo, ou clique com o botão direito em um ponto para removê-lo.</span>
+    <div class="map-helper-bar" id="mapHelperBar" style="display: none;">
+      <span><strong>Modo de Edição Ativo:</strong> Arraste os <strong>pontos dourados nas bordas</strong> para esculpir o continente, arraste o interior para movê-lo, ou use os botões de <strong>Montanhas</strong>, <strong>Árvores</strong>, <strong>Estrada</strong> ou <strong>Rio</strong> para traçar sobre a terra.</span>
     </div>
 
     <div class="map-studio-layout">
@@ -327,19 +525,20 @@
         <button class="btn btn-sm btn-medieval" id="histFilterLINHAGEM" onclick="app.setHistoryFilter('LINHAGEM')">Linhagem de Sangue</button>
         <button class="btn btn-sm btn-medieval" id="histFilterCASA" onclick="app.setHistoryFilter('CASA')">Casas & Trono</button>
         <button class="btn btn-sm btn-medieval" id="histFilterTERRITORIO" onclick="app.setHistoryFilter('TERRITORIO')">Feudos & Territórios</button>
+        <button class="btn btn-sm btn-medieval" id="histFilterCRONOLOGIA" onclick="app.setHistoryFilter('CRONOLOGIA')">Cronologia & Guerras</button>
         <button class="btn btn-sm btn-medieval" id="histFilterGRIMORIO" onclick="app.setHistoryFilter('GRIMORIO')">Grimório Arcano</button>
       </div>
       <div class="history-note">
-        Exclusões de linhagens, casas, feudos ou criações arcanas podem ser revertidas nos respectivos assentos abaixo.
+        Exclusões de linhagens, casas, feudos, marcos cronológicos ou criações arcanas podem ser revertidas nos respectivos assentos abaixo.
       </div>
     </div>
 
     <div class="card-box">
       <div class="card-header-styled">
-        <h2>Anais & Crônicas de Alterações (Linhagem &bull; Dinastia &bull; Território &bull; Grimório)</h2>
+        <h2>Anais & Crônicas de Alterações (Linhagem &bull; Dinastia &bull; Território &bull; Cronologia &bull; Grimório)</h2>
       </div>
       <p class="sub-desc">
-        Registros de alterações estruturais devidamente divididos em <strong>Linhagem</strong>, <strong>Dinastia/Casa</strong>, <strong>Território</strong> e <strong>Grimório Arcano</strong>. Qualquer exclusão ou reestruturação pode ser revogada restaurando o códice ao estado anterior.
+        Registros de alterações estruturais devidamente divididos em <strong>Linhagem</strong>, <strong>Dinastia/Casa</strong>, <strong>Território</strong>, <strong>Cronologia</strong> e <strong>Grimório Arcano</strong>. Qualquer exclusão ou reestruturação pode ser revogada restaurando o códice ao estado anterior.
       </p>
       <div id="auditLogsContainer"></div>
     </div>
@@ -358,6 +557,23 @@
       <div class="modal-footer" id="mainModalFooter"></div>
     </div>
   </div>
+
+  <!-- ====================================================================
+       CANTO LATERAL: LISTA DE HABITANTES DO TERRITÓRIO (DRAWER)
+       ==================================================================== -->
+  <div class="residents-drawer-backdrop" id="residentsDrawerBackdrop" onclick="app.closeResidentsDrawer()"></div>
+  <aside class="residents-corner-drawer" id="residentsCornerDrawer">
+    <div class="residents-drawer-header">
+      <div>
+        <span class="creation-cat-tag" id="residentsDrawerTerrType">Território</span>
+        <h3 id="residentsDrawerTitle">Habitantes</h3>
+      </div>
+      <button class="modal-close" onclick="app.closeResidentsDrawer()" title="Fechar painel de habitantes">&times;</button>
+    </div>
+    <div class="residents-drawer-body" id="residentsDrawerBody">
+      <!-- Inserido dinamicamente via app.openTerritoryResidentsDrawer -->
+    </div>
+  </aside>
 
   <!-- Scripts do Códice -->
   <script src="data.js"></script>

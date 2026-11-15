@@ -246,17 +246,22 @@ body {
   border-color: var(--border-gold-bright);
 }
 
-.btn-primary {
-  background: linear-gradient(180deg, #7a1d29 0%, #57141d 100%);
-  border: 1px solid #993240;
-  color: #faeed9;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.5);
+.btn-primary,
+.btn-confirm {
+  background: linear-gradient(180deg, #1e6b37 0%, #124723 100%);
+  border: 1px solid #2ea155;
+  color: #f0fdf4;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 6px rgba(0, 0, 0, 0.55);
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
-.btn-primary:hover {
-  background: linear-gradient(180deg, #912432 0%, #6b1824 100%);
-  border-color: #ba4757;
-  color: #fff;
+.btn-primary:hover,
+.btn-confirm:hover {
+  background: linear-gradient(180deg, #268746 0%, #165b2d 100%);
+  border-color: #4ade80;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .btn-gold {
@@ -980,6 +985,102 @@ body {
 /* --------------------------------------------------------------------------
    CARTOGRAFIA DO REINO (EDITOR DE TERRITÓRIOS / CONTINENTES E OCEANO)
    -------------------------------------------------------------------------- */
+.map-main-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.map-mode-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.map-zoom-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-edit-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.map-edit-toggle-btn.btn-editing-active {
+  background: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%) !important;
+  color: #fff !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+}
+
+.map-mode-badge {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.map-mode-badge.view-mode {
+  background: #111a24;
+  border: 1px solid #233f5b;
+  color: #7ec0ee;
+}
+
+.map-mode-badge.view-mode .badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+.map-mode-badge.edit-mode {
+  background: #2b1f13;
+  border: 1px solid #9e7534;
+  color: #f7d58b;
+}
+
+.map-mode-badge.edit-mode .badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #eab308;
+  box-shadow: 0 0 6px #eab308;
+  animation: pulse-dot 1.5s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.map-edit-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 .map-continent-btn {
   display: inline-flex;
   align-items: center;
@@ -987,6 +1088,12 @@ body {
   font-weight: 700;
   padding: 5px 12px;
   box-shadow: 0 2px 8px rgba(197, 160, 89, 0.25);
+}
+
+.btn-names-hidden {
+  opacity: 0.72;
+  border-style: dashed !important;
+  color: var(--ink-secondary) !important;
 }
 
 .continent-btn-icon {
@@ -1053,49 +1160,128 @@ body {
   pointer-events: none;
 }
 
-.map-city-pin {
+.map-pins-layer {
   position: absolute;
-  transform: translate(-50%, -50%);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
+  display: none;
+}
+
+/* ==========================================================================
+   CANTO LATERAL DE HABITANTES DO TERRITÓRIO (CORNER DRAWER)
+   ========================================================================== */
+.residents-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 6, 4, 0.65);
+  backdrop-filter: blur(3px);
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.residents-drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.residents-corner-drawer {
+  position: fixed;
+  top: 0;
+  right: -450px;
+  width: 420px;
+  max-width: 92vw;
+  height: 100vh;
+  background: linear-gradient(180deg, #221a14 0%, #150f0b 100%);
+  border-left: 2px solid var(--border-gold-bright);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.92);
+  z-index: 999;
   display: flex;
   flex-direction: column;
+  transition: right 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.residents-corner-drawer.open {
+  right: 0;
+}
+
+.residents-drawer-header {
+  padding: 16px 20px;
+  background: #18120c;
+  border-bottom: 1px solid var(--border-brass);
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  transition: transform 0.12s ease;
-  z-index: 10;
 }
 
-.map-city-pin.selected {
-  transform: translate(-50%, -50%) scale(1.08);
-  z-index: 20;
-}
-
-.pin-marker {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--pin-color, #8b202e);
-  border: 2px solid #dfba73;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
-}
-
-.pin-label {
-  margin-top: 3px;
-  background: #16110c;
-  border: 1px solid var(--border-gold-bright);
-  color: var(--ink-parchment);
-  padding: 2px 7px;
-  border-radius: 2px;
+.residents-drawer-header h3 {
   font-family: var(--font-display);
-  font-size: 0.68rem;
+  font-size: 1.05rem;
+  color: var(--gold-leaf);
+  margin: 4px 0 0 0;
+  text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.residents-drawer-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resident-card-item {
+  background: #140f0b;
+  border: 1px solid var(--border-brass);
+  border-radius: 3px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.resident-card-item:hover {
+  border-color: var(--gold-antique);
+  transform: translateX(-2px);
+}
+
+.resident-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold-antique);
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+.resident-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.resident-card-name {
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.map-city-pin.selected .pin-label {
-  background: var(--gold-antique);
-  color: #120e0a;
+.resident-card-meta {
+  font-size: 0.8rem;
+  color: var(--ink-secondary);
+  margin-top: 2px;
 }
 
 /* --------------------------------------------------------------------------
@@ -1135,6 +1321,10 @@ body {
 
 .audit-log-item.cat-GRIMORIO {
   border-left-color: #a855f7;
+}
+
+.audit-log-item.cat-CRONOLOGIA {
+  border-left-color: #f59e0b;
 }
 
 /* --------------------------------------------------------------------------
@@ -1316,4 +1506,461 @@ body {
   background: var(--gold-antique);
   color: #120e0a;
   border-color: var(--gold-leaf);
+}
+
+/* ==========================================================================
+   CRONOLOGIA HISTÓRICA & LINHA DO TEMPO
+   ========================================================================== */
+
+.timeline-toolbar {
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.timeline-zoom-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.timeline-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  color: var(--gold-leaf);
+  text-transform: uppercase;
+  user-select: none;
+  background: #18120c;
+  padding: 5px 10px;
+  border: 1px solid var(--border-brass);
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.timeline-checkbox-label:hover {
+  border-color: var(--gold-leaf);
+}
+
+.timeline-filters-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  background: #140f0a;
+  border: 1px solid var(--border-brass);
+  border-radius: 4px;
+  padding: 8px 14px;
+}
+
+.timeline-category-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.timeline-cat-pill {
+  background: #1c150e;
+  border: 1px solid var(--border-brass);
+  color: var(--ink-secondary);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.timeline-cat-pill:hover {
+  color: #fff;
+  border-color: var(--gold-leaf);
+}
+
+.timeline-cat-pill.active {
+  background: var(--gold-antique);
+  color: #120e0a;
+  border-color: var(--gold-leaf);
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(223, 186, 115, 0.35);
+}
+
+.timeline-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Régua do Tempo Interativa */
+.timeline-ruler-wrapper {
+  background: #130e09;
+  border: 1px solid var(--border-gold);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.75), 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.timeline-ruler-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.timeline-ruler-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timeline-ruler-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-antique) #100b07;
+}
+
+.timeline-ruler-viewport:active {
+  cursor: grabbing;
+}
+
+.timeline-ruler-track {
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+  min-height: 80px;
+  padding: 10px 20px;
+  border-bottom: 2px solid var(--gold-leaf);
+}
+
+.ruler-segment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.ruler-tick-major {
+  width: 2px;
+  height: 22px;
+  background: var(--gold-leaf);
+  margin-bottom: 4px;
+}
+
+.ruler-tick-minor {
+  width: 1px;
+  height: 12px;
+  background: var(--border-brass);
+  margin-bottom: 4px;
+}
+
+.ruler-tick-sub {
+  width: 1px;
+  height: 6px;
+  background: rgba(197, 160, 89, 0.35);
+  margin-bottom: 4px;
+}
+
+.ruler-label-year {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--parchment-bright);
+  letter-spacing: 0.6px;
+}
+
+.ruler-label-sub {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.ruler-event-pin {
+  position: absolute;
+  top: -2px;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #16120d;
+  border: 1.5px solid var(--gold-leaf);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.ruler-event-pin:hover {
+  transform: translateX(-50%) scale(1.35);
+  z-index: 5;
+  box-shadow: 0 0 10px var(--gold-leaf);
+}
+
+.ruler-event-pin.pin-epic {
+  border-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+}
+
+/* Trilha Central de Acontecimentos & Cartões */
+.timeline-events-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding: 10px 0 40px 0;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.timeline-events-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 28px;
+  width: 3px;
+  background: linear-gradient(180deg, var(--gold-leaf) 0%, #785a28 50%, var(--gold-antique) 100%);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(223, 186, 115, 0.35);
+}
+
+.timeline-era-header {
+  position: relative;
+  margin: 24px 0 16px 0;
+  padding-left: 60px;
+}
+
+.timeline-era-badge {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  background: linear-gradient(135deg, #2b1f13 0%, #17110a 100%);
+  color: var(--gold-leaf);
+  padding: 5px 14px;
+  border: 1px solid var(--border-gold);
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 20px;
+  padding-left: 60px;
+  transition: all 0.25s ease;
+}
+
+.timeline-node-icon {
+  position: absolute;
+  left: 17px;
+  top: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #17120c;
+  border: 2px solid var(--gold-leaf);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  z-index: 3;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  transition: transform 0.2s ease;
+}
+
+.timeline-item:hover .timeline-node-icon {
+  transform: scale(1.22);
+}
+
+.timeline-card {
+  background: #17120c;
+  border: 1px solid var(--border-brass);
+  border-radius: 4px;
+  padding: 14px 18px;
+  position: relative;
+  transition: all 0.25s ease;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.timeline-card:hover {
+  border-color: var(--gold-leaf);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+.timeline-card.card-epic {
+  border-color: var(--gold-leaf);
+  background: linear-gradient(135deg, #22180f 0%, #17120c 100%);
+  box-shadow: 0 4px 14px rgba(223, 186, 115, 0.15);
+}
+
+@keyframes cardPulseGlow {
+  0% { box-shadow: 0 0 0 rgba(223, 186, 115, 0); }
+  50% { box-shadow: 0 0 24px rgba(223, 186, 115, 0.9); border-color: var(--gold-leaf); }
+  100% { box-shadow: 0 0 0 rgba(223, 186, 115, 0); }
+}
+
+.card-highlight-pulse {
+  animation: cardPulseGlow 1.4s ease 2;
+  border-color: var(--gold-leaf) !important;
+}
+
+.timeline-card.card-epic::after {
+  content: "★ Épico";
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  color: var(--gold-leaf);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.timeline-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.timeline-date-tag {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.timeline-card-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff8e7;
+  letter-spacing: 0.4px;
+  margin: 4px 0 8px 0;
+}
+
+.timeline-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+  color: var(--ink-secondary);
+}
+
+.timeline-cameo-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--gold-leaf);
+  vertical-align: middle;
+}
+
+.timeline-desc {
+  font-size: 0.9rem;
+  color: var(--parchment-bright);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.timeline-image-preview {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 3px;
+  border: 1px solid var(--border-gold-subtle);
+  margin-bottom: 10px;
+  object-fit: cover;
+}
+
+.timeline-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(223, 186, 115, 0.15);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* Badges de Categoria da Cronologia */
+.badge-war {
+  background: #391113 !important;
+  color: #fca5a5 !important;
+  border: 1px solid #991b1b !important;
+}
+
+.badge-birth {
+  background: #362208 !important;
+  color: #fde68a !important;
+  border: 1px solid #d97706 !important;
+}
+
+.badge-death {
+  background: #242426 !important;
+  color: #e5e7eb !important;
+  border: 1px solid #6b7280 !important;
+}
+
+.badge-coronation {
+  background: #2e103f !important;
+  color: #e9d5ff !important;
+  border: 1px solid #9333ea !important;
+}
+
+.badge-marriage {
+  background: #3b1126 !important;
+  color: #fbcfe8 !important;
+  border: 1px solid #db2777 !important;
+}
+
+.badge-arcane {
+  background: #0c2338 !important;
+  color: #bae6fd !important;
+  border: 1px solid #0284c7 !important;
+}
+
+.badge-foundation {
+  background: #332808 !important;
+  color: #fef08a !important;
+  border: 1px solid #ca8a04 !important;
+}
+
+.badge-chronicle {
+  background: #281f15 !important;
+  color: #f5ebd4 !important;
+  border: 1px solid #a17c38 !important;
 }

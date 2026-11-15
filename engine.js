@@ -67,6 +67,14 @@ class WorldEngine {
           if (this.ensureTerritoryPolygons(parsed.territories)) {
             modified = true;
           }
+          if (!Array.isArray(parsed.settlements)) {
+            parsed.settlements = Array.isArray(DEFAULT_WORLD_DATA.settlements) ? JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA.settlements)) : [];
+            modified = true;
+          }
+          if (!Array.isArray(parsed.timelineMilestones)) {
+            parsed.timelineMilestones = Array.isArray(DEFAULT_WORLD_DATA.timelineMilestones) ? JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA.timelineMilestones)) : [];
+            modified = true;
+          }
           if (modified) {
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
@@ -342,8 +350,10 @@ class WorldEngine {
       characters: JSON.parse(JSON.stringify(this.data.characters)),
       houses: JSON.parse(JSON.stringify(this.data.houses)),
       territories: JSON.parse(JSON.stringify(this.data.territories)),
+      settlements: JSON.parse(JSON.stringify(this.data.settlements || [])),
       mapStrokes: JSON.parse(JSON.stringify(this.data.mapStrokes || [])),
       houseEvents: JSON.parse(JSON.stringify(this.data.houseEvents)),
+      timelineMilestones: JSON.parse(JSON.stringify(this.data.timelineMilestones || [])),
       creations: JSON.parse(JSON.stringify(this.data.creations || [])),
       creationCategories: JSON.parse(JSON.stringify(this.data.creationCategories || []))
     };
@@ -358,10 +368,16 @@ class WorldEngine {
     this.data.characters = JSON.parse(JSON.stringify(log.snapshot.characters));
     this.data.houses = JSON.parse(JSON.stringify(log.snapshot.houses));
     this.data.territories = JSON.parse(JSON.stringify(log.snapshot.territories));
+    if (log.snapshot.settlements) {
+      this.data.settlements = JSON.parse(JSON.stringify(log.snapshot.settlements));
+    }
     if (log.snapshot.mapStrokes) {
       this.data.mapStrokes = JSON.parse(JSON.stringify(log.snapshot.mapStrokes));
     }
     this.data.houseEvents = JSON.parse(JSON.stringify(log.snapshot.houseEvents));
+    if (log.snapshot.timelineMilestones) {
+      this.data.timelineMilestones = JSON.parse(JSON.stringify(log.snapshot.timelineMilestones));
+    }
     if (log.snapshot.creations) {
       this.data.creations = JSON.parse(JSON.stringify(log.snapshot.creations));
     }
