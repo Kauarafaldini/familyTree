@@ -34,7 +34,7 @@
         <span class="nav-badge" id="badgeCharCount">0</span>
       </button>
       <button class="nav-tab" data-tab="tab-houses" onclick="app.switchTab('tab-houses')">
-        <span class="tab-label">Sucessão & Casas</span>
+        <span class="tab-label">Casas & Dinastias</span>
         <span class="nav-badge" id="badgeHouseCount">0</span>
       </button>
       <button class="nav-tab" data-tab="tab-grimoire" onclick="app.switchTab('tab-grimoire')">
@@ -208,61 +208,32 @@
   </section>
 
   <!-- ====================================================================
-       ABA 2: SUCESSÃO REAL, REGÊNCIA & CASAS DINÁSTICAS
+       ABA 2: CASAS NOBRES & DINASTIAS DO REINO
        ==================================================================== -->
   <section id="tab-houses" class="tab-panel">
     <div class="grid-2col">
-      <!-- Coluna Esquerda: Leis de Sucessão e Regência -->
+      <!-- Coluna Esquerda: Casas Nobres -->
       <div class="card-box">
         <div class="card-header-styled">
-          <h2>Tribunal Sucessório & Regência do Trono</h2>
-          <span class="decree-tag">Leis Canônicas Vigentes</span>
+          <h2>Casas & Linhagens Nobres</h2>
+          <button class="btn btn-primary btn-sm" onclick="app.openHouseModal()">Nova Casa</button>
         </div>
         <p class="sub-desc">
-          Simule a sucessão dinástica segundo a tradição do reino:
-          <strong>1) Prioridade dos irmãos do rei</strong> (tornando sua prole a nova linhagem herdeira);
-          <strong>2) Maioridade aos 18 anos</strong> (ausentes irmãos vivos, a <strong>Rainha Consorte assume como Regente</strong>);
-          <strong>3) Princesas herdeiras</strong> assumem unicamente se não restarem varões legítimos;
-          <strong>4) Bastardos</strong> permanecem desprovidos de herança, salvo concessão expressa da autora.
+          Casas soberanas, dinastias e linhagens do reino. Alterações são registradas sob a rubrica Dinastia nos anais.
         </p>
-
-        <div class="form-row" style="margin-bottom:14px;">
-          <div class="form-group">
-            <label for="successionKingSelect">Soberano em Análise de Sucessão:</label>
-            <select id="successionKingSelect" class="select-medieval" onchange="app.renderSuccessionAnalysis()"></select>
-          </div>
-          <div class="form-group">
-            <label for="successionSimYear">Ano da Transição (Ano Corrente: <span id="succCurrentYearSpan">1248</span>):</label>
-            <input type="number" id="successionSimYear" value="1248" onchange="app.renderSuccessionAnalysis()" />
-          </div>
-        </div>
-
-        <div id="successionResultBox"></div>
+        <div id="housesListContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
       </div>
 
-      <!-- Coluna Direita: Casas Nobres e Anais Históricos -->
-      <div style="display:flex; flex-direction:column; gap:18px;">
-        <div class="card-box">
-          <div class="card-header-styled">
-            <h2>Casas & Linhagens Nobres</h2>
-            <button class="btn btn-primary btn-sm" onclick="app.openHouseModal()">Nova Casa</button>
-          </div>
-          <p class="sub-desc">
-            Casas soberanas, casas nobres e linhagens consanguíneas avunculares. Alterações registradas sob a rubrica Dinastia nos anais.
-          </p>
-          <div id="housesListContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <!-- Coluna Direita: Marcos Históricos das Casas -->
+      <div class="card-box">
+        <div class="card-header-styled">
+          <h2>Marcos Históricos das Casas</h2>
+          <button class="btn btn-gold btn-sm" onclick="app.openHouseEventModal()">Novo Marco</button>
         </div>
-
-        <div class="card-box">
-          <div class="card-header-styled">
-            <h2>Marcos Históricos das Casas</h2>
-            <button class="btn btn-gold btn-sm" onclick="app.openHouseEventModal()">Novo Marco</button>
-          </div>
-          <p class="sub-desc">
-            Acontecimentos incorporados à história de esposas nobiliárquicas a partir do ano de núpcias e herdados por irmãos adicionados retroativamente.
-          </p>
-          <div id="houseEventsListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:290px; overflow-y:auto;"></div>
-        </div>
+        <p class="sub-desc">
+          Acontecimentos incorporados à história de esposas nobiliárquicas a partir do ano de núpcias e herdados por irmãos adicionados retroativamente.
+        </p>
+        <div id="houseEventsListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:550px; overflow-y:auto;"></div>
       </div>
     </div>
   </section>
@@ -296,18 +267,41 @@
   <section id="tab-map" class="tab-panel">
     <div class="tree-toolbar">
       <div class="toolbar-section">
-        <span class="toolbar-section-label">Instrumentos Cartográficos:</span>
-        <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')">Examinar / Mover Feudo</button>
-        <button class="btn btn-sm btn-primary" id="mapToolAddCity" onclick="app.setMapTool('add_city')">Fundar Feudo / Cidade</button>
-        <button class="btn btn-sm btn-medieval" id="mapToolLand" onclick="app.setMapTool('draw_land')">Traçar Costa</button>
-        <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')">Traçar Rio</button>
-        <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')">Traçar Estrada</button>
-        <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')">Erguer Montanhas</button>
+        <span class="toolbar-section-label">Territórios &amp; Continentes:</span>
+        <button class="btn btn-sm btn-gold map-continent-btn" id="mapToolAddContinent" onclick="app.addContinentOnMap()" title="Adicionar um novo elemento Território (Terra / Continente) cheio de pontos nas bordas para você modelar do jeito e tamanho que quiser">
+          <svg class="continent-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4.5 9.5C4.5 6.5 7.5 4 11 4.5C13.5 4.8 15.5 3.5 18 5C20.5 6.5 21 9.5 19.5 12C18 14.5 19.5 17 17.5 19C15.5 21 12 19.5 9.5 20C7 20.5 4.5 18.5 4 16C3.5 13.5 6 12.5 4.5 9.5Z" fill="rgba(223, 186, 115, 0.3)" />
+            <path d="M19.2 19.2C20 18.9 21.2 19.5 21.2 20.5C21.2 21.3 19.8 21.8 19 21.2C18.4 20.7 18.5 19.5 19.2 19.2Z" fill="rgba(223, 186, 115, 0.3)" />
+            <circle cx="11" cy="4.5" r="1.3" fill="currentColor" />
+            <circle cx="18" cy="5" r="1.3" fill="currentColor" />
+            <circle cx="19.5" cy="12" r="1.3" fill="currentColor" />
+            <circle cx="17.5" cy="19" r="1.3" fill="currentColor" />
+            <circle cx="9.5" cy="20" r="1.3" fill="currentColor" />
+            <circle cx="4" cy="16" r="1.3" fill="currentColor" />
+            <circle cx="4.5" cy="9.5" r="1.3" fill="currentColor" />
+          </svg>
+          <span>+ Novo Território (Continente)</span>
+        </button>
+        <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')" title="Arraste os pontos nas bordas para modelar o território ou arraste o centro para movê-lo">Modelar Bordas / Mover</button>
+        <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Adicionar mais pontos de controle na borda do território selecionado">+ Pontos na Borda</button>
+        <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.15)" title="Aumentar tamanho do território selecionado">Aumentar (+)</button>
+        <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.86)" title="Diminuir tamanho do território selecionado">Diminuir (-)</button>
+        <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar curvas da costa do território selecionado">Suavizar Costa</button>
       </div>
       <div class="toolbar-section">
+        <span class="toolbar-section-label">Traços Sobre a Terra:</span>
+        <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')">Rio</button>
+        <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')">Estrada</button>
+        <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')">Montanhas</button>
         <button class="btn btn-sm btn-medieval" onclick="app.undoLastMapStroke()">Desfazer Traço</button>
-        <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()">Limpar Rascunho</button>
+        <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()">Limpar Traços</button>
       </div>
+    </div>
+
+    <div class="map-helper-bar">
+      <span><strong>Oceano (Água):</strong> Onde não houver território, o mapa é automaticamente <em>Água</em> preenchida com mini ondas.</span>
+      <span>&bull;</span>
+      <span><strong>Modelagem Livre:</strong> Arraste os <strong>pontos dourados nas bordas</strong> para esculpir o formato e tamanho do território, arraste o interior para movê-lo, ou clique com o botão direito em um ponto para removê-lo.</span>
     </div>
 
     <div class="map-studio-layout">
@@ -333,18 +327,19 @@
         <button class="btn btn-sm btn-medieval" id="histFilterLINHAGEM" onclick="app.setHistoryFilter('LINHAGEM')">Linhagem de Sangue</button>
         <button class="btn btn-sm btn-medieval" id="histFilterCASA" onclick="app.setHistoryFilter('CASA')">Casas & Trono</button>
         <button class="btn btn-sm btn-medieval" id="histFilterTERRITORIO" onclick="app.setHistoryFilter('TERRITORIO')">Feudos & Territórios</button>
+        <button class="btn btn-sm btn-medieval" id="histFilterGRIMORIO" onclick="app.setHistoryFilter('GRIMORIO')">Grimório Arcano</button>
       </div>
       <div class="history-note">
-        Exclusões de linhagens, casas ou nomes cartográficos podem ser revertidas nos respectivos assentos abaixo.
+        Exclusões de linhagens, casas, feudos ou criações arcanas podem ser revertidas nos respectivos assentos abaixo.
       </div>
     </div>
 
     <div class="card-box">
       <div class="card-header-styled">
-        <h2>Anais & Crônicas de Alterações (Linhagem &bull; Dinastia &bull; Território)</h2>
+        <h2>Anais & Crônicas de Alterações (Linhagem &bull; Dinastia &bull; Território &bull; Grimório)</h2>
       </div>
       <p class="sub-desc">
-        Registros de alterações estruturais devidamente divididos em <strong>Linhagem</strong>, <strong>Dinastia/Casa</strong> e <strong>Território</strong>. Qualquer exclusão ou reestruturação pode ser revogada restaurando o códice ao estado anterior.
+        Registros de alterações estruturais devidamente divididos em <strong>Linhagem</strong>, <strong>Dinastia/Casa</strong>, <strong>Território</strong> e <strong>Grimório Arcano</strong>. Qualquer exclusão ou reestruturação pode ser revogada restaurando o códice ao estado anterior.
       </p>
       <div id="auditLogsContainer"></div>
     </div>

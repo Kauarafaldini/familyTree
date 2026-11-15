@@ -36,6 +36,16 @@ class WorldEngine {
             modified = true;
           }
 
+          if (!Array.isArray(parsed.creations)) {
+            parsed.creations = Array.isArray(DEFAULT_WORLD_DATA.creations) ? DEFAULT_WORLD_DATA.creations.slice() : [];
+            modified = true;
+          }
+
+          if (!Array.isArray(parsed.creationCategories)) {
+            parsed.creationCategories = Array.isArray(DEFAULT_WORLD_DATA.creationCategories) ? DEFAULT_WORLD_DATA.creationCategories.slice() : ["Magia", "Poção", "Encantamento", "Artefato / Relíquia"];
+            modified = true;
+          }
+
           if (parsed.meta && !parsed.meta.selectedRaceFilter) {
             parsed.meta.selectedRaceFilter = "all";
             modified = true;
@@ -54,6 +64,9 @@ class WorldEngine {
               modified = true;
             }
           });
+          if (this.ensureTerritoryPolygons(parsed.territories)) {
+            modified = true;
+          }
           if (modified) {
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
@@ -65,7 +78,38 @@ class WorldEngine {
     } catch (e) {
       console.warn("Erro ao carregar localStorage, usando dados iniciais:", e);
     }
-    return JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+    const initialData = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+    this.ensureTerritoryPolygons(initialData.territories);
+    return initialData;
+  }
+
+  // Gera um anel cheio de pontos de controle na borda para modelar um território/continente
+  generateContinentPoints(cx, cy, rx = 86, ry = 66, count = 24, seed = 1) {
+    const pts = [];
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count;
+      const wave1 = Math.sin(angle * 3 + seed * 1.3) * 0.11;
+      const wave2 = Math.cos(angle * 5 - seed * 1.9) * 0.07;
+      const factor = 1 + wave1 + wave2;
+      const px = Math.round(Math.max(14, Math.min(946, cx + Math.cos(angle) * rx * factor)));
+      const py = Math.round(Math.max(14, Math.min(546, cy + Math.sin(angle) * ry * factor)));
+      pts.push({ x: px, y: py });
+    }
+    return pts;
+  }
+
+  ensureTerritoryPolygons(territories) {
+    if (!Array.isArray(territories)) return false;
+    let changed = false;
+    territories.forEach((t, idx) => {
+      if (!Array.isArray(t.points) || t.points.length < 6) {
+        const cx = Number(t.x) || 480;
+        const cy = Number(t.y) || 280;
+        t.points = this.generateContinentPoints(cx, cy, 86, 66, 24, idx + 1);
+        changed = true;
+      }
+    });
+    return changed;
   }
 
   getRaces() {
@@ -107,6 +151,7 @@ class WorldEngine {
 
   resetToDefault() {
     this.data = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+    this.ensureTerritoryPolygons(this.data.territories);
     this.saveToStorage();
   }
 
@@ -183,6 +228,7 @@ class WorldEngine {
       ],
       auditLogs: []
     };
+    this.ensureTerritoryPolygons(this.data.territories);
     this.saveToStorage();
   }
 
@@ -296,7 +342,10 @@ class WorldEngine {
       characters: JSON.parse(JSON.stringify(this.data.characters)),
       houses: JSON.parse(JSON.stringify(this.data.houses)),
       territories: JSON.parse(JSON.stringify(this.data.territories)),
-      houseEvents: JSON.parse(JSON.stringify(this.data.houseEvents))
+      mapStrokes: JSON.parse(JSON.stringify(this.data.mapStrokes || [])),
+      houseEvents: JSON.parse(JSON.stringify(this.data.houseEvents)),
+      creations: JSON.parse(JSON.stringify(this.data.creations || [])),
+      creationCategories: JSON.parse(JSON.stringify(this.data.creationCategories || []))
     };
   }
 
@@ -309,7 +358,16 @@ class WorldEngine {
     this.data.characters = JSON.parse(JSON.stringify(log.snapshot.characters));
     this.data.houses = JSON.parse(JSON.stringify(log.snapshot.houses));
     this.data.territories = JSON.parse(JSON.stringify(log.snapshot.territories));
+    if (log.snapshot.mapStrokes) {
+      this.data.mapStrokes = JSON.parse(JSON.stringify(log.snapshot.mapStrokes));
+    }
     this.data.houseEvents = JSON.parse(JSON.stringify(log.snapshot.houseEvents));
+    if (log.snapshot.creations) {
+      this.data.creations = JSON.parse(JSON.stringify(log.snapshot.creations));
+    }
+    if (log.snapshot.creationCategories) {
+      this.data.creationCategories = JSON.parse(JSON.stringify(log.snapshot.creationCategories));
+    }
     log.reverted = true;
 
     this.recordAuditLog(

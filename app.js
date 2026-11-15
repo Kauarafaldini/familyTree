@@ -90,8 +90,6 @@ class FantasyGenealogyApp {
     if (!isNaN(yr) && yr > 0) {
       this.engine.data.meta.currentYear = yr;
       this.engine.saveToStorage();
-      const simInput = document.getElementById("successionSimYear");
-      if (simInput) simInput.value = yr;
       this.renderTree();
       this.renderHousesAndSuccessionTab();
     }
@@ -193,16 +191,61 @@ class FantasyGenealogyApp {
   }
 
   promptNewRace() {
-    const race = prompt("Digite o nome da nova Raça / Espécie que deseja incluir no Códice:");
-    if (race && race.trim()) {
-      const trimmed = race.trim();
-      const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-      this.engine.addRace(capitalized);
-      this.populateFilterControls();
-      const raceInput = document.getElementById("raceFilterInput");
-      if (raceInput) raceInput.value = capitalized;
-      this.onRaceFilterInput(capitalized);
+    const bodyHtml = `
+      <div class="form-group">
+        <label>Nome da Nova Raça / Espécie:</label>
+        <input
+          type="text"
+          id="modalNewRaceName"
+          placeholder="Ex: Fada / Silfo, Quimera, Tritão, Draconiano..."
+          class="input-medieval"
+          style="width:100%;"
+          onkeydown="if(event.key==='Enter') app.confirmNewRaceModal()"
+        />
+      </div>
+      <div class="card-box" style="margin-top:12px; padding:12px;">
+        <h4 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.84rem; text-transform:uppercase; margin-bottom:6px;">
+          Registro no Códice de Raças
+        </h4>
+        <p style="font-size:0.88rem; color:var(--ink-secondary); line-height:1.5;">
+          A nova espécie será averbada no tomo, passando a constar imediatamente nos filtros de genealogia e nas opções de novos personagens.
+        </p>
+      </div>
+      <div id="newRaceErrorMsg" style="display:none; margin-top:8px;" class="alert-banner alert-danger"></div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="app.confirmNewRaceModal()">Registrar Raça</button>
+    `;
+
+    this.showModal("Registrar Nova Raça no Códice", bodyHtml, footerHtml);
+    setTimeout(() => {
+      const inp = document.getElementById("modalNewRaceName");
+      if (inp) inp.focus();
+    }, 50);
+  }
+
+  confirmNewRaceModal() {
+    const inp = document.getElementById("modalNewRaceName");
+    const errBox = document.getElementById("newRaceErrorMsg");
+    if (!inp) return;
+    const clean = inp.value.trim();
+    if (!clean) {
+      if (errBox) {
+        errBox.textContent = "Por favor, informe o nome da raça.";
+        errBox.style.display = "block";
+      }
+      inp.focus();
+      return;
     }
+    const capitalized = clean.charAt(0).toUpperCase() + clean.slice(1);
+    this.engine.addRace(capitalized);
+    this.populateFilterControls();
+    const raceInput = document.getElementById("raceFilterInput");
+    if (raceInput) raceInput.value = capitalized;
+    this.onRaceFilterInput(capitalized);
+    this.closeModal();
   }
 
   adjustZoom(delta) {
@@ -2012,109 +2055,11 @@ class FantasyGenealogyApp {
   }
 
   // --------------------------------------------------------------------------
-  // SUCESSÃO REAL & CASAS DINÁSTICAS
+  // CASAS DINÁSTICAS & MARCOS HISTÓRICOS
   // --------------------------------------------------------------------------
   renderHousesAndSuccessionTab() {
-    const kingSelect = document.getElementById("successionKingSelect");
-    const yearSpan = document.getElementById("succCurrentYearSpan");
-    if (!kingSelect) return;
-
-    if (yearSpan) yearSpan.textContent = this.engine.data.meta.currentYear;
-
-    const rulers = this.engine.data.characters.filter(
-      c => !c.isPlaceholderEmpty && ["rei", "principe", "lorde"].includes(c.socialRank)
-    );
-
-    const prevSelected = kingSelect.value;
-    kingSelect.innerHTML = rulers
-      .map(
-        r =>
-          `<option value="${r.id}">${this.escapeHtml(r.name)} (${r.socialRank.toUpperCase()} &bull; ${
-            r.isAlive ? "Vivo" : "Falecido em " + r.deathYear
-          })</option>`
-      )
-      .join("");
-
-    if (prevSelected && rulers.some(r => r.id === prevSelected)) {
-      kingSelect.value = prevSelected;
-    }
-
-    this.renderSuccessionAnalysis();
     this.renderHousesList();
     this.renderHouseEventsList();
-  }
-
-  renderSuccessionAnalysis() {
-    const kingId = document.getElementById("successionKingSelect")?.value;
-    const simYear = Number(document.getElementById("successionSimYear")?.value) || this.engine.data.meta.currentYear;
-    const box = document.getElementById("successionResultBox");
-    if (!box || !kingId) return;
-
-    const res = this.engine.analyzeSuccessionForKing(kingId, simYear);
-    if (!res) {
-      box.innerHTML = `<p>Selecione um soberano.</p>`;
-      return;
-    }
-
-    box.innerHTML = `
-      <div class="alert-banner alert-info" style="margin-bottom:14px;">
-        <h4 style="margin-bottom:6px; color:var(--gold-leaf);">Ordem Canônica de Sucessão (Ano Base: ${res.currentYear})</h4>
-        <p style="font-size:0.92rem;">${this.escapeHtml(res.explanation)}</p>
-      </div>
-
-      <div class="form-row" style="margin-bottom:14px;">
-        <div class="card-box" style="padding:12px;">
-          <div style="font-family:var(--font-display); font-size:0.7rem; color:var(--gold-muted); text-transform:uppercase;">Soberano no Trono / Regente:</div>
-          <div style="font-family:var(--font-display); font-size:1.02rem; font-weight:700; color:var(--gold-leaf); margin-top:4px;">
-            ${res.ruler ? this.escapeHtml(res.ruler.name) : "Assento Vago"}
-          </div>
-          ${
-            res.regent
-              ? `<span class="badge-pill badge-avuncular">Rainha Regente (${res.yearsUntilMajority} anos para maioridade do herdeiro)</span>`
-              : ""
-          }
-        </div>
-
-        <div class="card-box" style="padding:12px;">
-          <div style="font-family:var(--font-display); font-size:0.7rem; color:var(--gold-muted); text-transform:uppercase;">Herdeiro Imediato:</div>
-          <div style="font-family:var(--font-display); font-size:1.02rem; font-weight:700; color:#7899c4; margin-top:4px;">
-            ${res.heir ? `${this.escapeHtml(res.heir.name)} (${res.currentYear - (res.heir.birthYear || res.currentYear)} anos)` : "Sem herdeiro imediato"}
-          </div>
-        </div>
-      </div>
-
-      <div style="font-size:0.88rem; line-height:1.65; background:#140f0b; border:1px solid var(--border-brass); padding:12px; border-radius:3px; margin-bottom:12px;">
-        <div><strong>1. Irmãos Vivos do Rei (Prioridade Fraterna):</strong> ${
-          res.brothers.length > 0 ? res.brothers.map(b => this.escapeHtml(b.name)).join(", ") : "Nenhum irmão vivo"
-        }</div>
-        <div><strong>2. Príncipes Legítimos (Maioridade de 18 anos):</strong> ${
-          res.sons.length > 0
-            ? res.sons.map(s => `${this.escapeHtml(s.name)} (${res.currentYear - (s.birthYear || res.currentYear)} anos)`).join(", ")
-            : "Nenhum filho homem legítimo"
-        }</div>
-        <div><strong>3. Princesas Legítimas (Herdam na ausência de varões):</strong> ${
-          res.daughters.length > 0 ? res.daughters.map(d => this.escapeHtml(d.name)).join(", ") : "Nenhuma filha mulher"
-        }</div>
-        <div><strong>4. Bastardos Excluídos da Sucessão:</strong> ${
-          res.excludedBastards.length > 0
-            ? res.excludedBastards.map(b => `${this.escapeHtml(b.name)} (Desprovido de herança)`).join(", ")
-            : "Nenhum"
-        }</div>
-      </div>
-
-      <button class="btn btn-primary" onclick="app.triggerOfficialSuccession('${kingId}', ${simYear})">
-        Decretar Sucessão do Trono de ${this.escapeHtml(res.king.name)}
-      </button>
-    `;
-  }
-
-  triggerOfficialSuccession(kingId, year) {
-    const out = this.engine.applyKingSuccession(kingId, year);
-    if (out.success) {
-      this.syncHeaderAndBadges();
-      this.renderHousesAndSuccessionTab();
-      this.renderTree();
-    }
   }
 
   renderHousesList() {
@@ -2405,15 +2350,24 @@ class FantasyGenealogyApp {
           .map(id => this.engine.getCharacter(id))
           .filter(Boolean);
 
+        const imageHtml = item.imageUrl
+          ? `
+            <div class="creation-img-container">
+              <img src="${this.escapeHtml(item.imageUrl)}" alt="${this.escapeHtml(item.name)}" class="creation-img" />
+            </div>
+          `
+          : "";
+
         return `
           <div class="creation-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <span class="creation-cat-tag">${this.escapeHtml(item.category)} &bull; ${this.escapeHtml(item.powerLevel || "Arcano")}</span>
               <div style="display:flex; gap:4px;">
                 <button class="btn btn-sm btn-medieval" onclick="app.openCreationModal('${item.id}')">Editar</button>
-                <button class="btn btn-sm btn-danger" onclick="app.deleteCreation('${item.id}')">&times;</button>
+                <button class="btn btn-sm btn-danger" onclick="app.openDeleteCreationModal('${item.id}')" title="Excluir criação do Grimório">&times;</button>
               </div>
             </div>
+            ${imageHtml}
             <h3 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.95rem; text-transform:uppercase;">${this.escapeHtml(item.name)}</h3>
             <p style="font-size:0.9rem; color:var(--ink-parchment);"><strong>Efeito:</strong> ${this.escapeHtml(item.effect || "&mdash;")}</p>
             <p style="font-size:0.86rem; color:var(--ink-secondary);"><strong>Ingredientes / Catalisadores:</strong> ${this.escapeHtml(item.ingredientsOrCost || "&mdash;")}</p>
@@ -2434,15 +2388,114 @@ class FantasyGenealogyApp {
   }
 
   promptNewCreationCategory() {
-    const newCat = prompt("Digite o nome da nova categoria (ex: Runas, Venenos, Relíquias, Leis):");
-    if (newCat && newCat.trim()) {
-      const clean = newCat.trim();
-      if (!this.engine.data.creationCategories.includes(clean)) {
-        this.engine.data.creationCategories.push(clean);
-        this.engine.saveToStorage();
+    const bodyHtml = `
+      <div class="form-group">
+        <label>Nome da Nova Categoria Arcana:</label>
+        <input
+          type="text"
+          id="modalNewCatName"
+          placeholder="Ex: Runas Antigas, Venenos Reais, Relíquias, Bestiário..."
+          class="input-medieval"
+          style="width:100%;"
+          onkeydown="if(event.key==='Enter') app.confirmNewCreationCategory()"
+        />
+      </div>
+
+      <div class="card-box" style="margin-top:12px; padding:12px;">
+        <h4 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.84rem; text-transform:uppercase; margin-bottom:6px;">
+          Disciplinas Arcanas do Reino
+        </h4>
+        <p style="font-size:0.88rem; color:var(--ink-secondary); line-height:1.5;">
+          A nova categoria aparecerá imediatamente como um filtro superior no Grimório e estará disponível para classificação de novos feitiços, poções e rituais.
+        </p>
+      </div>
+      <div id="newCatErrorMsg" style="display:none; margin-top:8px;" class="alert-banner alert-danger"></div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="app.confirmNewCreationCategory()">Consagrar Categoria</button>
+    `;
+
+    this.showModal("Consagrar Nova Categoria no Grimório", bodyHtml, footerHtml);
+    setTimeout(() => {
+      const inp = document.getElementById("modalNewCatName");
+      if (inp) inp.focus();
+    }, 50);
+  }
+
+  confirmNewCreationCategory() {
+    const inp = document.getElementById("modalNewCatName");
+    const errBox = document.getElementById("newCatErrorMsg");
+    if (!inp) return;
+    const clean = inp.value.trim();
+
+    if (!clean) {
+      if (errBox) {
+        errBox.textContent = "Por favor, informe o nome da categoria arcana.";
+        errBox.style.display = "block";
       }
-      this.activeGrimoireCategory = clean;
-      this.renderGrimoire();
+      inp.focus();
+      return;
+    }
+
+    if (!Array.isArray(this.engine.data.creationCategories)) {
+      this.engine.data.creationCategories = [];
+    }
+
+    const alreadyExists = this.engine.data.creationCategories.some(
+      c => c.toLowerCase() === clean.toLowerCase()
+    );
+
+    if (alreadyExists) {
+      if (errBox) {
+        errBox.textContent = `A categoria "${clean}" já se encontra consagrada no Grimório.`;
+        errBox.style.display = "block";
+      }
+      return;
+    }
+
+    const snapshot = this.engine.createSnapshot();
+    this.engine.data.creationCategories.push(clean);
+
+    this.engine.recordAuditLog(
+      "GRIMÓRIO",
+      "Consagração de Categoria",
+      `Nova Categoria Arcana: ${clean}`,
+      `A disciplina "${clean}" foi formalizada no Grimório Arcano.`,
+      snapshot
+    );
+
+    this.engine.saveToStorage();
+    this.activeGrimoireCategory = clean;
+    this.closeModal();
+    this.renderGrimoire();
+  }
+
+  handleCreationPhotoFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const urlInput = document.getElementById("crf_imageUrl");
+      if (urlInput) {
+        urlInput.value = ev.target.result;
+        this.updateCreationImagePreview(ev.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  updateCreationImagePreview(url) {
+    const box = document.getElementById("crf_imagePreviewBox");
+    const img = document.getElementById("crf_imagePreviewImg");
+    if (!box || !img) return;
+    if (url && url.trim()) {
+      img.src = url.trim();
+      box.style.display = "block";
+    } else {
+      img.src = "";
+      box.style.display = "none";
     }
   }
 
@@ -2454,6 +2507,7 @@ class FantasyGenealogyApp {
           category: this.activeGrimoireCategory !== "ALL" ? this.activeGrimoireCategory : "Magia",
           powerLevel: "Arcano",
           originTerritoryId: "",
+          imageUrl: "",
           ingredientsOrCost: "",
           effect: "",
           lore: ""
@@ -2495,6 +2549,43 @@ class FantasyGenealogyApp {
       </div>
 
       <div class="form-group">
+        <label>Ilustração / Pintura Arcana (Arquivo Local ou Link URL):</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input
+            type="text"
+            id="crf_imageUrl"
+            value="${this.escapeHtml(item.imageUrl || "")}"
+            placeholder="Cole uma URL ou clique em Carregar Arquivo..."
+            class="input-medieval"
+            style="flex:1;"
+            oninput="app.updateCreationImagePreview(this.value)"
+          />
+          <button type="button" class="btn btn-sm btn-gold" onclick="document.getElementById('crf_imageFileInput').click()">Carregar Arquivo</button>
+          <input
+            type="file"
+            id="crf_imageFileInput"
+            accept="image/*"
+            style="display:none;"
+            onchange="app.handleCreationPhotoFile(event)"
+          />
+          <button
+            type="button"
+            class="btn btn-sm btn-medieval"
+            onclick="document.getElementById('crf_imageUrl').value=''; app.updateCreationImagePreview('');"
+            title="Remover ilustração"
+          >Limpar</button>
+        </div>
+        <div id="crf_imagePreviewBox" style="${item.imageUrl ? 'display:block;' : 'display:none;'} margin-top:8px; text-align:center;">
+          <img
+            id="crf_imagePreviewImg"
+            src="${this.escapeHtml(item.imageUrl || "")}"
+            alt="Prévia da Ilustração"
+            style="max-height:160px; max-width:100%; border-radius:4px; border:1px solid var(--border-gold-subtle); object-fit:contain; background:#120e0a; padding:2px;"
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
         <label>Ingredientes, Catalisadores ou Custo:</label>
         <input type="text" id="crf_cost" value="${this.escapeHtml(item.ingredientsOrCost || "")}" placeholder="Ex: Três gotas de sangue de linhagem real e cinzas de rubi" />
       </div>
@@ -2523,17 +2614,27 @@ class FantasyGenealogyApp {
   saveCreationFromModal(editId = "") {
     const name = document.getElementById("crf_name").value.trim() || "Nova Criação";
     const category = document.getElementById("crf_category").value;
-    const powerLevel = document.getElementById("crf_power").value.trim();
+    const powerLevel = document.getElementById("crf_power").value.trim() || "Arcano";
     const originTerritoryId = document.getElementById("crf_territory").value || null;
+    const imageUrl = document.getElementById("crf_imageUrl")?.value.trim() || "";
     const ingredientsOrCost = document.getElementById("crf_cost").value.trim();
     const effect = document.getElementById("crf_effect").value.trim();
     const lore = document.getElementById("crf_lore").value.trim();
 
+    const snapshot = this.engine.createSnapshot();
+
     if (editId) {
       const existing = this.engine.data.creations.find(x => x.id === editId);
       if (existing) {
-        Object.assign(existing, { name, category, powerLevel, originTerritoryId, ingredientsOrCost, effect, lore });
+        Object.assign(existing, { name, category, powerLevel, originTerritoryId, imageUrl, ingredientsOrCost, effect, lore });
       }
+      this.engine.recordAuditLog(
+        "GRIMÓRIO",
+        "Revisão Arcana",
+        `Edição no Grimório: ${name}`,
+        `O registro arcano "${name}" (${category}) teve seus efeitos, custos, ilustrações e tradições atualizados.`,
+        snapshot
+      );
     } else {
       this.engine.data.creations.push({
         id: "cre_" + Date.now(),
@@ -2542,10 +2643,18 @@ class FantasyGenealogyApp {
         powerLevel,
         originTerritoryId,
         relatedCharacterIds: [],
+        imageUrl,
         ingredientsOrCost,
         effect,
         lore
       });
+      this.engine.recordAuditLog(
+        "GRIMÓRIO",
+        "Inscrição Arcana",
+        `Nova Inscrição: ${name}`,
+        `Inscrito sob a categoria "${category}". Poder: "${powerLevel}". Efeito: "${effect || "Sem efeito lavrado"}".`,
+        snapshot
+      );
     }
 
     this.engine.saveToStorage();
@@ -2554,32 +2663,329 @@ class FantasyGenealogyApp {
     this.renderGrimoire();
   }
 
-  deleteCreation(id) {
+  openDeleteCreationModal(id) {
+    const item = this.engine.data.creations.find(x => x.id === id);
+    if (!item) return;
+
+    const bodyHtml = `
+      <div class="alert-banner alert-danger">
+        <h4 style="margin-bottom:6px;">Confirmação de Revogação Arcana</h4>
+        Deseja realmente excluir <strong>&ldquo;${this.escapeHtml(item.name)}&rdquo;</strong> (${this.escapeHtml(item.category)}) do Grimório?
+      </div>
+      <p style="font-size:0.92rem; color:var(--ink-secondary); margin-top:12px; line-height:1.5;">
+        Esta exclusão será registrada nos <strong>Anais do Reino</strong> com auditoria completa e poderá ser revertida a qualquer momento na aba Anais.
+      </p>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+      <button class="btn btn-danger" onclick="app.confirmDeleteCreation('${item.id}')">
+        Confirmar Exclusão
+      </button>
+    `;
+
+    this.showModal(`Excluir do Grimório: ${item.name}`, bodyHtml, footerHtml);
+  }
+
+  confirmDeleteCreation(id) {
+    const item = this.engine.data.creations.find(x => x.id === id);
+    if (!item) {
+      this.closeModal();
+      return;
+    }
+
+    const snapshot = this.engine.createSnapshot();
+    const itemName = item.name;
+    const itemCat = item.category;
+
     this.engine.data.creations = this.engine.data.creations.filter(x => x.id !== id);
+    this.engine.recordAuditLog(
+      "GRIMÓRIO",
+      "Revogação Arcana",
+      `Excluído do Grimório: ${itemName}`,
+      `O registro arcano "${itemName}" (${itemCat}) foi removido do tomo.`,
+      snapshot
+    );
+
     this.engine.saveToStorage();
+    this.closeModal();
     this.syncHeaderAndBadges();
     this.renderGrimoire();
   }
 
+  deleteCreation(id) {
+    this.openDeleteCreationModal(id);
+  }
+
   // --------------------------------------------------------------------------
-  // CARTOGRAFIA DO REINO (MAPA ANTIGO)
+  // CARTOGRAFIA DO REINO (EDITOR DE TERRITÓRIOS / CONTINENTES E OCEANO COM ONDAS)
   // --------------------------------------------------------------------------
   setMapTool(tool) {
     this.mapTool = tool;
-    ["Select", "AddCity", "Land", "River", "Road", "Mountain"].forEach(suffix => {
+    ["Select", "River", "Road", "Mountain"].forEach(suffix => {
       const btn = document.getElementById("mapTool" + suffix);
-      if (btn) btn.classList.remove("btn-gold");
+      if (btn) {
+        btn.classList.remove("btn-gold");
+        btn.classList.remove("active-tool");
+      }
     });
     const mapIds = {
       select: "mapToolSelect",
-      add_city: "mapToolAddCity",
-      draw_land: "mapToolLand",
       draw_river: "mapToolRiver",
       draw_road: "mapToolRoad",
       draw_mountain: "mapToolMountain"
     };
     const activeBtn = document.getElementById(mapIds[tool]);
-    if (activeBtn) activeBtn.classList.add("btn-gold");
+    if (activeBtn) {
+      activeBtn.classList.add("active-tool");
+    }
+  }
+
+  // Adiciona na tela um novo elemento Território (Continente / Terra) cheio de pontos nas bordas
+  addContinentOnMap(customX = null, customY = null) {
+    this.engine.ensureTerritoryPolygons(this.engine.data.territories);
+    const snapshot = this.engine.createSnapshot();
+
+    const count = this.engine.data.territories.length;
+    const offsets = [
+      { x: 480, y: 280 },
+      { x: 320, y: 230 },
+      { x: 630, y: 270 },
+      { x: 450, y: 390 },
+      { x: 270, y: 360 },
+      { x: 670, y: 170 }
+    ];
+    const pos = offsets[count % offsets.length];
+    const cx = customX !== null ? customX : pos.x;
+    const cy = customY !== null ? customY : pos.y;
+
+    const palette = ["#d97706", "#e11d48", "#38bdf8", "#10b981", "#a855f7", "#f59e0b", "#ec4899"];
+    const color = palette[count % palette.length];
+    const defaultHouseId = (this.engine.data.houses[0] && this.engine.data.houses[0].id) || "";
+    const points = this.engine.generateContinentPoints(cx, cy, 98, 76, 24, count + 3);
+
+    const newTerr = {
+      id: "terr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      name: `Novo Território ${count + 1}`,
+      type: "Continente / Território",
+      houseId: defaultHouseId,
+      color,
+      x: cx,
+      y: cy,
+      points,
+      description: "Território modelável adicionado pela autora sobre o oceano.",
+      notablePassages: []
+    };
+
+    this.engine.data.territories.push(newTerr);
+    this.selectedTerritoryId = newTerr.id;
+    this.setMapTool("select");
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Novo Território (Continente)",
+      `Território Criado: ${newTerr.name}`,
+      `Elemento território (terra) adicionado ao mapa com ${points.length} pontos de modelagem nas bordas.`,
+      snapshot
+    );
+
+    this.syncHeaderAndBadges();
+    this.renderMapStudio();
+    this.renderTree();
+  }
+
+  updateTerritoryCentroid(terr) {
+    if (!terr || !Array.isArray(terr.points) || terr.points.length === 0) return;
+    let sumX = 0;
+    let sumY = 0;
+    terr.points.forEach(p => {
+      sumX += p.x;
+      sumY += p.y;
+    });
+    terr.x = Math.round(sumX / terr.points.length);
+    terr.y = Math.round(sumY / terr.points.length);
+  }
+
+  isPointInPolygon(pt, points) {
+    if (!Array.isArray(points) || points.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const xi = points[i].x;
+      const yi = points[i].y;
+      const xj = points[j].x;
+      const yj = points[j].y;
+      const intersect =
+        yi > pt.y !== yj > pt.y &&
+        pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi + 0.00001) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  findHitVertex(pt) {
+    this.engine.ensureTerritoryPolygons(this.engine.data.territories);
+    const selected = this.engine.getTerritory(this.selectedTerritoryId);
+
+    // 1. Pontos principais da borda do território selecionado
+    if (selected && Array.isArray(selected.points)) {
+      for (let i = 0; i < selected.points.length; i++) {
+        const p = selected.points[i];
+        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= 10) {
+          return { kind: "vertex", terr: selected, index: i };
+        }
+      }
+      // 2. Pontos intermediários (midpoints) da borda do território selecionado para criar novo vértice
+      const len = selected.points.length;
+      for (let i = 0; i < len; i++) {
+        const p1 = selected.points[i];
+        const p2 = selected.points[(i + 1) % len];
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        if (Math.hypot(pt.x - mx, pt.y - my) <= 8) {
+          return { kind: "midpoint", terr: selected, index: i, mx, my };
+        }
+      }
+    }
+
+    // 3. Pontos da borda de qualquer outro território
+    for (let tIdx = this.engine.data.territories.length - 1; tIdx >= 0; tIdx--) {
+      const t = this.engine.data.territories[tIdx];
+      if (!t || !Array.isArray(t.points)) continue;
+      for (let i = 0; i < t.points.length; i++) {
+        const p = t.points[i];
+        if (Math.hypot(pt.x - p.x, pt.y - p.y) <= 9) {
+          return { kind: "vertex", terr: t, index: i };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  findHitTerritoryBody(pt) {
+    this.engine.ensureTerritoryPolygons(this.engine.data.territories);
+    for (let i = this.engine.data.territories.length - 1; i >= 0; i--) {
+      const t = this.engine.data.territories[i];
+      if (!t) continue;
+      if (Math.hypot(pt.x - t.x, pt.y - t.y) <= 26 || this.isPointInPolygon(pt, t.points)) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  subdivideSelectedTerritoryPoints() {
+    const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
+    if (!t) return;
+    this.engine.ensureTerritoryPolygons([t]);
+    if (t.points.length >= 64) return;
+
+    const snapshot = this.engine.createSnapshot();
+    const newPts = [];
+    const len = t.points.length;
+    for (let i = 0; i < len; i++) {
+      const p1 = t.points[i];
+      const p2 = t.points[(i + 1) % len];
+      newPts.push({ x: p1.x, y: p1.y });
+      newPts.push({
+        x: Math.round((p1.x + p2.x) / 2),
+        y: Math.round((p1.y + p2.y) / 2)
+      });
+    }
+    t.points = newPts;
+    this.updateTerritoryCentroid(t);
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Refinamento de Borda",
+      `Mais Pontos na Borda: ${t.name}`,
+      `O território "${t.name}" passou a ter ${t.points.length} pontos de modelagem em sua borda.`,
+      snapshot
+    );
+    this.renderMapStudio();
+  }
+
+  scaleSelectedTerritory(factor = 1.15) {
+    const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
+    if (!t) return;
+    this.engine.ensureTerritoryPolygons([t]);
+
+    const snapshot = this.engine.createSnapshot();
+    this.updateTerritoryCentroid(t);
+    const cx = t.x;
+    const cy = t.y;
+
+    t.points = t.points.map(p => ({
+      x: Math.round(Math.max(10, Math.min(950, cx + (p.x - cx) * factor))),
+      y: Math.round(Math.max(10, Math.min(550, cy + (p.y - cy) * factor)))
+    }));
+    this.updateTerritoryCentroid(t);
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Redimensionamento de Território",
+      `Tamanho Ajustado: ${t.name}`,
+      `O território "${t.name}" foi redimensionado (${factor > 1 ? "ampliado" : "reduzido"}) pela autora.`,
+      snapshot
+    );
+    this.renderMapStudio();
+  }
+
+  smoothSelectedTerritoryPoints() {
+    const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
+    if (!t) return;
+    this.engine.ensureTerritoryPolygons([t]);
+
+    const snapshot = this.engine.createSnapshot();
+    const len = t.points.length;
+    const smoothed = [];
+    for (let i = 0; i < len; i++) {
+      const prev = t.points[(i - 1 + len) % len];
+      const curr = t.points[i];
+      const next = t.points[(i + 1) % len];
+      smoothed.push({
+        x: Math.round(prev.x * 0.22 + curr.x * 0.56 + next.x * 0.22),
+        y: Math.round(prev.y * 0.22 + curr.y * 0.56 + next.y * 0.22)
+      });
+    }
+    t.points = smoothed;
+    this.updateTerritoryCentroid(t);
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Suavização Costeira",
+      `Costa Suavizada: ${t.name}`,
+      `Os pontos de borda do território "${t.name}" foram suavizados.`,
+      snapshot
+    );
+    this.renderMapStudio();
+  }
+
+  resetTerritoryPolygonShape(terrId) {
+    const t = this.engine.getTerritory(terrId);
+    if (!t) return;
+    const snapshot = this.engine.createSnapshot();
+    t.points = this.engine.generateContinentPoints(t.x || 480, t.y || 280, 92, 72, 24, Date.now() % 19);
+    this.updateTerritoryCentroid(t);
+
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Redefinição de Formato",
+      `Formato Redefinido: ${t.name}`,
+      `O contorno do território "${t.name}" foi redefinido com 24 pontos de borda.`,
+      snapshot
+    );
+    this.renderMapStudio();
+  }
+
+  updateMapPinPosition(terr) {
+    if (!terr) return;
+    const canvas = document.getElementById("fantasyMapCanvas");
+    const pinEl = document.querySelector(`.map-city-pin[data-terr-id="${terr.id}"]`);
+    if (pinEl && canvas) {
+      pinEl.style.left = ((terr.x / canvas.width) * 100).toFixed(2) + "%";
+      pinEl.style.top = ((terr.y / canvas.height) * 100).toFixed(2) + "%";
+    }
   }
 
   initMapCanvasEvents() {
@@ -2596,16 +3002,44 @@ class FantasyGenealogyApp {
       };
     };
 
+    canvas.addEventListener("contextmenu", e => {
+      const pt = getCoords(e);
+      const hit = this.findHitVertex(pt);
+      if (hit && hit.kind === "vertex" && hit.terr && hit.terr.points.length > 6) {
+        e.preventDefault();
+        const snapshot = this.engine.createSnapshot();
+        hit.terr.points.splice(hit.index, 1);
+        this.updateTerritoryCentroid(hit.terr);
+        this.engine.recordAuditLog(
+          "TERRITÓRIO",
+          "Modelagem de Território",
+          `Ponto Removido da Borda: ${hit.terr.name}`,
+          `Um ponto de controle foi removido da borda de "${hit.terr.name}" (${hit.terr.points.length} pontos restantes).`,
+          snapshot
+        );
+        this.hoveredMapHandle = null;
+        this.renderMapStudio();
+      }
+    });
+
+    canvas.addEventListener("dblclick", e => {
+      if (this.mapTool !== "select") return;
+      const pt = getCoords(e);
+      const hitVertex = this.findHitVertex(pt);
+      if (hitVertex) return;
+      const hitTerr = this.findHitTerritoryBody(pt);
+      if (hitTerr) {
+        this.selectedTerritoryId = hitTerr.id;
+        this.openTerritoryModal(hitTerr.id);
+      }
+    });
+
     canvas.addEventListener("mousedown", e => {
+      if (e.button === 2) return;
       const pt = getCoords(e);
 
-      if (this.mapTool === "add_city") {
-        this.openTerritoryModal(null, pt.x, pt.y);
-        this.setMapTool("select");
-        return;
-      }
-
-      if (this.mapTool.startsWith("draw_")) {
+      if (this.mapTool && this.mapTool.startsWith("draw_")) {
+        this.mapDragSnapshot = this.engine.createSnapshot();
         this.isDrawingMap = true;
         this.engine.data.mapStrokes = this.engine.data.mapStrokes || [];
         this.engine.data.mapStrokes.push({
@@ -2613,36 +3047,169 @@ class FantasyGenealogyApp {
           points: [pt]
         });
         this.drawMapCanvas();
+        return;
+      }
+
+      // Modo de modelagem e seleção de territórios
+      const hit = this.findHitVertex(pt);
+      if (hit && hit.kind === "vertex") {
+        this.selectedTerritoryId = hit.terr.id;
+        this.mapDragSnapshot = this.engine.createSnapshot();
+        this.mapDragModified = false;
+        this.draggingVertex = { terrId: hit.terr.id, index: hit.index };
+        this.renderMapStudio();
+        return;
+      }
+
+      if (hit && hit.kind === "midpoint") {
+        this.selectedTerritoryId = hit.terr.id;
+        this.mapDragSnapshot = this.engine.createSnapshot();
+        hit.terr.points.splice(hit.index + 1, 0, { x: pt.x, y: pt.y });
+        this.mapDragModified = true;
+        this.draggingVertex = { terrId: hit.terr.id, index: hit.index + 1 };
+        this.renderMapStudio();
+        return;
+      }
+
+      const hitTerr = this.findHitTerritoryBody(pt);
+      if (hitTerr) {
+        this.selectedTerritoryId = hitTerr.id;
+        this.mapDragSnapshot = this.engine.createSnapshot();
+        this.mapDragModified = false;
+        this.draggingTerritory = {
+          terrId: hitTerr.id,
+          lastX: pt.x,
+          lastY: pt.y
+        };
+        this.renderMapStudio();
+        return;
       }
     });
 
     canvas.addEventListener("mousemove", e => {
-      if (this.draggingPinId) {
-        const pt = getCoords(e);
-        const terr = this.engine.getTerritory(this.draggingPinId);
-        if (terr) {
-          terr.x = Math.max(20, Math.min(canvas.width - 20, pt.x));
-          terr.y = Math.max(20, Math.min(canvas.height - 20, pt.y));
-          this.renderMapStudio();
+      const pt = getCoords(e);
+
+      // 1. Arrastando um ponto da borda para modelar o território
+      if (this.draggingVertex) {
+        const terr = this.engine.getTerritory(this.draggingVertex.terrId);
+        if (terr && Array.isArray(terr.points) && terr.points[this.draggingVertex.index]) {
+          terr.points[this.draggingVertex.index].x = Math.max(8, Math.min(canvas.width - 8, pt.x));
+          terr.points[this.draggingVertex.index].y = Math.max(8, Math.min(canvas.height - 8, pt.y));
+          this.updateTerritoryCentroid(terr);
+          this.mapDragModified = true;
+          canvas.style.cursor = "grabbing";
+          this.drawMapCanvas();
+          this.updateMapPinPosition(terr);
         }
         return;
       }
-      if (!this.isDrawingMap) return;
-      const pt = getCoords(e);
-      const strokes = this.engine.data.mapStrokes;
-      if (strokes && strokes.length > 0) {
-        strokes[strokes.length - 1].points.push(pt);
+
+      // 2. Arrastando o território inteiro pelo oceano
+      if (this.draggingTerritory) {
+        const terr = this.engine.getTerritory(this.draggingTerritory.terrId);
+        if (terr && Array.isArray(terr.points)) {
+          const dx = pt.x - this.draggingTerritory.lastX;
+          const dy = pt.y - this.draggingTerritory.lastY;
+          if (dx !== 0 || dy !== 0) {
+            terr.points.forEach(p => {
+              p.x = Math.max(8, Math.min(canvas.width - 8, p.x + dx));
+              p.y = Math.max(8, Math.min(canvas.height - 8, p.y + dy));
+            });
+            this.updateTerritoryCentroid(terr);
+            this.draggingTerritory.lastX = pt.x;
+            this.draggingTerritory.lastY = pt.y;
+            this.mapDragModified = true;
+            canvas.style.cursor = "grabbing";
+            this.drawMapCanvas();
+            this.updateMapPinPosition(terr);
+          }
+        }
+        return;
+      }
+
+      // 3. Desenhando traço livre (rio, estrada, montanha)
+      if (this.isDrawingMap) {
+        const strokes = this.engine.data.mapStrokes;
+        if (strokes && strokes.length > 0) {
+          strokes[strokes.length - 1].points.push(pt);
+          this.drawMapCanvas();
+        }
+        return;
+      }
+
+      // 4. Feedback visual de cursor ao passar o mouse sobre os pontos da borda ou território
+      if (this.mapTool && this.mapTool.startsWith("draw_")) {
+        canvas.style.cursor = "crosshair";
+        return;
+      }
+
+      const hit = this.findHitVertex(pt);
+      const prevHover = this.hoveredMapHandle;
+      this.hoveredMapHandle = hit;
+      if (
+        (prevHover && !hit) ||
+        (!prevHover && hit) ||
+        (prevHover && hit && (prevHover.index !== hit.index || prevHover.kind !== hit.kind || prevHover.terr.id !== hit.terr.id))
+      ) {
         this.drawMapCanvas();
+      }
+
+      if (hit) {
+        canvas.style.cursor = hit.kind === "midpoint" ? "copy" : "grab";
+      } else if (this.findHitTerritoryBody(pt)) {
+        canvas.style.cursor = "move";
+      } else {
+        canvas.style.cursor = "default";
       }
     });
 
     window.addEventListener("mouseup", () => {
-      if (this.draggingPinId) {
-        this.draggingPinId = null;
-        this.engine.saveToStorage();
+      if (this.draggingVertex) {
+        const terr = this.engine.getTerritory(this.draggingVertex.terrId);
+        this.draggingVertex = null;
+        if (this.mapDragModified && terr) {
+          this.engine.recordAuditLog(
+            "TERRITÓRIO",
+            "Modelagem de Território",
+            `Território Modelado: ${terr.name}`,
+            `O formato e tamanho do território "${terr.name}" foram modelados pelos pontos da borda.`,
+            this.mapDragSnapshot
+          );
+          this.engine.saveToStorage();
+          this.renderMapStudio();
+        }
+        this.mapDragSnapshot = null;
+        this.mapDragModified = false;
       }
+
+      if (this.draggingTerritory) {
+        const terr = this.engine.getTerritory(this.draggingTerritory.terrId);
+        this.draggingTerritory = null;
+        if (this.mapDragModified && terr) {
+          this.engine.recordAuditLog(
+            "TERRITÓRIO",
+            "Movimentação de Território",
+            `Território Movido: ${terr.name}`,
+            `O território "${terr.name}" foi reposicionado para (${terr.x}, ${terr.y}) no mapa.`,
+            this.mapDragSnapshot
+          );
+          this.engine.saveToStorage();
+          this.renderMapStudio();
+        }
+        this.mapDragSnapshot = null;
+        this.mapDragModified = false;
+      }
+
       if (this.isDrawingMap) {
         this.isDrawingMap = false;
+        this.engine.recordAuditLog(
+          "TERRITÓRIO",
+          "Traço Cartográfico",
+          `Traço Adicionado ao Mapa`,
+          `Um novo elemento hidrográfico/relevo foi desenhado sobre o mapa.`,
+          this.mapDragSnapshot
+        );
+        this.mapDragSnapshot = null;
         this.engine.saveToStorage();
       }
     });
@@ -2650,16 +3217,79 @@ class FantasyGenealogyApp {
 
   undoLastMapStroke() {
     if (this.engine.data.mapStrokes && this.engine.data.mapStrokes.length > 0) {
+      const snapshot = this.engine.createSnapshot();
       this.engine.data.mapStrokes.pop();
-      this.engine.saveToStorage();
+      this.engine.recordAuditLog(
+        "TERRITÓRIO",
+        "Traço Desfeito",
+        "Último Traço Cartográfico Removido",
+        "O último traço desenhado no mapa foi desfeito.",
+        snapshot
+      );
       this.drawMapCanvas();
     }
   }
 
   clearMapStrokes() {
+    if (!this.engine.data.mapStrokes || this.engine.data.mapStrokes.length === 0) return;
+    const snapshot = this.engine.createSnapshot();
     this.engine.data.mapStrokes = [];
-    this.engine.saveToStorage();
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Limpeza de Traços",
+      "Traços Livres do Mapa Limpos",
+      "Todos os traços livres (rios, estradas e montanhas) foram removidos.",
+      snapshot
+    );
     this.drawMapCanvas();
+  }
+
+  // Traça o caminho fechado suave passando exatamente por todos os pontos da borda do território
+  traceTerritoryPolygonPath(ctx, points) {
+    if (!Array.isArray(points) || points.length < 3) return;
+    const len = points.length;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 0; i < len; i++) {
+      const p0 = points[(i - 1 + len) % len];
+      const p1 = points[i];
+      const p2 = points[(i + 1) % len];
+      const p3 = points[(i + 2) % len];
+
+      // Curva Catmull-Rom cúbica suave que passa exatamente por cada vértice da borda
+      const tension = 0.22;
+      const cp1x = p1.x + (p2.x - p0.x) * tension;
+      const cp1y = p1.y + (p2.y - p0.y) * tension;
+      const cp2x = p2.x - (p3.x - p1.x) * tension;
+      const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+    }
+    ctx.closePath();
+  }
+
+  // Desenha um ícone de mini ondas (duas cristas náuticas) na posição (wx, wy) da água
+  drawMiniWaveIcon(ctx, wx, wy) {
+    // Crista principal de mini ondas (~ ~)
+    ctx.strokeStyle = "rgba(115, 185, 238, 0.42)";
+    ctx.lineWidth = 1.45;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(wx - 8.5, wy + 1);
+    ctx.quadraticCurveTo(wx - 4.2, wy - 3.6, wx, wy + 1);
+    ctx.quadraticCurveTo(wx + 4.2, wy - 3.6, wx + 8.5, wy + 1);
+    ctx.stroke();
+
+    // Segunda mini onda sutil logo abaixo
+    ctx.strokeStyle = "rgba(165, 216, 250, 0.24)";
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(wx - 5, wy + 4.6);
+    ctx.quadraticCurveTo(wx - 2.5, wy + 1.8, wx, wy + 4.6);
+    ctx.quadraticCurveTo(wx + 2.5, wy + 1.8, wx + 5, wy + 4.6);
+    ctx.stroke();
   }
 
   drawMapCanvas() {
@@ -2667,16 +3297,21 @@ class FantasyGenealogyApp {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
-    // Fundo de Pergaminho Náutico Envelhecido
-    const grad = ctx.createRadialGradient(480, 280, 60, 480, 280, 560);
-    grad.addColorStop(0, "#231c15");
-    grad.addColorStop(0.7, "#17120e");
-    grad.addColorStop(1, "#0f0b08");
-    ctx.fillStyle = grad;
+    this.engine.ensureTerritoryPolygons(this.engine.data.territories);
+
+    // ------------------------------------------------------------------------
+    // 1. CAMADA BASE DE ÁGUA (OCEANO AUTOMÁTICO COM ÍCONES DE MINI ONDAS)
+    // Onde não houver elemento território (terra), é automaticamente Água!
+    // ------------------------------------------------------------------------
+    const waterGrad = ctx.createRadialGradient(480, 280, 50, 480, 280, 580);
+    waterGrad.addColorStop(0, "#152c42");
+    waterGrad.addColorStop(0.65, "#0e1f30");
+    waterGrad.addColorStop(1, "#08131f");
+    ctx.fillStyle = waterGrad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Linhas de Rumo Cartográficas Sutis
-    ctx.strokeStyle = "rgba(197, 160, 89, 0.07)";
+    // Linhas de rumo náuticas sutis sobre a água
+    ctx.strokeStyle = "rgba(120, 180, 230, 0.06)";
     ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 60) {
       ctx.beginPath();
@@ -2691,34 +3326,81 @@ class FantasyGenealogyApp {
       ctx.stroke();
     }
 
-    // Continente em Pergaminho
+    // Preenchimento de toda a área de Água com Ícones de Mini Ondas
     ctx.save();
-    ctx.fillStyle = "#2e241b";
-    ctx.strokeStyle = "#8c6f3d";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(140, 110);
-    ctx.quadraticCurveTo(260, 60, 420, 95);
-    ctx.quadraticCurveTo(610, 70, 770, 150);
-    ctx.quadraticCurveTo(850, 260, 780, 390);
-    ctx.quadraticCurveTo(660, 480, 490, 465);
-    ctx.quadraticCurveTo(310, 500, 190, 430);
-    ctx.quadraticCurveTo(100, 300, 140, 110);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Hidrografia / Rio
-    ctx.strokeStyle = "#3f5a7e";
-    ctx.lineWidth = 3.2;
-    ctx.beginPath();
-    ctx.moveTo(250, 140);
-    ctx.quadraticCurveTo(380, 250, 430, 270);
-    ctx.quadraticCurveTo(510, 330, 580, 460);
-    ctx.stroke();
+    const stepX = 42;
+    const stepY = 26;
+    for (let row = 0, wy = 18; wy < canvas.height - 10; row++, wy += stepY) {
+      const offsetX = row % 2 === 1 ? stepX / 2 : 0;
+      for (let wx = 22 + offsetX; wx < canvas.width - 14; wx += stepX) {
+        this.drawMiniWaveIcon(ctx, wx, wy);
+      }
+    }
     ctx.restore();
 
-    // Traços Livres do Cartógrafo
+    // ------------------------------------------------------------------------
+    // 2. CAMADA DE ELEMENTOS TERRITÓRIO (TERRA / CONTINENTES MODELÁVEIS)
+    // Cobre a água onde o território está posicionado e modelado
+    // ------------------------------------------------------------------------
+    const territories = this.engine.data.territories || [];
+    if (!this.selectedTerritoryId && territories.length > 0) {
+      this.selectedTerritoryId = territories[0].id;
+    }
+
+    territories.forEach(t => {
+      if (!Array.isArray(t.points) || t.points.length < 3) return;
+      const isSelected = t.id === this.selectedTerritoryId;
+
+      ctx.save();
+      this.traceTerritoryPolygonPath(ctx, t.points);
+
+      // Espuma / Maré rasa ao redor da costa do território
+      ctx.strokeStyle = "rgba(110, 192, 242, 0.18)";
+      ctx.lineWidth = 12;
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(170, 224, 252, 0.30)";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+
+      // Preenchimento opaco de Terra (substitui a água e esconde as ondas embaixo da terra)
+      const landGrad = ctx.createRadialGradient(t.x, t.y, 10, t.x, t.y, 220);
+      landGrad.addColorStop(0, "#3b2e20");
+      landGrad.addColorStop(0.7, "#2e2318");
+      landGrad.addColorStop(1, "#241b12");
+      ctx.fillStyle = landGrad;
+      ctx.fill();
+
+      // Matiz sutil da cor heráldica do território sobre a terra
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle = t.color || "#c5a059";
+      ctx.globalAlpha = isSelected ? 0.16 : 0.10;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Textura cartográfica de solo (hachuras sutis de terra firme)
+      ctx.globalAlpha = 0.08;
+      ctx.strokeStyle = "#dfba73";
+      ctx.lineWidth = 1;
+      for (let ty = 0; ty < canvas.height; ty += 16) {
+        ctx.beginPath();
+        ctx.moveTo(0, ty);
+        ctx.lineTo(canvas.width, ty);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Contorno costeiro da massa de terra
+      this.traceTerritoryPolygonPath(ctx, t.points);
+      ctx.strokeStyle = isSelected ? (t.color || "#dfba73") : "#9c7c44";
+      ctx.lineWidth = isSelected ? 2.8 : 2.0;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // ------------------------------------------------------------------------
+    // 3. TRAÇOS DO CARTÓGRAFO (RIOS, ESTRADAS E MONTANHAS)
+    // ------------------------------------------------------------------------
     (this.engine.data.mapStrokes || []).forEach(s => {
       if (!s.points || s.points.length < 2) return;
       ctx.save();
@@ -2734,15 +3416,15 @@ class FantasyGenealogyApp {
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
       } else if (s.type === "draw_river") {
-        ctx.strokeStyle = "#3f5a7e";
-        ctx.lineWidth = 4.5;
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 4.2;
         ctx.lineCap = "round";
       } else if (s.type === "draw_road") {
-        ctx.strokeStyle = "#b3a58e";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#d6c7b2";
+        ctx.lineWidth = 2.2;
         ctx.setLineDash([5, 5]);
       } else if (s.type === "draw_mountain") {
-        ctx.strokeStyle = "#7a6a54";
+        ctx.strokeStyle = "#8a765c";
         ctx.lineWidth = 7;
         ctx.setLineDash([3, 7]);
       }
@@ -2750,13 +3432,111 @@ class FantasyGenealogyApp {
       ctx.restore();
     });
 
-    // Rosa dos Ventos Nobiliárquica
-    ctx.fillStyle = "rgba(223, 186, 115, 0.75)";
+    // ------------------------------------------------------------------------
+    // 4. PONTOS DE CONTROLE NAS BORDAS DOS TERRITÓRIOS (MODELAGEM PELA AUTORA)
+    // ------------------------------------------------------------------------
+    territories.forEach(t => {
+      if (!Array.isArray(t.points) || t.points.length < 3) return;
+      const isSelected = t.id === this.selectedTerritoryId;
+
+      if (isSelected) {
+        ctx.save();
+        // Anel pontilhado guia ligando os pontos da borda
+        ctx.beginPath();
+        ctx.moveTo(t.points[0].x, t.points[0].y);
+        for (let i = 1; i < t.points.length; i++) {
+          ctx.lineTo(t.points[i].x, t.points[i].y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(223, 186, 115, 0.45)";
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Pontos intermediários (midpoints) nas bordas para adicionar mais vértices ao puxar
+        const len = t.points.length;
+        for (let i = 0; i < len; i++) {
+          const p1 = t.points[i];
+          const p2 = t.points[(i + 1) % len];
+          const mx = (p1.x + p2.x) / 2;
+          const my = (p1.y + p2.y) / 2;
+          const isHoveredMid =
+            this.hoveredMapHandle &&
+            this.hoveredMapHandle.kind === "midpoint" &&
+            this.hoveredMapHandle.terr.id === t.id &&
+            this.hoveredMapHandle.index === i;
+
+          ctx.beginPath();
+          ctx.arc(mx, my, isHoveredMid ? 5.2 : 3.0, 0, Math.PI * 2);
+          ctx.fillStyle = isHoveredMid ? "#38bdf8" : "rgba(223, 186, 115, 0.65)";
+          ctx.fill();
+          ctx.strokeStyle = "#120e0a";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // Pontos principais na borda do território (cheio de pontos modeláveis)
+        t.points.forEach((p, idx) => {
+          const isHoveredVertex =
+            (this.hoveredMapHandle &&
+              this.hoveredMapHandle.kind === "vertex" &&
+              this.hoveredMapHandle.terr.id === t.id &&
+              this.hoveredMapHandle.index === idx) ||
+            (this.draggingVertex &&
+              this.draggingVertex.terrId === t.id &&
+              this.draggingVertex.index === idx);
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, isHoveredVertex ? 7.2 : 5.4, 0, Math.PI * 2);
+          ctx.fillStyle = isHoveredVertex ? "#f43f5e" : "#fff3d1";
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = isHoveredVertex ? "#ffffff" : (t.color || "#c5a059");
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, isHoveredVertex ? 2.6 : 1.8, 0, Math.PI * 2);
+          ctx.fillStyle = "#16110c";
+          ctx.fill();
+        });
+        ctx.restore();
+      } else {
+        // Pontos discretos nos outros territórios indicando que também são modeláveis
+        ctx.save();
+        t.points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3.0, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(223, 186, 115, 0.55)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(18, 14, 10, 0.8)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+    });
+
+    // Legenda Náutica & Rosa dos Ventos
+    ctx.fillStyle = "rgba(165, 216, 250, 0.82)";
+    ctx.font = "600 11px Cinzel, serif";
+    ctx.fillText("≈ ÁGUA (OCEANO)", 16, 28);
+
+    ctx.fillStyle = "rgba(223, 186, 115, 0.80)";
     ctx.font = "600 12px Cinzel, serif";
-    ctx.fillText("SEPTENTRIO (N)", canvas.width - 130, 32);
+    ctx.fillText("SEPTENTRIO (N)", canvas.width - 130, 28);
   }
 
   renderMapStudio() {
+    this.engine.ensureTerritoryPolygons(this.engine.data.territories);
+    if (
+      !this.selectedTerritoryId &&
+      this.engine.data.territories &&
+      this.engine.data.territories.length > 0
+    ) {
+      this.selectedTerritoryId = this.engine.data.territories[0].id;
+    }
+
     this.drawMapCanvas();
     const pinsLayer = document.getElementById("mapPinsLayer");
     if (!pinsLayer) return;
@@ -2770,9 +3550,8 @@ class FantasyGenealogyApp {
 
         return `
           <div class="map-city-pin ${isSelected ? "selected" : ""}"
-               style="left:${leftPct}%; top:${topPct}%; --pin-color:${t.color || "#8b202e"};"
-               onmousedown="app.startPinDrag(event, '${t.id}')"
-               onclick="app.selectTerritoryOnMap('${t.id}')">
+               data-terr-id="${t.id}"
+               style="left:${leftPct}%; top:${topPct}%; --pin-color:${t.color || "#8b202e"};">
             <div class="pin-marker"></div>
             <div class="pin-label">${this.escapeHtml(t.name)}</div>
           </div>
@@ -2787,7 +3566,7 @@ class FantasyGenealogyApp {
     if (this.mapTool === "select") {
       event.stopPropagation();
       this.selectedTerritoryId = terrId;
-      this.draggingPinId = terrId;
+      this.renderMapStudio();
     }
   }
 
@@ -2807,11 +3586,17 @@ class FantasyGenealogyApp {
 
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) {
-      panel.innerHTML = `<p>Utilize &ldquo;Fundar Feudo / Cidade&rdquo; para lavrar o primeiro assento geográfico.</p>`;
+      panel.innerHTML = `
+        <div style="text-align:center; padding:18px 8px;">
+          <p style="margin-bottom:12px; color:var(--ink-secondary);">Todo o mapa está coberto por <strong>Água (mini ondas)</strong>. Clique no botão de continente para criar seu primeiro território de terra!</p>
+          <button class="btn btn-gold" onclick="app.addContinentOnMap()">+ Novo Território (Continente)</button>
+        </div>
+      `;
       return;
     }
 
     const house = this.engine.getHouse(t.houseId);
+    const borderPointsCount = Array.isArray(t.points) ? t.points.length : 0;
 
     const residents = this.engine.data.characters.filter(
       c => !c.isPlaceholderEmpty && c.livedInTerritoryId === t.id
@@ -2827,23 +3612,29 @@ class FantasyGenealogyApp {
     panel.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
         <div>
-          <span class="creation-cat-tag">${this.escapeHtml(t.type || "Feudo / Província")}</span>
+          <span class="creation-cat-tag">${this.escapeHtml(t.type || "Território / Continente")} &bull; ${borderPointsCount} pontos na borda</span>
           <h2 style="font-family:var(--font-display); font-size:1rem; margin-top:6px; color:var(--gold-leaf); text-transform:uppercase;">${this.escapeHtml(t.name)}</h2>
         </div>
         <div style="display:flex; gap:6px;">
-          <button class="btn btn-sm btn-medieval" onclick="app.openTerritoryModal('${t.id}')" title="Alterar feudo">Editar</button>
-          <button class="btn btn-sm btn-danger" onclick="app.deleteTerritory('${t.id}')" title="Apagar feudo">&times;</button>
+          <button class="btn btn-sm btn-medieval" onclick="app.openTerritoryModal('${t.id}')" title="Alterar nome, cor e casa deste território">Editar</button>
+          <button class="btn btn-sm btn-danger" onclick="app.openDeleteTerritoryModal('${t.id}')" title="Apagar território">&times;</button>
         </div>
       </div>
 
-      <p class="sub-desc" style="margin-top:4px;">
+      <p class="sub-desc" style="margin-top:4px; margin-bottom:10px;">
         <strong>Casa Soberana / Feudal:</strong> ${house ? this.escapeHtml(house.name) : "Independente"}<br/>
         ${this.escapeHtml(t.description || "")}
       </p>
 
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+        <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Dobrar a quantidade de pontos na borda">+ Pontos na Borda</button>
+        <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar o contorno costeiro">Suavizar Costa</button>
+        <button class="btn btn-sm btn-medieval" onclick="app.resetTerritoryPolygonShape('${t.id}')" title="Restaurar formato circular de continente">Redefinir Formato</button>
+      </div>
+
       <div class="card-box" style="padding:10px; margin-bottom:12px;">
         <h4 style="font-family:var(--font-display); color:var(--gold-leaf); font-size:0.8rem; text-transform:uppercase; margin-bottom:8px;">
-          Habitantes deste Assento (${residents.length})
+          Habitantes deste Território (${residents.length})
         </h4>
         ${
           residents.length > 0
@@ -2922,6 +3713,7 @@ class FantasyGenealogyApp {
     const description = document.getElementById("pass_desc").value.trim();
     if (!description) return;
 
+    const snapshot = this.engine.createSnapshot();
     t.notablePassages = t.notablePassages || [];
     t.notablePassages.push({
       id: "pass_" + Date.now(),
@@ -2931,7 +3723,15 @@ class FantasyGenealogyApp {
       description
     });
 
-    this.engine.saveToStorage();
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Passagem Histórica",
+      `Passagem Averbada em ${t.name}`,
+      `Registro no ano ${year}: "${description}"`,
+      snapshot
+    );
+
+    this.syncHeaderAndBadges();
     this.renderSelectedTerritoryPanel();
   }
 
@@ -2940,7 +3740,7 @@ class FantasyGenealogyApp {
       ? this.engine.getTerritory(editId)
       : {
           name: "",
-          type: "Feudo / Província",
+          type: "Continente / Território",
           color: "#294873",
           x: defaultX,
           y: defaultY,
@@ -2955,33 +3755,33 @@ class FantasyGenealogyApp {
     const bodyHtml = `
       <div class="form-row">
         <div class="form-group">
-          <label>Nome do Feudo / Cidade:</label>
-          <input type="text" id="tf_name" value="${this.escapeHtml(t.name)}" placeholder="Ex: Cidadela de Valória" />
+          <label>Nome do Território / Continente:</label>
+          <input type="text" id="tf_name" value="${this.escapeHtml(t.name)}" placeholder="Ex: Continente de Valória" />
         </div>
         <div class="form-group">
-          <label>Natureza do Assento:</label>
-          <input type="text" id="tf_type" value="${this.escapeHtml(t.type || "")}" placeholder="Ex: Fortaleza, Capital, Província..." />
+          <label>Natureza do Território:</label>
+          <input type="text" id="tf_type" value="${this.escapeHtml(t.type || "")}" placeholder="Ex: Continente, Ilha, Província, Fortaleza..." />
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label>Casa Feudal Governante:</label>
+          <label>Casa Soberana / Governante:</label>
           <select id="tf_houseId">${houseOpts}</select>
         </div>
         <div class="form-group">
-          <label>Cor do Estandarte Cartográfico:</label>
+          <label>Cor Heráldica do Território:</label>
           <input type="color" id="tf_color" value="${t.color || "#294873"}" style="height:38px;" />
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label>Coordenada X (0 &bull; 960):</label>
+          <label>Centro X (0 &bull; 960):</label>
           <input type="number" id="tf_x" value="${t.x}" />
         </div>
         <div class="form-group">
-          <label>Coordenada Y (0 &bull; 560):</label>
+          <label>Centro Y (0 &bull; 560):</label>
           <input type="number" id="tf_y" value="${t.y}" />
         </div>
       </div>
@@ -2993,22 +3793,22 @@ class FantasyGenealogyApp {
     `;
 
     this.showModal(
-      editId ? `Editar Feudo: ${t.name}` : `Fundar Feudo ou Cidade`,
+      editId ? `Editar Território: ${t.name}` : `Fundar Novo Território (Continente)`,
       bodyHtml,
       `
         <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="app.saveTerritoryFromModal('${editId || ""}')">Salvar Feudo</button>
+        <button class="btn btn-primary" onclick="app.saveTerritoryFromModal('${editId || ""}')">Salvar Território</button>
       `
     );
   }
 
   saveTerritoryFromModal(editId = "") {
-    const name = document.getElementById("tf_name").value.trim() || "Nova Província";
-    const type = document.getElementById("tf_type").value.trim();
+    const name = document.getElementById("tf_name").value.trim() || "Novo Território";
+    const type = document.getElementById("tf_type").value.trim() || "Continente / Território";
     const houseId = document.getElementById("tf_houseId").value;
     const color = document.getElementById("tf_color").value;
-    const x = Number(document.getElementById("tf_x").value) || 450;
-    const y = Number(document.getElementById("tf_y").value) || 260;
+    const newX = Number(document.getElementById("tf_x").value) || 480;
+    const newY = Number(document.getElementById("tf_y").value) || 280;
     const description = document.getElementById("tf_desc").value.trim();
 
     const snapshot = this.engine.createSnapshot();
@@ -3017,24 +3817,35 @@ class FantasyGenealogyApp {
       const existing = this.engine.getTerritory(editId);
       const oldName = existing ? existing.name : "";
       if (existing) {
-        Object.assign(existing, { name, type, houseId, color, x, y, description });
+        const dx = newX - (existing.x || newX);
+        const dy = newY - (existing.y || newY);
+        if ((dx !== 0 || dy !== 0) && Array.isArray(existing.points)) {
+          existing.points.forEach(p => {
+            p.x = Math.max(8, Math.min(952, p.x + dx));
+            p.y = Math.max(8, Math.min(552, p.y + dy));
+          });
+        }
+        Object.assign(existing, { name, type, houseId, color, x: newX, y: newY, description });
+        this.engine.ensureTerritoryPolygons([existing]);
       }
       this.engine.recordAuditLog(
         "TERRITÓRIO",
-        "Alteração de Feudo",
-        `Feudo Atualizado: "${oldName}" &rarr; "${name}"`,
-        `O feudo "${oldName}" teve suas descrições e limites atualizados.`,
+        "Alteração de Território",
+        `Território Atualizado: "${oldName}" &rarr; "${name}"`,
+        `O território "${oldName}" teve suas propriedades atualizadas.`,
         snapshot
       );
     } else {
+      const points = this.engine.generateContinentPoints(newX, newY, 96, 74, 24, this.engine.data.territories.length + 1);
       const newTerr = {
         id: "terr_" + Date.now(),
         name,
         type,
         houseId,
         color,
-        x,
-        y,
+        x: newX,
+        y: newY,
+        points,
         description,
         notablePassages: []
       };
@@ -3042,9 +3853,9 @@ class FantasyGenealogyApp {
       this.selectedTerritoryId = newTerr.id;
       this.engine.recordAuditLog(
         "TERRITÓRIO",
-        "Fundação de Feudo",
-        `Novo Feudo Fundado: ${name}`,
-        `A cidade/província "${name}" foi averbada na cartografia do reino.`,
+        "Fundação de Território",
+        `Novo Território Fundado: ${name}`,
+        `O território "${name}" foi averbado na cartografia do reino com ${points.length} pontos de borda.`,
         snapshot
       );
     }
@@ -3053,6 +3864,30 @@ class FantasyGenealogyApp {
     this.syncHeaderAndBadges();
     this.renderMapStudio();
     this.renderTree();
+  }
+
+  openDeleteTerritoryModal(terrId) {
+    const t = this.engine.getTerritory(terrId);
+    if (!t) return;
+
+    const bodyHtml = `
+      <div class="alert-banner alert-danger" style="margin-bottom:10px;">
+        <strong>Confirmação de Exclusão de Território:</strong><br/>
+        Tem certeza de que deseja submergir e remover o território <strong>"${this.escapeHtml(t.name)}"</strong> do mapa?
+      </div>
+      <p style="font-size:0.9rem; color:var(--ink-secondary); line-height:1.5;">
+        A área ocupada por este território voltará a ser <strong>Água (preenchida com ícones de mini ondas)</strong>. Esta remoção será registrada nos <em>Anais do Reino</em> e poderá ser revertida a qualquer momento.
+      </p>
+    `;
+
+    this.showModal(
+      `Confirmar Exclusão: ${t.name}`,
+      bodyHtml,
+      `
+        <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+        <button class="btn btn-danger" onclick="app.deleteTerritory('${t.id}')">Confirmar Exclusão</button>
+      `
+    );
   }
 
   deleteTerritory(terrId) {
@@ -3068,12 +3903,13 @@ class FantasyGenealogyApp {
 
     this.engine.recordAuditLog(
       "TERRITÓRIO",
-      "Extinção de Feudo",
-      `Feudo Revogado: ${t.name}`,
-      `O feudo "${t.name}" foi removido da cartografia (restaurável na seção Feudos dos anais).`,
+      "Extinção de Território",
+      `Território Removido: ${t.name}`,
+      `O território "${t.name}" foi removido da cartografia e sua área retornou ao oceano.`,
       snapshot
     );
 
+    this.closeModal();
     this.syncHeaderAndBadges();
     this.renderMapStudio();
     this.renderTree();
@@ -3091,7 +3927,7 @@ class FantasyGenealogyApp {
     const container = document.getElementById("auditLogsContainer");
     if (!container) return;
 
-    ["ALL", "LINHAGEM", "CASA", "TERRITORIO"].forEach(k => {
+    ["ALL", "LINHAGEM", "CASA", "TERRITORIO", "GRIMORIO"].forEach(k => {
       const btn = document.getElementById("histFilter" + k);
       if (btn) btn.classList.toggle("btn-primary", this.activeHistoryFilter === k);
     });
@@ -3100,6 +3936,9 @@ class FantasyGenealogyApp {
       if (this.activeHistoryFilter === "ALL") return true;
       if (this.activeHistoryFilter === "TERRITORIO") {
         return l.category === "TERRITÓRIO" || l.category === "TERRITORIO";
+      }
+      if (this.activeHistoryFilter === "GRIMORIO") {
+        return l.category === "GRIMÓRIO" || l.category === "GRIMORIO";
       }
       return l.category === this.activeHistoryFilter;
     });
@@ -3111,7 +3950,9 @@ class FantasyGenealogyApp {
 
     container.innerHTML = logs
       .map(l => {
-        const cleanCat = l.category === "TERRITÓRIO" ? "TERRITORIO" : l.category;
+        let cleanCat = l.category;
+        if (cleanCat === "TERRITÓRIO") cleanCat = "TERRITORIO";
+        if (cleanCat === "GRIMÓRIO") cleanCat = "GRIMORIO";
         return `
           <div class="audit-log-item cat-${cleanCat}">
             <div>
@@ -3144,10 +3985,11 @@ class FantasyGenealogyApp {
     const res = this.engine.revertAuditLog(logId);
     if (res.success) {
       this.syncHeaderAndBadges();
-      this.populateHouseFilterSelect();
+      this.populateFilterControls();
       this.renderTree();
       this.renderHousesAndSuccessionTab();
       this.renderMapStudio();
+      this.renderGrimoire();
       this.renderAuditHistory();
     }
   }

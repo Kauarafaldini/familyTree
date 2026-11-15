@@ -954,9 +954,66 @@ body {
   align-self: flex-start;
 }
 
+.creation-img-container {
+  width: 100%;
+  height: 155px;
+  overflow: hidden;
+  border-radius: 3px;
+  border: 1px solid var(--border-gold-subtle);
+  background: #110d0a;
+  margin: 4px 0 6px 0;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
+}
+
+.creation-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.28s ease;
+}
+
+.creation-card:hover .creation-img {
+  transform: scale(1.04);
+}
+
 /* --------------------------------------------------------------------------
-   CARTOGRAFIA DO REINO (MAPA ANTIGO)
+   CARTOGRAFIA DO REINO (EDITOR DE TERRITÓRIOS / CONTINENTES E OCEANO)
    -------------------------------------------------------------------------- */
+.map-continent-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  padding: 5px 12px;
+  box-shadow: 0 2px 8px rgba(197, 160, 89, 0.25);
+}
+
+.continent-btn-icon {
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+
+.map-helper-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(90deg, #121e2b 0%, #1a1510 100%);
+  border: 1px solid var(--border-brass);
+  border-left: 3px solid #38bdf8;
+  border-radius: 3px;
+  padding: 7px 14px;
+  margin-bottom: 12px;
+  font-family: var(--font-serif);
+  font-size: 0.88rem;
+  color: var(--ink-secondary);
+}
+
+.map-helper-bar strong {
+  color: var(--gold-leaf);
+}
+
 .map-studio-layout {
   display: grid;
   grid-template-columns: 1fr 380px;
@@ -971,7 +1028,7 @@ body {
 
 .map-canvas-container {
   position: relative;
-  background: #181512;
+  background: #0d1d2d;
   border: 2px solid var(--border-gold-bright);
   border-radius: 3px;
   overflow: hidden;
@@ -983,7 +1040,8 @@ body {
   display: block;
   width: 100%;
   height: 560px;
-  cursor: crosshair;
+  cursor: default;
+  user-select: none;
 }
 
 .map-pins-layer {
@@ -998,18 +1056,16 @@ body {
 .map-city-pin {
   position: absolute;
   transform: translate(-50%, -50%);
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: transform 0.16s ease;
+  transition: transform 0.12s ease;
   z-index: 10;
 }
 
-.map-city-pin:hover,
 .map-city-pin.selected {
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: translate(-50%, -50%) scale(1.08);
   z-index: 20;
 }
 
@@ -1075,6 +1131,10 @@ body {
 
 .audit-log-item.cat-TERRITORIO {
   border-left-color: var(--azure-tome);
+}
+
+.audit-log-item.cat-GRIMORIO {
+  border-left-color: #a855f7;
 }
 
 /* --------------------------------------------------------------------------
