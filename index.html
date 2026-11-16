@@ -317,25 +317,22 @@
       </div>
     </div>
 
-    <!-- Régua do Tempo Interativa (Visual Time Track) -->
-    <div class="timeline-ruler-wrapper" id="timelineRulerWrapper">
-      <div class="timeline-ruler-header">
-        <div class="timeline-ruler-title">
+    <!-- Painel Panorâmico Horizontal da Cronologia (Eixo Horizontal com Zoom no Ponto & Resumo Desdobrável) -->
+    <div class="timeline-h-container" id="timelineHorizontalWrapper">
+      <div class="timeline-h-header-bar">
+        <div class="timeline-scale-indicator">
           <span class="badge-pill badge-avuncular" id="timelineScaleBadge">Escala: Anos</span>
-          <span style="font-size:0.8rem; color:var(--ink-secondary);">Arraste horizontalmente ou use a roda do mouse sobre a régua para aproximar / afastar</span>
+          <span style="font-size:0.8rem; color:var(--ink-secondary);">Gire a <strong>roda do mouse sobre um marco</strong> para aproximar no ponto exato &bull; Arraste horizontalmente para navegar</span>
         </div>
         <div id="timelineStatsInfo" style="font-size:0.82rem; color:var(--gold-leaf);"></div>
       </div>
-      <div class="timeline-ruler-viewport" id="timelineRulerViewport">
-        <div class="timeline-ruler-track" id="timelineRulerTrack">
-          <!-- Marcas de anos, luas e dias geradas dinamicamente -->
+
+      <!-- Viewport horizontal com linha contínua, ícones e desdobramento ao aproximar -->
+      <div class="timeline-h-viewport" id="timelineHorizontalViewport">
+        <div class="timeline-h-canvas" id="timelineHorizontalTrack">
+          <!-- Linha horizontal, marcas temporais e nós gerados dinamicamente -->
         </div>
       </div>
-    </div>
-
-    <!-- Trilha Central de Crônicas & Cartões Históricos -->
-    <div class="timeline-events-container" id="timelineEventsContainer">
-      <!-- Cartões cronológicos gerados dinamicamente por renderTimeline() -->
     </div>
   </section>
 

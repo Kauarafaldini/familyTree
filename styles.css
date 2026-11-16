@@ -1604,221 +1604,339 @@ body {
   flex-wrap: wrap;
 }
 
-/* Régua do Tempo Interativa */
-.timeline-ruler-wrapper {
-  background: #130e09;
+/* ==========================================================================
+   CRONOLOGIA PANORÂMICA HORIZONTAL (EIXO HORIZONTAL COM ZOOM NO PONTO & RESUMO)
+   ========================================================================== */
+
+.timeline-h-container {
+  background: #110d08;
   border: 1px solid var(--border-gold);
-  border-radius: 4px;
-  padding: 12px 14px;
-  margin-bottom: 20px;
-  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.75), 0 4px 14px rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 20px rgba(0, 0, 0, 0.85), 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  margin-top: 10px;
 }
 
-.timeline-ruler-header {
+.timeline-h-header-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #1d160f 0%, #15100a 100%);
+  border-bottom: 1px solid var(--border-brass);
 }
 
-.timeline-ruler-title {
+.timeline-scale-indicator {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.timeline-ruler-viewport {
+.timeline-h-viewport {
+  width: 100%;
+  height: 560px;
+  min-height: 520px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 8px;
+  position: relative;
   cursor: grab;
   user-select: none;
   scrollbar-width: thin;
   scrollbar-color: var(--gold-antique) #100b07;
+  background: radial-gradient(circle at 50% 30%, #1c150e 0%, #0f0b07 100%);
 }
 
-.timeline-ruler-viewport:active {
+.timeline-h-viewport:active {
   cursor: grabbing;
 }
 
-.timeline-ruler-track {
-  display: flex;
-  align-items: flex-end;
+.timeline-h-canvas {
   position: relative;
-  min-height: 80px;
-  padding: 10px 20px;
-  border-bottom: 2px solid var(--gold-leaf);
+  height: 100%;
+  min-height: 520px;
+  /* Largura calculada dinamicamente pelo JS */
 }
 
-.ruler-segment {
+/* O Grande Eixo Central Horizontal */
+.timeline-main-axis {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  top: 160px;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(197, 160, 89, 0.2) 0%, #c5a059 4%, #f3d790 50%, #c5a059 96%, rgba(197, 160, 89, 0.2) 100%);
+  border-radius: 2px;
+  box-shadow: 0 0 14px rgba(223, 186, 115, 0.45);
+  z-index: 2;
+}
+
+/* Ticks temporais diretamente no eixo horizontal */
+.timeline-axis-tick {
+  position: absolute;
+  top: 160px;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 1;
 }
 
-.ruler-tick-major {
+.axis-tick-mark-major {
   width: 2px;
-  height: 22px;
+  height: 26px;
   background: var(--gold-leaf);
-  margin-bottom: 4px;
+  margin-top: -11px;
 }
 
-.ruler-tick-minor {
+.axis-tick-label-year {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  letter-spacing: 0.8px;
+  margin-top: 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.axis-tick-mark-minor {
+  width: 1px;
+  height: 16px;
+  background: var(--border-brass);
+  margin-top: -6px;
+}
+
+.axis-tick-mark-month {
   width: 1px;
   height: 12px;
-  background: var(--border-brass);
-  margin-bottom: 4px;
+  background: rgba(197, 160, 89, 0.45);
+  margin-top: -4px;
 }
 
-.ruler-tick-sub {
-  width: 1px;
-  height: 6px;
-  background: rgba(197, 160, 89, 0.35);
-  margin-bottom: 4px;
-}
-
-.ruler-label-year {
+.axis-tick-label-month {
   font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--parchment-bright);
-  letter-spacing: 0.6px;
-}
-
-.ruler-label-sub {
-  font-family: var(--font-display);
-  font-size: 0.66rem;
+  font-size: 0.65rem;
   color: var(--ink-dim);
   text-transform: uppercase;
+  margin-top: 14px;
+  white-space: nowrap;
 }
 
-.ruler-event-pin {
+.axis-tick-mark-day {
+  width: 1px;
+  height: 6px;
+  background: rgba(197, 160, 89, 0.25);
+  margin-top: -1px;
+}
+
+.axis-tick-label-day {
+  font-size: 0.55rem;
+  color: rgba(197, 160, 89, 0.4);
+  margin-top: 8px;
+}
+
+/* Nó do Acontecimento Histórico no Eixo Horizontal */
+.timeline-h-node {
   position: absolute;
-  top: -2px;
+  top: 160px;
   transform: translateX(-50%);
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #16120d;
-  border: 1.5px solid var(--gold-leaf);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.62rem;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  z-index: 2;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
-}
-
-.ruler-event-pin:hover {
-  transform: translateX(-50%) scale(1.35);
-  z-index: 5;
-  box-shadow: 0 0 10px var(--gold-leaf);
-}
-
-.ruler-event-pin.pin-epic {
-  border-color: #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
-}
-
-/* Trilha Central de Acontecimentos & Cartões */
-.timeline-events-container {
   display: flex;
   flex-direction: column;
-  position: relative;
-  padding: 10px 0 40px 0;
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-.timeline-events-container::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 28px;
-  width: 3px;
-  background: linear-gradient(180deg, var(--gold-leaf) 0%, #785a28 50%, var(--gold-antique) 100%);
-  border-radius: 2px;
-  box-shadow: 0 0 6px rgba(223, 186, 115, 0.35);
-}
-
-.timeline-era-header {
-  position: relative;
-  margin: 24px 0 16px 0;
-  padding-left: 60px;
-}
-
-.timeline-era-badge {
-  font-family: var(--font-display);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  background: linear-gradient(135deg, #2b1f13 0%, #17110a 100%);
-  color: var(--gold-leaf);
-  padding: 5px 14px;
-  border: 1px solid var(--border-gold);
-  border-radius: 3px;
-  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  z-index: 5;
+  transition: z-index 0.2s ease;
 }
 
-.timeline-item {
-  position: relative;
-  margin-bottom: 20px;
-  padding-left: 60px;
-  transition: all 0.25s ease;
+.timeline-h-node:hover,
+.timeline-h-node.selected {
+  z-index: 40;
 }
 
-.timeline-node-icon {
+/* Linhas verticais conectoras (agulhas) */
+.timeline-stem-up {
   position: absolute;
-  left: 17px;
-  top: 14px;
-  width: 26px;
-  height: 26px;
+  bottom: 16px;
+  width: 1.5px;
+  height: 22px;
+  background: linear-gradient(0deg, var(--gold-leaf), rgba(197, 160, 89, 0.3));
+  pointer-events: none;
+}
+
+.timeline-stem-down {
+  position: absolute;
+  top: 16px;
+  width: 1.5px;
+  height: 22px;
+  background: linear-gradient(180deg, var(--gold-leaf), rgba(197, 160, 89, 0.3));
+  pointer-events: none;
+}
+
+/* Selo / Ícone do Nó Centralizado sobre a Linha */
+.timeline-node-seal {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #17120c;
   border: 2px solid var(--gold-leaf);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.82rem;
-  z-index: 3;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.8), 0 0 6px rgba(0, 0, 0, 0.6);
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.25s ease;
+  position: relative;
+  z-index: 6;
+}
+
+.timeline-h-node:hover .timeline-node-seal,
+.timeline-h-node.selected .timeline-node-seal {
+  transform: scale(1.3);
+  box-shadow: 0 0 16px var(--gold-leaf), 0 4px 12px rgba(0, 0, 0, 0.9);
+}
+
+.timeline-h-node.node-epic .timeline-node-seal {
+  border-color: #f59e0b;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.75);
+}
+
+/* Caixa Superior: Nome e Data do Acontecimento */
+.timeline-node-top-label {
+  position: absolute;
+  bottom: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 220px;
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
   transition: transform 0.2s ease;
 }
 
-.timeline-item:hover .timeline-node-icon {
-  transform: scale(1.22);
+.timeline-h-node:hover .timeline-node-top-label {
+  transform: translateY(-3px);
 }
 
-.timeline-card {
-  background: #17120c;
+.timeline-node-event-title {
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff9e6;
+  letter-spacing: 0.4px;
+  line-height: 1.25;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
+  max-width: 200px;
+  word-break: break-word;
+}
+
+.timeline-node-event-date {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  color: var(--gold-leaf);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 3px;
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(19, 14, 9, 0.85);
+  border-radius: 3px;
+  border: 1px solid rgba(197, 160, 89, 0.35);
+}
+
+/* Caixa Inferior: Resumo do Conto da Cronologia */
+.timeline-node-summary-card {
+  position: absolute;
+  top: 38px;
+  width: 270px;
+  background: linear-gradient(135deg, #1b150f 0%, #120e0a 100%);
   border: 1px solid var(--border-brass);
-  border-radius: 4px;
-  padding: 14px 18px;
-  position: relative;
-  transition: all 0.25s ease;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  border-radius: 5px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85), 0 2px 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transform: translateY(-12px) scale(0.92);
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), max-height 0.3s ease;
+  z-index: 10;
 }
 
-.timeline-card:hover {
+/* Desdobramento da caixa de resumo:
+   1) Ao aproximar com o zoom (quando .zoom-revealed está ativo no canvas)
+   2) OU ao passar o mouse / clicar no nó */
+.timeline-h-canvas.zoom-revealed .timeline-node-summary-card,
+.timeline-h-node:hover .timeline-node-summary-card,
+.timeline-h-node.selected .timeline-node-summary-card {
+  opacity: 1;
+  max-height: 480px;
+  pointer-events: auto;
+  overflow-y: auto;
+  transform: translateY(0) scale(1);
   border-color: var(--gold-leaf);
-  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.7);
-  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9), 0 0 14px rgba(223, 186, 115, 0.25);
+  z-index: 35;
 }
 
-.timeline-card.card-epic {
-  border-color: var(--gold-leaf);
-  background: linear-gradient(135deg, #22180f 0%, #17120c 100%);
-  box-shadow: 0 4px 14px rgba(223, 186, 115, 0.15);
+.timeline-h-node.node-epic .timeline-node-summary-card {
+  border-color: #f59e0b;
+}
+
+.timeline-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.timeline-card-summary-text {
+  font-size: 0.82rem;
+  color: var(--parchment-bright);
+  line-height: 1.45;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.timeline-card-cameos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.timeline-cameo-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--gold-leaf);
+  vertical-align: middle;
+}
+
+.timeline-node-img-thumb {
+  max-width: 100%;
+  max-height: 140px;
+  border-radius: 3px;
+  border: 1px solid var(--border-gold-subtle);
+  margin-bottom: 8px;
+  object-fit: cover;
+  display: block;
+}
+
+.timeline-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  border-top: 1px solid rgba(197, 160, 89, 0.15);
+  padding-top: 6px;
+  margin-top: 4px;
 }
 
 @keyframes cardPulseGlow {
@@ -1830,90 +1948,6 @@ body {
 .card-highlight-pulse {
   animation: cardPulseGlow 1.4s ease 2;
   border-color: var(--gold-leaf) !important;
-}
-
-.timeline-card.card-epic::after {
-  content: "★ Épico";
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  font-family: var(--font-display);
-  font-size: 0.68rem;
-  color: var(--gold-leaf);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.timeline-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 6px;
-  flex-wrap: wrap;
-}
-
-.timeline-date-tag {
-  font-family: var(--font-display);
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--gold-leaf);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.timeline-card-title {
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #fff8e7;
-  letter-spacing: 0.4px;
-  margin: 4px 0 8px 0;
-}
-
-.timeline-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-  font-size: 0.8rem;
-  color: var(--ink-secondary);
-}
-
-.timeline-cameo-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--gold-leaf);
-  vertical-align: middle;
-}
-
-.timeline-desc {
-  font-size: 0.9rem;
-  color: var(--parchment-bright);
-  line-height: 1.5;
-  margin-bottom: 10px;
-}
-
-.timeline-image-preview {
-  max-width: 100%;
-  max-height: 220px;
-  border-radius: 3px;
-  border: 1px solid var(--border-gold-subtle);
-  margin-bottom: 10px;
-  object-fit: cover;
-}
-
-.timeline-card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid rgba(223, 186, 115, 0.15);
-  padding-top: 8px;
-  margin-top: 8px;
 }
 
 /* Badges de Categoria da Cronologia */

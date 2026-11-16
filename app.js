@@ -2818,6 +2818,23 @@ class FantasyGenealogyApp {
     return filtered;
   }
 
+  getTimelinePixelsPerYear() {
+    let base = 140;
+    if (this.timelineZoomMode === "month") base = 340;
+    if (this.timelineZoomMode === "day") base = 980;
+    return base * this.timelineZoom;
+  }
+
+  updateTimelineZoomModeFromZoom() {
+    if (this.timelineZoom >= 3.0) {
+      this.timelineZoomMode = "day";
+    } else if (this.timelineZoom >= 1.6) {
+      this.timelineZoomMode = "month";
+    } else {
+      this.timelineZoomMode = "year";
+    }
+  }
+
   renderTimeline() {
     const badge = document.getElementById("badgeTimelineCount");
     if (badge) badge.textContent = (this.engine.data.timelineMilestones || []).length;
@@ -2829,13 +2846,6 @@ class FantasyGenealogyApp {
 
     const zoomLbl = document.getElementById("timelineZoomLabel");
     if (zoomLbl) zoomLbl.textContent = Math.round(this.timelineZoom * 100) + "%";
-
-    const sortLbl = document.getElementById("timelineSortLabel");
-    if (sortLbl) {
-      sortLbl.innerHTML = this.timelineSortOrder === "asc"
-        ? "Mais Antigos &rarr; Mais Recentes"
-        : "Mais Recentes &rarr; Mais Antigos";
-    }
 
     const chk = document.getElementById("chkIncludeCharLifeEvents");
     if (chk) chk.checked = this.timelineIncludeCharLifeEvents;
@@ -2890,8 +2900,9 @@ class FantasyGenealogyApp {
     const filteredEvents = this.getFilteredTimelineEvents();
     const statsInfo = document.getElementById("timelineStatsInfo");
     if (statsInfo) {
-      statsInfo.textContent = `${filteredEvents.length} acontecimentos lavrados`;
+      statsInfo.textContent = `${filteredEvents.length} acontecimentos no eixo cronológico`;
     }
+
     const scaleBadge = document.getElementById("timelineScaleBadge");
     if (scaleBadge) {
       scaleBadge.textContent = this.timelineZoomMode === "day"
@@ -2901,17 +2912,25 @@ class FantasyGenealogyApp {
         : "Escala: Anos & Décadas";
     }
 
-    this.renderTimelineRuler(filteredEvents);
-    this.renderTimelineCards(filteredEvents);
+    this.renderHorizontalTimeline(filteredEvents);
   }
 
-  renderTimelineRuler(filteredEvents) {
-    const track = document.getElementById("timelineRulerTrack");
+  renderHorizontalTimeline(filteredEvents) {
+    const track = document.getElementById("timelineHorizontalTrack");
     if (!track) return;
 
     if (filteredEvents.length === 0) {
       track.style.width = "100%";
-      track.innerHTML = `<div style="color:var(--ink-dim); padding:20px; font-style:italic;">Sem marcos para exibir na régua.</div>`;
+      track.innerHTML = `
+        <div style="text-align:center; padding:120px 20px; color:var(--ink-dim); font-style:italic;">
+          <div style="font-size:2.5rem; margin-bottom:10px;">📜</div>
+          Nenhum acontecimento histórico coincide com os filtros da crônica.
+          <div style="margin-top:14px;">
+            <button class="btn btn-sm btn-medieval" onclick="app.setTimelineCategoryFilter('ALL')">Limpar Filtros</button>
+            <button class="btn btn-sm btn-gold" onclick="app.openCreateMilestoneModal()" style="margin-left:8px;">+ Lavrar Novo Marco</button>
+          </div>
+        </div>
+      `;
       return;
     }
 
@@ -2930,77 +2949,87 @@ class FantasyGenealogyApp {
       maxYear = (this.engine.data.currentYear || 1220) + 10;
     }
 
-    const startYear = Math.floor((minYear - 5) / 5) * 5;
-    const endYear = Math.ceil((maxYear + 5) / 5) * 5;
-    const totalYears = Math.max(15, endYear - startYear);
+    const startYear = Math.floor((minYear - 4) / 5) * 5;
+    const endYear = Math.ceil((maxYear + 4) / 5) * 5;
+    const totalYears = Math.max(10, endYear - startYear);
 
-    let pixelsPerYear = 38 * this.timelineZoom;
-    if (this.timelineZoomMode === "month") pixelsPerYear = 120 * this.timelineZoom;
-    if (this.timelineZoomMode === "day") pixelsPerYear = 420 * this.timelineZoom;
+    this.timelineStartYear = startYear;
+    this.timelineEndYear = endYear;
 
-    const totalWidth = Math.max(800, totalYears * pixelsPerYear);
+    const pixelsPerYear = this.getTimelinePixelsPerYear();
+    const paddingX = 240;
+    const totalWidth = Math.max(1200, totalYears * pixelsPerYear + paddingX * 2);
     track.style.width = `${totalWidth}px`;
 
+    // Ativa desdobramento automático quando aproximado (zoom >= 1.35)
+    const isZoomNear = this.timelineZoom >= 1.35;
+    track.classList.toggle("zoom-revealed", isZoomNear);
+
     let html = "";
+
+    // 1. Linha do Eixo Central Horizontal
+    html += `<div class="timeline-main-axis" style="left:${paddingX - 40}px; right:${paddingX - 40}px;"></div>`;
+
+    // 2. Marcas do tempo (Ticks)
     for (let yr = startYear; yr <= endYear; yr++) {
-      const leftPx = (yr - startYear) * pixelsPerYear;
+      const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
       const isDecade = yr % 10 === 0;
       const isFive = yr % 5 === 0;
 
       if (this.timelineZoomMode === "year") {
         if (isFive) {
           html += `
-            <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
-              <div class="${isDecade ? "ruler-tick-major" : "ruler-tick-minor"}"></div>
-              <div class="ruler-label-year">${yr}</div>
+            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+              <div class="${isDecade ? "axis-tick-mark-major" : "axis-tick-mark-minor"}"></div>
+              <div class="axis-tick-label-year">${yr}</div>
             </div>
           `;
         } else {
           html += `
-            <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
-              <div class="ruler-tick-sub"></div>
+            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+              <div class="axis-tick-mark-day"></div>
             </div>
           `;
         }
       } else if (this.timelineZoomMode === "month") {
         html += `
-          <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
-            <div class="ruler-tick-major"></div>
-            <div class="ruler-label-year">${yr}</div>
+          <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+            <div class="axis-tick-mark-major"></div>
+            <div class="axis-tick-label-year">${yr}</div>
           </div>
         `;
         for (let m = 1; m <= 12; m++) {
-          const mLeft = leftPx + (m / 12) * pixelsPerYear;
+          const mLeft = yrLeft + (m / 12) * pixelsPerYear;
           const mInfo = FANTASY_MONTHS[m - 1];
           html += `
-            <div class="ruler-segment" style="position:absolute; left:${mLeft}px;">
-              <div class="ruler-tick-minor"></div>
-              <div class="ruler-label-sub" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
+            <div class="timeline-axis-tick" style="left:${mLeft}px;">
+              <div class="axis-tick-mark-month"></div>
+              <div class="axis-tick-label-month" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
             </div>
           `;
         }
       } else if (this.timelineZoomMode === "day") {
         html += `
-          <div class="ruler-segment" style="position:absolute; left:${leftPx}px;">
-            <div class="ruler-tick-major"></div>
-            <div class="ruler-label-year">${yr}</div>
+          <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+            <div class="axis-tick-mark-major"></div>
+            <div class="axis-tick-label-year">${yr}</div>
           </div>
         `;
         for (let m = 1; m <= 12; m++) {
-          const mStart = leftPx + ((m - 1) / 12) * pixelsPerYear;
+          const mStart = yrLeft + ((m - 1) / 12) * pixelsPerYear;
           const mInfo = FANTASY_MONTHS[m - 1];
           html += `
-            <div class="ruler-segment" style="position:absolute; left:${mStart}px;">
-              <div class="ruler-tick-minor"></div>
-              <div class="ruler-label-sub">${mInfo.name}</div>
+            <div class="timeline-axis-tick" style="left:${mStart}px;">
+              <div class="axis-tick-mark-month"></div>
+              <div class="axis-tick-label-month">${mInfo.name}</div>
             </div>
           `;
           for (let d = 5; d <= 30; d += 5) {
             const dLeft = mStart + (d / 30) * (pixelsPerYear / 12);
             html += `
-              <div class="ruler-segment" style="position:absolute; left:${dLeft}px;">
-                <div class="ruler-tick-sub"></div>
-                <div class="ruler-label-sub" style="font-size:0.55rem;">d${d}</div>
+              <div class="timeline-axis-tick" style="left:${dLeft}px;">
+                <div class="axis-tick-mark-day"></div>
+                <div class="axis-tick-label-day">d${d}</div>
               </div>
             `;
           }
@@ -3008,6 +3037,7 @@ class FantasyGenealogyApp {
       }
     }
 
+    // 3. Nós dos Acontecimentos na Linha Horizontal
     filteredEvents.forEach(ev => {
       const yr = Number(ev.year) || startYear;
       const m = Number(ev.month) || 1;
@@ -3016,71 +3046,19 @@ class FantasyGenealogyApp {
       const yrFrac = yr - startYear;
       const mFrac = (m - 1) / 12;
       const dFrac = (d - 1) / (12 * 30);
-      const pinLeft = (yrFrac + mFrac + dFrac) * pixelsPerYear;
+      const nodeX = paddingX + (yrFrac + mFrac + dFrac) * pixelsPerYear;
 
       const meta = this.getTimelineCategoryMeta(ev.category);
       const isEpic = ev.importance === "epic";
+      const isSelected = this.selectedMilestoneId === ev.id;
       const dateText = this.formatTimelineDate(yr, m, d, this.timelineZoomMode);
-
-      html += `
-        <div class="ruler-event-pin ${isEpic ? "pin-epic" : ""}"
-             style="left:${pinLeft}px; border-color:${meta.color}; color:${meta.color};"
-             onclick="app.jumpTimelineToEvent('${ev.id}')"
-             title="${this.escapeHtml(ev.title)} &bull; ${dateText}">
-          <span class="pin-icon">${meta.icon}</span>
-        </div>
-      `;
-    });
-
-    track.innerHTML = html;
-  }
-
-  renderTimelineCards(filteredEvents) {
-    const container = document.getElementById("timelineEventsContainer");
-    if (!container) return;
-
-    if (filteredEvents.length === 0) {
-      container.innerHTML = `
-        <div style="text-align:center; padding:50px 20px; color:var(--ink-dim); font-style:italic;">
-          <div style="font-size:2rem; margin-bottom:10px;">📜</div>
-          Nenhum acontecimento histórico coincide com os filtros da crônica.
-          <div style="margin-top:12px;">
-            <button class="btn btn-sm btn-medieval" onclick="app.setTimelineCategoryFilter('ALL')">Limpar Filtros</button>
-            <button class="btn btn-sm btn-gold" onclick="app.openCreateMilestoneModal()" style="margin-left:6px;">+ Lavrar Novo Marco</button>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    let lastHeaderYear = null;
-    let cardsHtml = "";
-
-    filteredEvents.forEach(ev => {
-      const yr = Number(ev.year);
-      const meta = this.getTimelineCategoryMeta(ev.category);
-      const isEpic = ev.importance === "epic";
-      const dateText = this.formatTimelineDate(ev.year, ev.month, ev.day, this.timelineZoomMode);
-
-      if (lastHeaderYear !== yr) {
-        lastHeaderYear = yr;
-        const decade = Math.floor(yr / 10) * 10;
-        cardsHtml += `
-          <div class="timeline-era-header">
-            <span class="timeline-era-badge">
-              <span>📅 Ano ${yr}</span>
-              <span style="opacity:0.6; font-size:0.75rem;">(Década de ${decade})</span>
-            </span>
-          </div>
-        `;
-      }
 
       let charCameoHtml = "";
       if (ev.characterId) {
         const char = this.engine.getCharacter(ev.characterId);
         if (char) {
           charCameoHtml = `
-            <span class="badge-pill badge-noble" style="cursor:pointer;" onclick="app.openProfileModal('${char.id}')" title="Inspecionar códice de ${this.escapeHtml(char.name)}">
+            <span class="badge-pill badge-noble" style="cursor:pointer;" onclick="event.stopPropagation(); app.openProfileModal('${char.id}')" title="Inspecionar códice de ${this.escapeHtml(char.name)}">
               ${char.photoUrl ? `<img class="timeline-cameo-thumb" src="${char.photoUrl}" onerror="this.style.display='none'" alt="" />` : "👤"}
               <span>${this.escapeHtml(char.name)}</span>
             </span>
@@ -3105,7 +3083,7 @@ class FantasyGenealogyApp {
         const terr = this.engine.getTerritory(ev.territoryId);
         if (terr) {
           territoryHtml = `
-            <span class="badge-pill badge-avuncular" style="cursor:pointer;" onclick="app.switchTab('tab-map'); app.jumpToTerritoryOnMap('${terr.id}')" title="Ver no Mapa Cartográfico">
+            <span class="badge-pill badge-avuncular" style="cursor:pointer;" onclick="event.stopPropagation(); app.switchTab('tab-map'); app.jumpToTerritoryOnMap('${terr.id}')" title="Ver no Mapa Cartográfico">
               🗺️ ${this.escapeHtml(terr.name)}
             </span>
           `;
@@ -3113,31 +3091,43 @@ class FantasyGenealogyApp {
       }
 
       const imgHtml = ev.imageUrl
-        ? `<img class="timeline-image-preview" src="${this.escapeHtml(ev.imageUrl)}" alt="${this.escapeHtml(ev.title)}" onerror="this.style.display='none'" />`
+        ? `<img class="timeline-node-img-thumb" src="${this.escapeHtml(ev.imageUrl)}" alt="${this.escapeHtml(ev.title)}" onerror="this.style.display='none'" />`
         : "";
 
-      cardsHtml += `
-        <div class="timeline-item" id="timeline-card-${ev.id}">
-          <div class="timeline-node-icon" style="border-color:${meta.color}; color:${meta.color};">
-            ${meta.icon}
+      html += `
+        <div class="timeline-h-node ${isEpic ? "node-epic" : ""} ${isSelected ? "selected" : ""}"
+             id="hnode-${ev.id}"
+             style="left:${nodeX}px;"
+             onclick="app.selectTimelineNode('${ev.id}')">
+          
+          <!-- Haste conectora superior -->
+          <div class="timeline-stem-up"></div>
+
+          <!-- Rótulo Superior: Nome do Evento e Data -->
+          <div class="timeline-node-top-label" title="${this.escapeHtml(ev.title)} (${dateText})">
+            <div class="timeline-node-event-title">${this.escapeHtml(ev.title)}</div>
+            <div class="timeline-node-event-date">${dateText}</div>
           </div>
-          <div class="timeline-card ${isEpic ? "card-epic" : ""}">
-            <div class="timeline-card-header">
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span class="badge-pill ${meta.badgeClass}" style="border-color:${meta.color}; color:${meta.color};">
-                  ${meta.icon} ${meta.label}
-                </span>
-                <span class="timeline-date-tag">
-                  ${dateText}
-                </span>
-                ${isEpic ? `<span class="badge-pill badge-bastard" style="border-color:var(--gold-leaf); color:var(--gold-leaf); font-weight:700;">★ Grande Marco Histórico</span>` : ""}
-              </div>
+
+          <!-- Selo Heráldico sobre a Linha Horizontal -->
+          <div class="timeline-node-seal" style="border-color:${meta.color}; color:${meta.color};" title="${this.escapeHtml(ev.title)} &bull; Clique para inspecionar">
+            <span>${meta.icon}</span>
+          </div>
+
+          <!-- Haste conectora inferior -->
+          <div class="timeline-stem-down"></div>
+
+          <!-- Caixa Inferior: Resumo do Conto da Cronologia (Desdobra ao aproximar o zoom ou ao passar o mouse) -->
+          <div class="timeline-node-summary-card" onclick="event.stopPropagation()">
+            <div class="timeline-card-badges">
+              <span class="badge-pill ${meta.badgeClass}" style="border-color:${meta.color}; color:${meta.color}; font-size:0.7rem;">
+                ${meta.icon} ${meta.label}
+              </span>
+              ${isEpic ? `<span class="badge-pill badge-bastard" style="border-color:var(--gold-leaf); color:var(--gold-leaf); font-weight:700; font-size:0.68rem;">★ Marco Épico</span>` : ""}
             </div>
 
-            <div class="timeline-card-title">${this.escapeHtml(ev.title)}</div>
-
             ${(charCameoHtml || houseHtml || territoryHtml) ? `
-              <div class="timeline-meta-row">
+              <div class="timeline-card-cameos">
                 ${charCameoHtml}
                 ${houseHtml}
                 ${territoryHtml}
@@ -3146,45 +3136,46 @@ class FantasyGenealogyApp {
 
             ${imgHtml}
 
-            <div class="timeline-desc">${this.escapeHtml(ev.description || "")}</div>
+            <div class="timeline-card-summary-text">${this.escapeHtml(ev.description || "Sem crônica detalhada registrada.")}</div>
 
-            <div class="timeline-card-footer">
-              <div>
-                ${ev.isSynthetic ? `
-                  <span style="font-size:0.75rem; color:var(--ink-dim); font-style:italic;">Registro originário da árvore genealógica</span>
-                ` : `
-                  <span style="font-size:0.75rem; color:var(--ink-dim); font-style:italic;">Marco lavrado nos Anais do Reino</span>
-                `}
-              </div>
-              <div style="display:flex; gap:6px;">
-                ${ev.isSynthetic ? `
-                  <button class="btn btn-sm btn-medieval" onclick="app.openProfileModal('${ev.characterId}')" title="Inspecionar personagem">Ver Códice</button>
-                  <button class="btn btn-sm btn-medieval" onclick="app.switchTab('tab-tree')" title="Localizar na árvore">Ver na Árvore</button>
-                ` : `
-                  <button class="btn btn-sm btn-medieval" onclick="app.openEditMilestoneModal('${ev.id}')" title="Editar este acontecimento">Editar Marco</button>
-                  <button class="btn btn-sm btn-danger" onclick="app.confirmDeleteMilestone('${ev.id}')" title="Excluir marco da história">Excluir</button>
-                `}
-              </div>
+            <div class="timeline-card-actions">
+              ${ev.isSynthetic ? `
+                <button class="btn btn-sm btn-medieval" onclick="app.openProfileModal('${ev.characterId}')" title="Inspecionar códice">Códice</button>
+                <button class="btn btn-sm btn-medieval" onclick="app.switchTab('tab-tree')" title="Localizar na árvore">Árvore</button>
+              ` : `
+                <button class="btn btn-sm btn-medieval" onclick="app.openEditMilestoneModal('${ev.id}')" title="Editar este acontecimento">Editar</button>
+                <button class="btn btn-sm btn-danger" onclick="app.confirmDeleteMilestone('${ev.id}')" title="Excluir marco da história">Excluir</button>
+              `}
             </div>
           </div>
         </div>
       `;
     });
 
-    container.innerHTML = cardsHtml;
+    track.innerHTML = html;
+  }
+
+  selectTimelineNode(milestoneId) {
+    this.selectedMilestoneId = (this.selectedMilestoneId === milestoneId) ? null : milestoneId;
+    const track = document.getElementById("timelineHorizontalTrack");
+    if (!track) return;
+
+    track.querySelectorAll(".timeline-h-node").forEach(n => {
+      n.classList.toggle("selected", n.id === `hnode-${milestoneId}` && this.selectedMilestoneId === milestoneId);
+    });
   }
 
   jumpTimelineToEvent(eventId) {
     this.selectedMilestoneId = eventId;
-    const card = document.getElementById(`timeline-card-${eventId}`);
-    if (card) {
-      card.scrollIntoView({ behavior: "smooth", block: "center" });
-      const innerCard = card.querySelector(".timeline-card");
-      if (innerCard) {
-        innerCard.classList.remove("card-highlight-pulse");
-        void innerCard.offsetWidth;
-        innerCard.classList.add("card-highlight-pulse");
-      }
+    const node = document.getElementById(`hnode-${eventId}`);
+    const viewport = document.getElementById("timelineHorizontalViewport");
+    if (node && viewport) {
+      const nodeLeft = node.offsetLeft;
+      viewport.scrollTo({
+        left: Math.max(0, nodeLeft - viewport.clientWidth / 2),
+        behavior: "smooth"
+      });
+      this.selectTimelineNode(eventId);
     }
   }
 
@@ -3192,20 +3183,18 @@ class FantasyGenealogyApp {
     const yr = Number(year);
     if (isNaN(yr)) return;
 
-    const events = this.getFilteredTimelineEvents();
-    const targetEv = events.find(e => Number(e.year) >= yr) || events[events.length - 1];
-    if (targetEv) {
-      this.jumpTimelineToEvent(targetEv.id);
-    }
+    const viewport = document.getElementById("timelineHorizontalViewport");
+    if (!viewport) return;
 
-    const track = document.getElementById("timelineRulerTrack");
-    const viewport = document.getElementById("timelineRulerViewport");
-    if (track && viewport) {
-      const pin = track.querySelector(`[title*="Ano ${yr}"]`);
-      if (pin) {
-        pin.scrollIntoView({ behavior: "smooth", inline: "center" });
-      }
-    }
+    const startYear = this.timelineStartYear || 1200;
+    const pixelsPerYear = this.getTimelinePixelsPerYear();
+    const paddingX = 240;
+    const targetX = paddingX + (yr - startYear) * pixelsPerYear;
+
+    viewport.scrollTo({
+      left: Math.max(0, targetX - viewport.clientWidth / 2),
+      behavior: "smooth"
+    });
   }
 
   jumpTimelineToInputYear() {
@@ -3217,22 +3206,19 @@ class FantasyGenealogyApp {
 
   setTimelineZoomMode(mode) {
     if (mode === "year") this.timelineZoom = 1.0;
-    else if (mode === "month") this.timelineZoom = 2.2;
-    else if (mode === "day") this.timelineZoom = 3.8;
+    else if (mode === "month") this.timelineZoom = 1.8;
+    else if (mode === "day") this.timelineZoom = 3.2;
     this.timelineZoomMode = mode;
     this.renderTimeline();
   }
 
   adjustTimelineZoom(delta) {
-    this.timelineZoom = Math.max(0.5, Math.min(8.0, Number((this.timelineZoom + delta).toFixed(2))));
-    if (this.timelineZoom >= 3.2) {
-      this.timelineZoomMode = "day";
-    } else if (this.timelineZoom >= 1.8) {
-      this.timelineZoomMode = "month";
-    } else {
-      this.timelineZoomMode = "year";
+    const newZoom = Math.max(0.4, Math.min(6.5, Number((this.timelineZoom + delta).toFixed(2))));
+    if (newZoom !== this.timelineZoom) {
+      this.timelineZoom = newZoom;
+      this.updateTimelineZoomModeFromZoom();
+      this.renderTimeline();
     }
-    this.renderTimeline();
   }
 
   resetTimelineZoom() {
@@ -3534,7 +3520,7 @@ class FantasyGenealogyApp {
   }
 
   initTimelineEvents() {
-    const viewport = document.getElementById("timelineRulerViewport");
+    const viewport = document.getElementById("timelineHorizontalViewport");
     if (!viewport) return;
 
     let isDown = false;
@@ -3542,34 +3528,64 @@ class FantasyGenealogyApp {
     let scrollLeft = 0;
 
     viewport.addEventListener("mousedown", e => {
+      // Evita arrastar quando clica em botões de ação ou links
+      if (e.target.closest("button") || e.target.closest("a") || e.target.closest("select") || e.target.closest("input")) {
+        return;
+      }
       isDown = true;
       startX = e.pageX - viewport.offsetLeft;
       scrollLeft = viewport.scrollLeft;
+      viewport.style.cursor = "grabbing";
+    });
+
+    window.addEventListener("mouseup", () => {
+      isDown = false;
+      if (viewport) viewport.style.cursor = "grab";
     });
 
     viewport.addEventListener("mouseleave", () => {
       isDown = false;
-    });
-
-    viewport.addEventListener("mouseup", () => {
-      isDown = false;
+      if (viewport) viewport.style.cursor = "grab";
     });
 
     viewport.addEventListener("mousemove", e => {
       if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - viewport.offsetLeft;
-      const walk = (x - startX) * 1.5;
+      const walk = (x - startX);
       viewport.scrollLeft = scrollLeft - walk;
     });
 
+    // Zoom direto com o scroll do mouse sobre determinado ponto da linha do tempo!
     viewport.addEventListener("wheel", e => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY < 0 ? 0.25 : -0.25;
-        this.adjustTimelineZoom(delta);
-      } else {
-        viewport.scrollLeft += e.deltaY;
+      e.preventDefault();
+
+      const rect = viewport.getBoundingClientRect();
+      const mouseViewportX = e.clientX - rect.left;
+      const currentScrollLeft = viewport.scrollLeft;
+
+      const pixelsPerYearOld = this.getTimelinePixelsPerYear();
+      const paddingX = 240;
+      const startYear = this.timelineStartYear || 1200;
+
+      // Ano histórico exato sob o cursor no momento do scroll
+      const trackXOld = currentScrollLeft + mouseViewportX;
+      const yearUnderCursor = startYear + (trackXOld - paddingX) / pixelsPerYearOld;
+
+      // Fator de aproximação / afastamento
+      const zoomFactor = e.deltaY < 0 ? 1.2 : 0.833;
+      let newZoom = Number((this.timelineZoom * zoomFactor).toFixed(2));
+      newZoom = Math.max(0.4, Math.min(6.5, newZoom));
+
+      if (newZoom !== this.timelineZoom) {
+        this.timelineZoom = newZoom;
+        this.updateTimelineZoomModeFromZoom();
+        this.renderTimeline();
+
+        // Reposiciona o scroll horizontal para manter o ponto do ano sob o cursor!
+        const pixelsPerYearNew = this.getTimelinePixelsPerYear();
+        const trackXNew = paddingX + (yearUnderCursor - startYear) * pixelsPerYearNew;
+        viewport.scrollLeft = Math.max(0, trackXNew - mouseViewportX);
       }
     }, { passive: false });
   }
