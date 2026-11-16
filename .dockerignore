@@ -1,0 +1,5 @@
+.git
+.gitignore
+start-server.bat
+start-server.ps1
+.dockerignore

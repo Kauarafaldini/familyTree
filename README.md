@@ -1,32 +1,117 @@
 # 🍇 Crônicas & Linhagens — Sistema de Árvore Genealógica de Fantasia
 
-Aplicação web leve, sem dependências externas (HTML5 + CSS3 + JavaScript ES6 puro), projetada sob medida para construção de mundos de fantasia, árvores genealógicas em formato de **cachos de uva**, leis de sucessão real, grimório de criações e rascunho de mapa interativo.
+Aplicação web completa e responsiva para construção de mundos de fantasia, árvores genealógicas em formato de **cachos de uva**, leis de sucessão real, grimório de criações e rascunho de mapa interativo.
 
-## 🚀 Como Usar e Hospedar
-- **Uso Local Imediato:** Basta abrir o arquivo `index.html` em qualquer navegador moderno (Chrome, Edge, Firefox, Safari). Todos os dados ficam salvos automaticamente no navegador (`localStorage`) e podem ser exportados/importados em `.json`.
-- **Hospedagem Gratuita e Leve:** Por ser construído em HTML/CSS/JS puro e modular, pode ser hospedado gratuitamente arrastando a pasta para **Netlify Drop**, **GitHub Pages** ou **Vercel**, sem necessidade de servidor de banco de dados ou compilação.
+Todos os dados mocados foram removidos para início de trabalho com dados reais, com persistência direta no **MongoDB Atlas** através de uma camada de API em **PHP**.
 
-## ✨ Funcionalidades Implementadas
-1. **Árvore Genealógica em "Cachos de Uva" (De Cima para Baixo)**:
-   - Cada personagem é uma esfera com botão **`📜 Perfil`** dentro do círculo (exibindo História, Aparência, Como Morreu e Onde Viveu) e, embaixo da esfera, seu **Nome** e **Data de Nascimento e Falecimento**.
-   - **Linhas Vermelhas:** Ligações de sangue (pais, filhos, irmãos, gêmeos e tios).
-   - **Linhas Azuis:** Casamentos (marido e mulher).
-   - **Linhas Azul e Ouro:** Destaque visual para casamentos entre **Tios e Sobrinhos** (tradição avuncular, como na *Casa Solárius*).
-   - **Botão Alternador no Topo (`Linhagem` vs `Território`):** Alterna as cores ao redor das esferas entre a linhagem de sangue natal e o território/casa oficial pós-casamento.
-2. **Regras de Casamento e Assimilação da Mulher**:
-   - Ao casar-se com um **Lorde, Príncipe ou Rei**, a mulher passa a pertencer oficialmente à Casa do marido (Casa A), unindo a história seguinte a partir do ano do casamento (com opção de marcar **exceções** para eventos que não a envolveram).
-   - O histórico anterior de quando pertencia à Casa natal (Casa X) fica preservado e aparece na aba **"História"** dentro de seu perfil.
-   - Casamentos entre **civis e guardas** não alteram a casa dinástica.
-3. **Bastardos, Criaturas Míticas e Avisos de Inconsistência**:
-   - Filhos de nobres/reis com mulheres fora dos padrões nobres (civil, fazendeira, prostituta, etc.) são marcados como **Bastardos** e excluídos da casa e herança — com opção de **Exceção da Autora** que mantém o aviso permanente de *Lembrança de Bastardo*.
-   - Criaturas míticas (bruxos, elfos, sereias, caçadores) e inconsistências cronológicas/consanguíneas disparam um **Aviso de Inconsistência** explicando onde está a interferência, por que não seria permitido e oferecendo o campo para registrar a justificativa da autora.
-4. **Sucessão Real e Regência**:
-   - Prioridade dos **irmãos do rei** (ao assumirem, sua esposa e filhos tornam-se a Família Real ativa e novos herdeiros, e a família do rei falecido passa a ser familiares da família real).
-   - O príncipe primogênito só herda aos **18 anos**; caso não haja irmãos do rei e o príncipe seja menor de 18 anos, a **Rainha (esposa do rei)** governa como **Rainha Regente** até a maioridade.
-   - A **princesa** só herda na ausência total de sucessores homens (irmãos do rei ou príncipes).
-5. **Verificação de Exclusão, Campo Vazio, Reversão de Esposas e Histórico Separado (`Linhagem`, `Casa`, `Território`)**:
-   - Excluir apenas o personagem mantém um **Campo Vazio** na árvore sem apagar filhos ou irmãos.
-   - Excluir toda a árvore seguinte exige dupla confirmação, faz as esposas retomarem sua **Casa de Nascimento** (registrando no perfil que estiveram ligadas a uma linhagem excluída) e grava tudo no **Histórico de Alterações** com botão de **Reversão**.
-6. **Grimório (`Magias, Poções, Encantamentos e Criações`) & Rascunho do Mapa Interativo**:
-   - Aba dedicada para cadastrar magias, poções, encantamentos e novas categorias livres.
-   - Estúdio de rascunho de mapa onde é possível desenhar continentes/rios/montanhas e clicar no nome de cada **Cidade/Província** para ver quem viveu ali e quem passou por ali deixando uma marca (histórica ou não).
+---
+
+## 🗄️ Arquitetura de Banco de Dados & Backend PHP
+
+- **Banco de Dados:** MongoDB Atlas
+  - **Cluster:** `familytree.lhbb3e2.mongodb.net`
+  - **Database:** `familytree`
+  - **Coleções:**
+    - `world_state`: Estado consolidado do mundo para sincronização rápida e atômica.
+    - `characters`: Coleção individual de personagens para consultas e relatórios.
+    - `houses`: Casas e dinastias cadastradas.
+    - `territories`: Províncias, continentes e coordenadas geográficas.
+    - `timeline`: Marcos cronológicos e eventos históricos.
+    - `creations`: Grimório de magias, poções, artefatos e relíquias.
+- **Backend / Camada de Comunicação:** PHP 8.3 com a extensão oficial `ext-mongodb`
+  - `config.php`: Credenciais seguras e pooling de conexão com o MongoDB Atlas.
+  - `db.php`: Classe de serviço `FamilyTreeDB` com métodos para ping, carga, salvamento e estatísticas.
+  - `api.php`: Endpoint REST / JSON com suporte a CORS para comunicação com o frontend.
+
+---
+
+## ☁️ Como Subir no Render (Passo a Passo Completo)
+
+O projeto já inclui um [Dockerfile](file:///c:/projetos/familyTree/Dockerfile) e um [render.yaml](file:///c:/projetos/familyTree/render.yaml) configurados para o Render compilar o **PHP 8.3 + Apache + ext-mongodb** automaticamente.
+
+### Passo 1: Enviar as alterações para o GitHub
+No terminal do seu projeto:
+```bash
+git add .
+git commit -m "feat: configuracao para deploy no Render com PHP e MongoDB"
+git push origin main
+```
+
+### Passo 2: Criar o Web Service no Render
+1. Acesse **[dashboard.render.com](https://dashboard.render.com)** e faça login com seu GitHub.
+2. Clique no botão azul **`New +`** no topo e selecione **`Web Service`**.
+3. Escolha a opção **`Build and deploy from a Git repository`** e clique em **Next**.
+4. Conecte sua conta do GitHub e selecione o repositório **`familyTree`**.
+
+### Passo 3: Configurar o Serviço no Render
+- **Name:** `familytree` (ou o nome que preferir para a sua URL)
+- **Region:** `Oregon (US West)` ou a mais próxima de você
+- **Branch:** `main`
+- **Runtime:** O Render detectará automaticamente **Docker**.
+- **Instance Type:** Selecione **`Free`** ($0/mês).
+
+### Passo 4: Variável de Ambiente (Opcional, pois já está no config.php)
+Se desejar reforçar a variável de ambiente:
+- Em **Environment Variables**, adicione:
+  - **Key:** `MONGODB_URI`
+  - **Value:** `mongodb+srv://kauarsamtos0_db_user:vM8h0GYWkFoy4H6L@familytree.lhbb3e2.mongodb.net/familytree?retryWrites=true&w=majority`
+
+### Passo 5: Criar e Publicar
+Clique no botão **`Deploy Web Service`**.
+
+O Render irá:
+1. Baixar o código do GitHub;
+2. Montar a imagem Docker com PHP 8.3 e compilar o driver do MongoDB;
+3. Subir o servidor Apache com o frontend e o backend;
+4. Gerar sua URL pública gratuita com HTTPS (ex: `https://familytree-xxxx.onrender.com`).
+
+Pronto! Seu site e sua API em PHP estarão 100% online conectados diretamente ao seu MongoDB Atlas.
+
+---
+
+## 🚀 Como Executar o Projeto Localmente
+
+### Opção 1: Inicialização em 1 Clique (Recomendado no Windows)
+Dê um duplo clique no arquivo **`start-server.bat`** (ou execute no PowerShell via `./start-server.ps1`).
+
+O script irá:
+1. Detectar o interpretador do PHP 8.3 com o driver do MongoDB.
+2. Iniciar o servidor web embutido em `http://localhost:8000`.
+3. Abrir o seu navegador padrão automaticamente conectado ao banco de dados.
+
+### Opção 2: Linha de Comando Manual
+```powershell
+php -S localhost:8000
+```
+Depois, acesse `http://localhost:8000` no seu navegador.
+
+---
+
+## 📡 Endpoints da API PHP
+
+- `GET /api.php?action=ping`: Testa a conexão com o MongoDB Atlas e retorna o status.
+- `GET /api.php?action=load`: Carrega o mundo salvo no MongoDB Atlas.
+- `POST /api.php?action=save`: Salva o estado completo no MongoDB (atualiza `world_state` e as coleções individuais).
+- `POST /api.php?action=reset`: Reseta o banco para um estado limpo em branco.
+- `GET /api.php?action=stats`: Retorna as contagens de documentos no MongoDB.
+
+---
+
+## ✨ Funcionalidades Principais
+
+1. **Árvore Genealógica em Cachos de Uva:**
+   - Visualização de linhagens reais, laços de sangue (vermelho), casamentos (azul) e casamentos avunculares tio-sobrinho (dourado e azul).
+   - Alternador dinâmico de cores: Linhagem de Sangue vs Feudo/Casa Oficial.
+2. **Sucessão Real e Regência Dinástica:**
+   - Regras de primogenitura e prioridade fraterna (irmãos do rei).
+   - Regência da rainha até a maioridade do príncipe aos 18 anos.
+3. **Casamento e Assimilação:**
+   - Mulheres assimiladas à casa do nobre com histórico natal preservado.
+4. **Bastardos & Criaturas Míticas:**
+   - Avisos de inconsistência genealógica ou biológica com justificativa da autora.
+5. **Grimório Arcano:**
+   - Registro de magias, poções, encantamentos e relíquias vinculados a personagens e feudos.
+6. **Cartografia Interativa:**
+   - Modelagem de continentes, cálculo de pontos de borda, adição de cidades e capitais.
+7. **Sincronização em Tempo Real:**
+   - Indicador visual no topo da tela (`MongoDB Atlas`), sincronização automática em background e suporte a modo offline via `localStorage`.

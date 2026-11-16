@@ -8,6 +8,7 @@ const STORAGE_KEY = "fantasy_family_tree_v1";
 class WorldEngine {
   constructor() {
     this.data = this.loadFromStorage();
+    this.initDatabase();
   }
 
   // Sanitiza o nome do personagem para exibir somente nome e sobrenome, sem cargos ou títulos
@@ -18,8 +19,6 @@ class WorldEngine {
     clean = clean.replace(/\s*\([^)]*\)/g, "");
     clean = clean.replace(/^(Príncipe\/Rei|Príncipe\s+Herdeiro|Princesa\s+Herdeira|Rei|Rainha|Príncipe|Princesa|Lorde|Lord|Lady|Herdeiro|Herdeira|Cavaleiro|Guarda|Sor|Sir|Dom|Dona)\s+/i, "");
     clean = clean.replace(/\b([A-Za-zÀ-ÿ]+)\s+(I|II|III|IV|V|VI)\b/i, "$1");
-    if (clean.toLowerCase() === "lyanna") clean = "Lyanna Valmont";
-    if (clean.toLowerCase() === "jonas") clean = "Jonas Valmont";
     return clean.replace(/\s+/g, " ").trim();
   }
 
@@ -27,6 +26,19 @@ class WorldEngine {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
+        // Se o cache contiver dados mockados antigos da versão demonstrativa, descarta para iniciar com dados reais
+        if (
+          saved.includes("char_theron") ||
+          saved.includes("house_valmont") ||
+          saved.includes("house_ravencrest") ||
+          saved.includes("char_aldric")
+        ) {
+          try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+          const initialData = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+          this.ensureTerritoryPolygons(initialData.territories);
+          return initialData;
+        }
+
         const parsed = JSON.parse(saved);
         if (parsed && Array.isArray(parsed.characters) && Array.isArray(parsed.houses)) {
           let modified = false;
@@ -149,24 +161,135 @@ class WorldEngine {
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Sincronização com Banco de Dados MongoDB Atlas via PHP
+  // --------------------------------------------------------------------------
+  initDatabase() {
+    this.apiUrl = (window.location.protocol === "http:" || window.location.protocol === "https:")
+      ? "./api.php"
+      : "http://localhost:8000/api.php";
+    this.dbStatus = "init";
+    this.dbMessage = "Iniciando comunicação com MongoDB...";
+    this.lastSavedAt = null;
+    this.saveDebounceTimer = null;
+
+    // Dispara sincronização inicial com o MongoDB em segundo plano
+    setTimeout(() => {
+      this.fetchFromDatabase();
+    }, 100);
+  }
+
+  setDbStatus(status, message) {
+    this.dbStatus = status;
+    this.dbMessage = message;
+    if (typeof window.updateDbStatusUi === "function") {
+      window.updateDbStatusUi(status, message);
+    }
+  }
+
+  async fetchFromDatabase() {
+    try {
+      this.setDbStatus("syncing", "Conectando ao MongoDB Atlas...");
+      const res = await fetch(`${this.apiUrl}?action=load`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json && json.status === "success" && json.data) {
+        this.data = json.data;
+        this.ensureTerritoryPolygons(this.data.territories);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        } catch (e) {}
+        this.setDbStatus("connected", "MongoDB Atlas Conectado");
+        if (window.app && typeof window.app.renderAll === "function") {
+          window.app.renderAll();
+        }
+        return true;
+      } else {
+        throw new Error(json.message || "Resposta inválida do servidor");
+      }
+    } catch (err) {
+      console.warn("MongoDB / PHP API offline:", err.message);
+      this.setDbStatus("offline", "MongoDB Offline (Modo Local)");
+      return false;
+    }
+  }
+
+  saveToDatabase(immediate = false) {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+      this.saveDebounceTimer = null;
+    }
+
+    const doSave = async () => {
+      try {
+        this.setDbStatus("syncing", "Salvando no MongoDB...");
+        const res = await fetch(`${this.apiUrl}?action=save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(this.data)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json && json.status === "success") {
+          this.lastSavedAt = new Date();
+          this.setDbStatus("connected", "Salvo no MongoDB");
+        } else {
+          throw new Error(json.message || "Erro retornado ao salvar");
+        }
+      } catch (err) {
+        console.warn("Aviso ao salvar no MongoDB via PHP:", err.message);
+        this.setDbStatus("offline", "Salvo localmente (PHP/Mongo offline)");
+      }
+    };
+
+    if (immediate) {
+      return doSave();
+    } else {
+      this.saveDebounceTimer = setTimeout(doSave, 350);
+    }
+  }
+
+  async resetDatabase() {
+    try {
+      this.setDbStatus("syncing", "Resetando no MongoDB...");
+      const res = await fetch(`${this.apiUrl}?action=reset`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json && json.status === "success") {
+        this.data = json.data || JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        } catch (e) {}
+        this.setDbStatus("connected", "MongoDB Resetado com Sucesso");
+        if (window.app && typeof window.app.renderAll === "function") {
+          window.app.renderAll();
+        }
+        return true;
+      }
+    } catch (err) {
+      console.warn("Erro ao resetar no MongoDB via PHP:", err.message);
+      this.data = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+      this.saveToStorage();
+    }
+  }
+
   saveToStorage() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
     } catch (e) {
       console.error("Erro ao salvar no localStorage:", e);
     }
+    this.saveToDatabase();
   }
 
   resetToDefault() {
-    this.data = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
-    this.ensureTerritoryPolygons(this.data.territories);
-    this.saveToStorage();
+    this.resetDatabase();
   }
 
   createBlankWorld() {
     this.data = {
       meta: {
-        worldTitle: "Meu Mundo de Fantasia",
+        worldTitle: "Crônicas & Linhagens",
         currentYear: 1000,
         treeColorMode: "linhagem",
         selectedHouseFilter: "all",
@@ -183,44 +306,10 @@ class WorldEngine {
         "Vampiro",
         "Fada / Silfo"
       ],
-      houses: [
-        {
-          id: "house_real_1",
-          name: "Casa Real Principal",
-          motto: "Sangue e Honra",
-          color: "#e11d48",
-          isRoyal: true,
-          allowAvuncularMarriage: false,
-          seatTerritoryId: "terr_1",
-          successionLaw: "fraternal_priority",
-          description: "Casa soberana principal."
-        },
-        {
-          id: "house_plebe",
-          name: "Sem Casa Nobre (Civis & Guardas)",
-          motto: "Povo Livre",
-          color: "#64748b",
-          isRoyal: false,
-          allowAvuncularMarriage: false,
-          seatTerritoryId: "terr_1",
-          successionLaw: "none",
-          description: "Civis, guardas, fazendeiros e plebeus."
-        }
-      ],
-      territories: [
-        {
-          id: "terr_1",
-          name: "Capital do Reino",
-          type: "Capital Real",
-          color: "#f43f5e",
-          x: 450,
-          y: 260,
-          houseId: "house_real_1",
-          description: "Primeira cidade do seu rascunho de mapa.",
-          notablePassages: []
-        }
-      ],
+      houses: [],
+      territories: [],
       mapStrokes: [],
+      settlements: [],
       houseEvents: [],
       characters: [],
       creations: [],
@@ -238,6 +327,7 @@ class WorldEngine {
     };
     this.ensureTerritoryPolygons(this.data.territories);
     this.saveToStorage();
+  }
   }
 
   // --------------------------------------------------------------------------

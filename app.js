@@ -92,18 +92,95 @@ class FantasyGenealogyApp {
         this.closeModal();
       }
     });
+    window.updateDbStatusUi = (status, message) => {
+      const dot = document.getElementById("dbStatusDot");
+      const txt = document.getElementById("dbStatusText");
+      const badge = document.getElementById("dbStatusBadge");
+      if (!dot || !txt) return;
+
+      dot.className = "db-status-dot " + (status || "offline");
+      if (status === "connected") {
+        txt.textContent = "MongoDB Atlas";
+        if (badge) badge.title = `🟢 Conectado ao MongoDB Atlas via PHP\n${message || ''}`;
+      } else if (status === "syncing") {
+        txt.textContent = "Sincronizando...";
+        if (badge) badge.title = `🟡 Sincronizando com MongoDB Atlas...\n${message || ''}`;
+      } else if (status === "offline") {
+        txt.textContent = "Modo Local";
+        if (badge) badge.title = `🔴 PHP / MongoDB não detectado.\nRodando localmente.\nExecute start-server.bat para sincronizar com o MongoDB.`;
+      } else {
+        txt.textContent = "MongoDB (PHP)";
+      }
+    };
   }
 
   // --------------------------------------------------------------------------
   // Sincronização Geral e Navegação de Capítulos
   // --------------------------------------------------------------------------
+  renderAll() {
+    this.syncHeaderAndBadges();
+    this.populateFilterControls();
+    this.renderTree();
+    this.renderHousesAndSuccessionTab();
+    this.renderTimeline();
+    this.renderGrimoire();
+    this.renderMapStudio();
+    this.renderAuditHistory();
+  }
+
+  async syncDatabaseNow() {
+    if (typeof this.showToast === "function") {
+      this.showToast("Sincronizando com MongoDB Atlas via PHP...");
+    }
+    const ok = await this.engine.fetchFromDatabase();
+    if (ok) {
+      if (typeof this.showToast === "function") {
+        this.showToast("Mundo sincronizado com MongoDB Atlas!");
+      }
+    } else {
+      this.openDatabaseModal();
+    }
+  }
+
+  openDatabaseModal() {
+    const isOnline = this.engine.dbStatus === "connected";
+    const bodyHtml = `
+      <div class="card-box" style="padding:16px; margin-bottom:14px; border-left:4px solid ${isOnline ? '#10b981' : '#f59e0b'};">
+        <h4 style="color:var(--gold-leaf); font-family:var(--font-display); margin-bottom:8px;">
+          ${isOnline ? '🟢 MongoDB Atlas Conectado' : '🟡 Conexão com MongoDB Atlas via PHP'}
+        </h4>
+        <p style="font-size:0.92rem; color:var(--ink-secondary); line-height:1.6;">
+          <strong>Banco de Dados:</strong> MongoDB Atlas (Database: <code>familytree</code>)<br/>
+          <strong>Cluster:</strong> <code>familytree.lhbb3e2.mongodb.net</code><br/>
+          <strong>Driver:</strong> PHP 8.3 com extensão oficial <code>mongodb</code> (ext-mongodb)<br/>
+          <strong>Status da Conexão:</strong> ${this.escapeHtml(this.engine.dbMessage || 'Aguardando')}
+        </p>
+      </div>
+      <div style="font-size:0.88rem; color:var(--ink-dim); line-height:1.6;">
+        <p><strong>Como funciona a persistência em tempo real:</strong></p>
+        <ul style="padding-left:18px; margin-top:6px;">
+          <li>Cada personagem, casa dinástica, continente, evento e criação é salvo imediatamente no seu MongoDB Atlas.</li>
+          <li>Os dados estão organizados no banco nas coleções <code>world_state</code>, <code>characters</code>, <code>houses</code>, <code>territories</code>, <code>timeline</code> e <code>creations</code>.</li>
+          <li>Inicie o servidor local executando <code>start-server.bat</code> ou com o comando <code>php -S localhost:8000</code>.</li>
+        </ul>
+      </div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Fechar</button>
+      <button class="btn btn-gold" onclick="app.syncDatabaseNow(); app.closeModal();">Sincronizar Agora</button>
+    `;
+
+    this.showModal("Conexão MongoDB via PHP", bodyHtml, footerHtml);
+  }
+
   syncHeaderAndBadges() {
     const d = this.engine.data;
     const titleEl = document.getElementById("worldTitleDisplay");
-    if (titleEl) titleEl.textContent = d.meta.worldTitle || "Crônicas de Ébano & Vinha";
+    if (titleEl) titleEl.textContent = d.meta.worldTitle || "Crônicas & Linhagens";
 
     const yrInput = document.getElementById("currentYearInput");
-    if (yrInput) yrInput.value = d.meta.currentYear || 1248;
+    if (yrInput) yrInput.value = d.meta.currentYear || 1000;
 
     const activeChars = d.characters.filter(c => !c.isPlaceholderEmpty).length;
     const bChar = document.getElementById("badgeCharCount");
@@ -554,13 +631,23 @@ class FantasyGenealogyApp {
 
     if (chars.length === 0) {
       svg.innerHTML = "";
+      const isTotallyEmpty = (this.engine.data.characters || []).length === 0;
       nodesContainer.innerHTML = `
-        <div style="position:absolute; left:50%; top:220px; transform:translateX(-50%); text-align:center; color:var(--ink-secondary); font-family:var(--font-serif); font-size:1.05rem; max-width:500px; padding:28px; background:rgba(20,16,12,0.92); border:1px solid var(--border-brass); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,0.8);">
-          <div style="font-size:2rem; margin-bottom:10px;">📜</div>
-          <h3 style="font-family:var(--font-display); color:var(--gold-leaf); margin-bottom:8px; font-size:1.15rem;">Nenhum Assento Encontrado</h3>
-          <p style="color:var(--ink-dim); font-size:0.92rem; line-height:1.5;">Nenhum membro atende simultaneamente aos filtros de Casa e Raça selecionados.</p>
-          <div style="margin-top:16px;">
-            <button class="btn btn-sm btn-gold" onclick="app.clearHouseFilter(); app.clearRaceFilter();">Restaurar Todas as Linhagens</button>
+        <div style="position:absolute; left:50%; top:200px; transform:translateX(-50%); text-align:center; color:var(--ink-secondary); font-family:var(--font-serif); font-size:1.05rem; max-width:540px; padding:32px; background:rgba(20,16,12,0.95); border:1px solid var(--border-brass); border-radius:6px; box-shadow:0 8px 32px rgba(0,0,0,0.85);">
+          <div style="font-size:2.6rem; margin-bottom:12px;">🌱</div>
+          <h3 style="font-family:var(--font-display); color:var(--gold-leaf); margin-bottom:8px; font-size:1.25rem;">
+            ${isTotallyEmpty ? "Inicie sua Árvore Genealógica" : "Nenhum Assento Encontrado"}
+          </h3>
+          <p style="color:var(--ink-dim); font-size:0.92rem; line-height:1.6;">
+            ${isTotallyEmpty
+              ? "Todos os dados mockados foram removidos com sucesso. O seu códice agora está conectado ao MongoDB Atlas pronto para receber personagens, linhagens e casas reais!"
+              : "Nenhum membro atende simultaneamente aos filtros de Casa e Raça selecionados."}
+          </p>
+          <div style="margin-top:20px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+            ${isTotallyEmpty
+              ? `<button class="btn btn-gold" onclick="app.openCharacterModal()">+ Iniciar Primeiro Personagem</button>
+                 <button class="btn btn-medieval" onclick="app.openHouseModal()">+ Criar Primeira Casa</button>`
+              : `<button class="btn btn-sm btn-gold" onclick="app.clearHouseFilter(); app.clearRaceFilter();">Restaurar Todas as Linhagens</button>`}
           </div>
         </div>
       `;
@@ -1513,17 +1600,22 @@ class FantasyGenealogyApp {
           customTrajectoryEvents: prefill.customTrajectoryEvents || []
         };
 
-    const housesOpts = this.engine.data.houses
-      .map(h => `<option value="${h.id}" ${c.birthHouseId === h.id ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
-      .join("");
+    const noHouseOpt = `<option value="">— Sem Casa Dinástica —</option>`;
+    const housesOpts = (this.engine.data.houses.length === 0 ? noHouseOpt : (c.birthHouseId ? "" : noHouseOpt)) +
+      this.engine.data.houses
+        .map(h => `<option value="${h.id}" ${c.birthHouseId === h.id ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
+        .join("");
 
-    const officialHousesOpts = this.engine.data.houses
-      .map(h => `<option value="${h.id}" ${c.officialHouseId === h.id ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
-      .join("");
+    const officialHousesOpts = (this.engine.data.houses.length === 0 ? noHouseOpt : (c.officialHouseId ? "" : noHouseOpt)) +
+      this.engine.data.houses
+        .map(h => `<option value="${h.id}" ${c.officialHouseId === h.id ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
+        .join("");
 
-    const territoriesOpts = this.engine.data.territories
-      .map(t => `<option value="${t.id}" ${c.livedInTerritoryId === t.id ? "selected" : ""}>${this.escapeHtml(t.name)}</option>`)
-      .join("");
+    const noTerrOpt = `<option value="">— Sem Território Vinculado —</option>`;
+    const territoriesOpts = (this.engine.data.territories.length === 0 ? noTerrOpt : (c.livedInTerritoryId ? "" : noTerrOpt)) +
+      this.engine.data.territories
+        .map(t => `<option value="${t.id}" ${c.livedInTerritoryId === t.id ? "selected" : ""}>${this.escapeHtml(t.name)}</option>`)
+        .join("");
 
     const maleCharsOpts = [`<option value="">— Nenhum / Não Declarado —</option>`]
       .concat(
@@ -6804,10 +6896,10 @@ class FantasyGenealogyApp {
       </div>
 
       <div class="card-box" style="margin-top:10px;">
-        <h2>Governança do Códice</h2>
-        <p class="sub-desc">Restaure o reino ao mundo histórico de demonstração ou inicie um livro de linhagens em branco para lavrar uma nova crônica do zero.</p>
+        <h2>Persistência & Banco de Dados</h2>
+        <p class="sub-desc">Os dados são sincronizados automaticamente com o <strong>MongoDB Atlas</strong> via PHP. Você pode sincronizar manualmente ou limpar os dados para iniciar uma nova linhagem em branco.</p>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn btn-gold" onclick="app.resetToDemoWorld()">Restaurar Mundo de Demonstração Completo</button>
+          <button class="btn btn-gold" onclick="app.syncDatabaseNow(); app.closeModal();">Sincronizar com MongoDB Atlas</button>
           <button class="btn btn-danger" onclick="app.startBlankWorld()">Limpar Pergaminho e Iniciar do Zero</button>
         </div>
       </div>

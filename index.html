@@ -23,7 +23,7 @@
         <img src="logo/logo-removebg-preview.png" alt="Logo" class="sigil-img" />
       </div>
       <div class="brand-title">
-        <h1 id="worldTitleDisplay">Crônicas de Ébano & Vinha</h1>
+        <h1 id="worldTitleDisplay">Crônicas & Linhagens</h1>
         <p>Livro das Linhagens Reais &bull; Tratados Matrimoniais &bull; Cartografia do Reino</p>
       </div>
     </div>
@@ -56,9 +56,15 @@
     </nav>
 
     <div class="header-actions">
+      <!-- Indicador de Conexão com MongoDB Atlas via PHP -->
+      <div class="db-status-pill" id="dbStatusBadge" onclick="app.openDatabaseModal()" title="Status da sincronização com MongoDB Atlas via PHP. Clique para detalhes e sincronização manual.">
+        <span class="db-status-dot" id="dbStatusDot"></span>
+        <span class="db-status-text" id="dbStatusText">MongoDB (PHP)</span>
+      </div>
+
       <div class="year-box" title="Ano corrente da narrativa (calcula maioridade de 18 anos dos sucessores)">
         <span class="year-label">Ano Corrente:</span>
-        <input type="number" id="currentYearInput" value="1248" onchange="app.updateCurrentYear(this.value)" />
+        <input type="number" id="currentYearInput" value="1000" onchange="app.updateCurrentYear(this.value)" />
       </div>
       <div class="header-btn-group">
         <button class="btn btn-medieval" onclick="app.exportWorldJson()" title="Salvar pergaminho em arquivo JSON">Exportar Códice</button>
