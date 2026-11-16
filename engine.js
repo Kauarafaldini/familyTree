@@ -328,7 +328,6 @@ class WorldEngine {
     this.ensureTerritoryPolygons(this.data.territories);
     this.saveToStorage();
   }
-  }
 
   // --------------------------------------------------------------------------
   // Utilitários de Busca

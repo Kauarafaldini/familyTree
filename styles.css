@@ -2049,3 +2049,11 @@ body {
   from { opacity: 0.4; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1.1); }
 }
+
+.btn-xs {
+  padding: 3px 8px !important;
+  font-size: 0.74rem !important;
+  border-radius: 3px !important;
+  letter-spacing: 0.3px !important;
+  line-height: 1.2 !important;
+}

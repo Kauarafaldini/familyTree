@@ -1118,25 +1118,33 @@ class FantasyGenealogyApp {
 
           <div class="card-box">
             <h2>Vínculos Nobiliárquicos</h2>
-            <p style="font-size:0.92rem; line-height:1.6;">
-              <strong>Pai:</strong> ${father ? `<a href="javascript:void(0)" style="color:#dfba73;" onclick="app.openProfileModal('${father.id}')">${this.escapeHtml(father.name)}</a>` : "&mdash;"}<br/>
-              <strong>Mãe:</strong> ${mother ? `<a href="javascript:void(0)" style="color:#dfba73;" onclick="app.openProfileModal('${mother.id}')">${this.escapeHtml(mother.name)}</a>` : "&mdash;"}<br/>
+            <p style="font-size:0.92rem; line-height:1.7;">
+              <strong>Pai:</strong> ${
+                father
+                  ? `<a href="javascript:void(0)" style="color:#dfba73; font-weight:600;" onclick="app.openProfileModal('${father.id}')">${this.escapeHtml(father.name)}</a> <button class="btn btn-xs btn-medieval" onclick="app.openAddRelationshipModal('${c.id}', 'pai')" style="padding:1px 5px; font-size:0.7rem; margin-left:6px;" title="Alterar ou trocar pai">Trocar</button>`
+                  : `<span style="color:var(--ink-dim);">Não declarado</span> <button class="btn btn-xs btn-gold" onclick="app.openAddRelationshipModal('${c.id}', 'pai')" style="padding:1px 7px; font-size:0.72rem; margin-left:6px;">+ Adicionar Pai</button>`
+              }<br/>
+              <strong>Mãe:</strong> ${
+                mother
+                  ? `<a href="javascript:void(0)" style="color:#dfba73; font-weight:600;" onclick="app.openProfileModal('${mother.id}')">${this.escapeHtml(mother.name)}</a> <button class="btn btn-xs btn-medieval" onclick="app.openAddRelationshipModal('${c.id}', 'mae')" style="padding:1px 5px; font-size:0.7rem; margin-left:6px;" title="Alterar ou trocar mãe">Trocar</button>`
+                  : `<span style="color:var(--ink-dim);">Não declarada</span> <button class="btn btn-xs btn-gold" onclick="app.openAddRelationshipModal('${c.id}', 'mae')" style="padding:1px 7px; font-size:0.72rem; margin-left:6px;">+ Adicionar Mãe</button>`
+              }<br/>
               ${twin ? `<strong>Irmão(ã) Gêmeo(a):</strong> <a href="javascript:void(0)" style="color:#dfba73;" onclick="app.openProfileModal('${twin.id}')">${this.escapeHtml(twin.name)}</a><br/>` : ""}
               <strong>Cônjuge(s):</strong> ${
                 spouses.length > 0
                   ? spouses.map(s => `<a href="javascript:void(0)" style="color:#7899c4;" onclick="app.openProfileModal('${s.id}')">${this.escapeHtml(s.name)}</a>`).join(", ")
-                  : "Sem aliança matrimonial"
-              }<br/>
+                  : `<span style="color:var(--ink-dim);">Sem aliança</span>`
+              } <button class="btn btn-xs btn-gold" onclick="app.openMarriageModal('${c.id}')" style="padding:1px 7px; font-size:0.72rem; margin-left:6px;">+ Casar</button><br/>
               <strong>Descendência (${children.length}):</strong> ${
                 children.length > 0
                   ? children.map(ch => `<a href="javascript:void(0)" style="color:var(--gold-leaf);" onclick="app.openProfileModal('${ch.id}')">${this.escapeHtml(ch.name)}</a>`).join(", ")
-                  : "Nenhuma registrada"
-              }<br/>
+                  : `<span style="color:var(--ink-dim);">Nenhuma registrada</span>`
+              } <button class="btn btn-xs btn-gold" onclick="app.openAddRelationshipModal('${c.id}', 'filho')" style="padding:1px 7px; font-size:0.72rem; margin-left:6px;">+ Adicionar Filho(a)</button><br/>
               <strong>Irmandade (${siblings.length}):</strong> ${
                 siblings.length > 0
                   ? siblings.map(sb => `<a href="javascript:void(0)" style="color:var(--ink-secondary);" onclick="app.openProfileModal('${sb.id}')">${this.escapeHtml(sb.name)}</a>`).join(", ")
-                  : "Nenhum irmão registrado"
-              }
+                  : `<span style="color:var(--ink-dim);">Nenhum irmão registrado</span>`
+              } <button class="btn btn-xs btn-gold" onclick="app.openAddRelationshipModal('${c.id}', 'irmao')" style="padding:1px 7px; font-size:0.72rem; margin-left:6px;">+ Adicionar Irmão(ã)</button>
             </p>
           </div>
         </div>
@@ -1225,10 +1233,10 @@ class FantasyGenealogyApp {
     this.openProfileModal(charId);
   }
 
-  openAddRelationshipModal(charId = null) {
+  openAddRelationshipModal(charId = null, defaultType = "pai") {
     const chars = this.engine.data.characters.filter(c => !c.isPlaceholderEmpty);
     if (chars.length === 0) {
-      alert("Nenhum personagem registrado no códice ainda.");
+      alert("Nenhum personagem registrado no códice ainda. Crie o primeiro personagem antes de adicionar parentesco.");
       return;
     }
     const current = (charId && this.engine.getCharacter(charId)) || chars[0];
@@ -1247,14 +1255,16 @@ class FantasyGenealogyApp {
       .map(r => `<option value="${this.escapeHtml(r)}">${this.escapeHtml(r)}</option>`)
       .join("");
 
-    const houseOpts = this.engine.data.houses
-      .map(h => `<option value="${h.id}" ${h.id === (current.officialHouseId || current.birthHouseId) ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
-      .join("");
+    const noHouseOpt = `<option value="">— Sem Casa Dinástica —</option>`;
+    const houseOpts = (this.engine.data.houses.length === 0 ? noHouseOpt : "") +
+      this.engine.data.houses
+        .map(h => `<option value="${h.id}" ${h.id === (current.officialHouseId || current.birthHouseId) ? "selected" : ""}>${this.escapeHtml(h.name)}</option>`)
+        .join("");
 
     const bodyHtml = `
       <div style="background:#17120c; border:1px solid var(--border-gold-subtle); padding:10px 14px; border-radius:3px; margin-bottom:12px;">
         <span style="font-family:var(--font-display); font-size:0.7rem; color:var(--gold-leaf); text-transform:uppercase; letter-spacing:0.5px;">Personagem em Foco:</span>
-        <select id="rel_baseCharId" class="select-medieval" style="width:100%; font-size:0.95rem; margin-top:4px;" onchange="app.openAddRelationshipModal(this.value)">
+        <select id="rel_baseCharId" class="select-medieval" style="width:100%; font-size:0.95rem; margin-top:4px;" onchange="app.openAddRelationshipModal(this.value, document.getElementById('rel_type')?.value || 'pai')">
           ${charOpts}
         </select>
       </div>
@@ -1262,50 +1272,50 @@ class FantasyGenealogyApp {
       <div class="form-group" style="margin-bottom:12px;">
         <label>Qual parentesco deseja adicionar a este personagem?</label>
         <select id="rel_type" class="select-medieval" style="width:100%; font-size:0.95rem;" onchange="app.onRelationshipTypeChange()">
-          <option value="pai">Pai (Genitor)</option>
-          <option value="mae">Mãe (Genitora)</option>
-          <option value="padrasto">Padrasto (Casado com a Mãe)</option>
-          <option value="madrasta">Madrasta (Casada com o Pai)</option>
-          <option value="filho">Filho(a) Descendente</option>
-          <option value="irmao">Irmão / Irmã</option>
-          <option value="meio_irmao">Meio-Irmão / Meia-Irmã</option>
-          <option value="tio">Tio / Tia</option>
-          <option value="sobrinho">Sobrinho / Sobrinha</option>
-          <option value="conjuge">Cônjuge / Consorte</option>
+          <option value="pai" ${defaultType === "pai" ? "selected" : ""}>Pai (Genitor)</option>
+          <option value="mae" ${defaultType === "mae" ? "selected" : ""}>Mãe (Genitora)</option>
+          <option value="filho" ${defaultType === "filho" ? "selected" : ""}>Filho(a) Descendente</option>
+          <option value="irmao" ${defaultType === "irmao" ? "selected" : ""}>Irmão / Irmã</option>
+          <option value="meio_irmao" ${defaultType === "meio_irmao" ? "selected" : ""}>Meio-Irmão / Meia-Irmã</option>
+          <option value="padrasto" ${defaultType === "padrasto" ? "selected" : ""}>Padrasto (Casado com a Mãe)</option>
+          <option value="madrasta" ${defaultType === "madrasta" ? "selected" : ""}>Madrasta (Casada com o Pai)</option>
+          <option value="tio" ${defaultType === "tio" ? "selected" : ""}>Tio / Tia</option>
+          <option value="sobrinho" ${defaultType === "sobrinho" ? "selected" : ""}>Sobrinho / Sobrinha</option>
+          <option value="conjuge" ${defaultType === "conjuge" ? "selected" : ""}>Cônjuge / Consorte</option>
         </select>
       </div>
 
       <div class="profile-subtabs" style="margin-bottom:12px;">
-        <button type="button" class="profile-subtab-btn active" id="relTabBtnExisting" onclick="app.setRelationshipMode('existing')">
-          Vincular Personagem Existente
+        <button type="button" class="profile-subtab-btn ${otherCharOpts ? "active" : ""}" id="relTabBtnExisting" onclick="app.setRelationshipMode('existing')">
+          Vincular Personagem Já Existente
         </button>
-        <button type="button" class="profile-subtab-btn" id="relTabBtnNew" onclick="app.setRelationshipMode('new')">
+        <button type="button" class="profile-subtab-btn ${!otherCharOpts ? "active" : ""}" id="relTabBtnNew" onclick="app.setRelationshipMode('new')">
           + Criar Novo Parente
         </button>
       </div>
 
       <!-- Modo 1: Vincular Existente -->
-      <div id="relSectionExisting">
+      <div id="relSectionExisting" style="display:${otherCharOpts ? "block" : "none"};">
         <div class="form-group">
-          <label>Selecione o parente existente no códice:</label>
+          <label>Selecione quem será o(a) parente:</label>
           <select id="rel_existingCharId" class="select-medieval" style="width:100%;">
-            ${otherCharOpts || `<option value="">(Nenhum outro personagem disponível)</option>`}
+            ${otherCharOpts || `<option value="">(Nenhum outro personagem no códice ainda)</option>`}
           </select>
         </div>
       </div>
 
       <!-- Modo 2: Criar Novo Personagem -->
-      <div id="relSectionNew" style="display:none; flex-direction:column; gap:10px;">
+      <div id="relSectionNew" style="display:${!otherCharOpts ? "flex" : "none"}; flex-direction:column; gap:10px;">
         <div class="form-row">
           <div class="form-group">
-            <label>Nome do Novo Parente:</label>
-            <input type="text" id="rel_newName" placeholder="Ex: Raymund Valmont" />
+            <label id="rel_newNameLabel">Nome do Novo Parente:</label>
+            <input type="text" id="rel_newName" placeholder="Ex: Raymund..." />
           </div>
           <div class="form-group">
             <label>Gênero:</label>
             <select id="rel_newGender">
-              <option value="M">Masculino</option>
-              <option value="F">Feminino</option>
+              <option value="M" ${defaultType === "mae" || defaultType === "madrasta" ? "" : "selected"}>Masculino</option>
+              <option value="F" ${defaultType === "mae" || defaultType === "madrasta" ? "selected" : ""}>Feminino</option>
             </select>
           </div>
         </div>
@@ -1313,7 +1323,7 @@ class FantasyGenealogyApp {
         <div class="form-row">
           <div class="form-group">
             <label>Ano de Nascimento (Aprox.):</label>
-            <input type="number" id="rel_newBirthYear" value="${(current.birthYear || 1220) - 25}" />
+            <input type="number" id="rel_newBirthYear" value="${["pai", "mae", "padrasto", "madrasta", "tio"].includes(defaultType) ? (current.birthYear ? Number(current.birthYear) - 25 : 1175) : ["filho", "sobrinho"].includes(defaultType) ? (current.birthYear ? Number(current.birthYear) + 25 : 1225) : (current.birthYear || 1200)}" />
           </div>
           <div class="form-group">
             <label>Raça / Espécie:</label>
@@ -1334,11 +1344,12 @@ class FantasyGenealogyApp {
 
     const footerHtml = `
       <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
-      <button class="btn btn-primary btn-confirm" onclick="app.confirmAddRelationship()">Confirmar Parentesco</button>
+      <button class="btn btn-primary btn-confirm" onclick="app.confirmAddRelationship()">Confirmar e Salvar Parentesco</button>
     `;
 
     this.showModal(`Adicionar Parentesco: ${current.name}`, bodyHtml, footerHtml);
-    this.currentRelMode = "existing";
+    this.currentRelMode = otherCharOpts ? "existing" : "new";
+    setTimeout(() => this.onRelationshipTypeChange(), 20);
   }
 
   setRelationshipMode(mode) {
@@ -1532,9 +1543,13 @@ class FantasyGenealogyApp {
       snapshot
     );
 
+    this.engine.saveToStorage();
     this.closeModal();
     this.syncHeaderAndBadges();
     this.renderTree();
+    if (typeof this.showToast === "function") {
+      this.showToast(`${relLabels[relType]} "${relative.name}" vinculado(a) com sucesso!`);
+    }
   }
 
   toggleBastardAuthorException(charId) {
@@ -1693,14 +1708,61 @@ class FantasyGenealogyApp {
 
       <div class="form-row">
         <div class="form-group">
-          <label>Pai de Sangue (Linha Carmesim):</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label style="margin:0;">Pai de Sangue (Linha Carmesim):</label>
+            <button type="button" class="btn btn-xs btn-gold" onclick="app.toggleInlineNewParent('father')" style="font-size:0.75rem; padding:2px 8px;" title="Cadastrar e vincular um novo pai agora">
+              + Criar Novo Pai
+            </button>
+          </div>
           <select id="cf_fatherId" onchange="app.checkFormBastardAndTwinHints()">${maleCharsOpts}</select>
+          <div id="cf_newFatherInlineBox" style="display:none; margin-top:8px; padding:10px; background:#1b1510; border:1px solid var(--border-gold-subtle); border-radius:4px;">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--gold-leaf); margin-bottom:6px;">Cadastrar Novo Pai de Sangue:</div>
+            <input type="text" id="cf_newFatherName" placeholder="Nome do Pai..." class="input-medieval" style="width:100%; margin-bottom:6px;" />
+            <div style="display:flex; gap:6px;">
+              <input type="number" id="cf_newFatherBirthYear" placeholder="Ano Nasc." class="input-medieval" style="flex:1;" value="${c.birthYear ? Number(c.birthYear) - 25 : 1175}" />
+              <button type="button" class="btn btn-sm btn-gold" onclick="app.confirmInlineNewParent('father')">Adicionar Pai</button>
+              <button type="button" class="btn btn-sm btn-medieval" onclick="app.toggleInlineNewParent('father')">Cancelar</button>
+            </div>
+          </div>
         </div>
+
         <div class="form-group">
-          <label>Mãe de Sangue (Linha Carmesim):</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label style="margin:0;">Mãe de Sangue (Linha Carmesim):</label>
+            <button type="button" class="btn btn-xs btn-gold" onclick="app.toggleInlineNewParent('mother')" style="font-size:0.75rem; padding:2px 8px;" title="Cadastrar e vincular uma nova mãe agora">
+              + Criar Nova Mãe
+            </button>
+          </div>
           <select id="cf_motherId" onchange="app.checkFormBastardAndTwinHints()">${femaleCharsOpts}</select>
+          <div id="cf_newMotherInlineBox" style="display:none; margin-top:8px; padding:10px; background:#1b1510; border:1px solid var(--border-gold-subtle); border-radius:4px;">
+            <div style="font-size:0.8rem; font-weight:700; color:var(--gold-leaf); margin-bottom:6px;">Cadastrar Nova Mãe de Sangue:</div>
+            <input type="text" id="cf_newMotherName" placeholder="Nome da Mãe..." class="input-medieval" style="width:100%; margin-bottom:6px;" />
+            <div style="display:flex; gap:6px;">
+              <input type="number" id="cf_newMotherBirthYear" placeholder="Ano Nasc." class="input-medieval" style="flex:1;" value="${c.birthYear ? Number(c.birthYear) - 25 : 1175}" />
+              <button type="button" class="btn btn-sm btn-gold" onclick="app.confirmInlineNewParent('mother')">Adicionar Mãe</button>
+              <button type="button" class="btn btn-sm btn-medieval" onclick="app.toggleInlineNewParent('mother')">Cancelar</button>
+            </div>
+          </div>
         </div>
       </div>
+
+      ${editCharId ? `
+        <div class="card-box" style="padding:10px 14px; margin-top:4px; margin-bottom:12px; background:rgba(26,20,14,0.85); border-left:3px solid var(--gold-leaf); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            <span style="font-family:var(--font-display); font-size:0.78rem; color:var(--gold-leaf); text-transform:uppercase; font-weight:700;">
+              Parentescos deste Personagem:
+            </span>
+            <div style="font-size:0.82rem; color:var(--ink-secondary);">Adicione novos pais, filhos, irmãos ou casamento diretamente</div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'pai')">+ Pai</button>
+            <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'mae')">+ Mãe</button>
+            <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'filho')">+ Filho(a)</button>
+            <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'irmao')">+ Irmão(ã)</button>
+            <button type="button" class="btn btn-xs btn-medieval" onclick="app.closeModal(); app.openMarriageModal('${editCharId}')">+ Casar</button>
+          </div>
+        </div>
+      ` : ""}
 
       <div class="form-row">
         <div class="form-group">
@@ -1821,6 +1883,93 @@ class FantasyGenealogyApp {
     );
 
     setTimeout(() => this.checkFormBastardAndTwinHints(), 30);
+  }
+
+  toggleInlineNewParent(parentType) {
+    const boxId = parentType === "father" ? "cf_newFatherInlineBox" : "cf_newMotherInlineBox";
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    const isShowing = box.style.display !== "none";
+    box.style.display = isShowing ? "none" : "block";
+    if (!isShowing) {
+      const inp = document.getElementById(parentType === "father" ? "cf_newFatherName" : "cf_newMotherName");
+      if (inp) inp.focus();
+    }
+  }
+
+  confirmInlineNewParent(parentType) {
+    const isFather = parentType === "father";
+    const nameInput = document.getElementById(isFather ? "cf_newFatherName" : "cf_newMotherName");
+    const birthInput = document.getElementById(isFather ? "cf_newFatherBirthYear" : "cf_newMotherBirthYear");
+    const selectEl = document.getElementById(isFather ? "cf_fatherId" : "cf_motherId");
+    const childBirthYear = Number(document.getElementById("cf_birthYear")?.value) || 1200;
+    const childHouseId = document.getElementById("cf_birthHouseId")?.value || "";
+
+    const name = nameInput?.value.trim();
+    if (!name) {
+      alert(`Por favor, informe o nome para cadastrar o ${isFather ? "pai" : "mãe"}.`);
+      if (nameInput) nameInput.focus();
+      return;
+    }
+
+    const birthYear = Number(birthInput?.value) || (childBirthYear - 25);
+    const gender = isFather ? "M" : "F";
+    const newId = "char_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+
+    const newParent = {
+      id: newId,
+      name,
+      gender,
+      birthYear,
+      deathYear: null,
+      isAlive: true,
+      socialRank: "lorde",
+      race: "Humano",
+      creatureType: "humano",
+      birthHouseId: childHouseId,
+      officialHouseId: childHouseId,
+      livedInTerritoryId: null,
+      fatherId: null,
+      motherId: null,
+      spouseIds: [],
+      marriageDetails: {},
+      twinOfId: null,
+      isBastard: false,
+      bastardLegitimizedByAuthor: false,
+      bastardAuthorNote: "",
+      isPlaceholderEmpty: false,
+      royalBranchStatus: isFather ? "Patriarca de Linhagem" : "Matriarca de Linhagem",
+      appearance: "",
+      deathCause: "Vivo",
+      preMarriageHistory: `Progenitor(a) de linhagem.`,
+      postMarriageHistory: "",
+      customTrajectoryEvents: [],
+      excludedMarriageExceptions: [],
+      linkedToExcludedLineage: null,
+      inconsistencyJustifications: []
+    };
+
+    this.engine.data.characters.push(newParent);
+    this.engine.saveToStorage();
+
+    // Adiciona a opção no select e marca como selecionada
+    if (selectEl) {
+      const opt = document.createElement("option");
+      opt.value = newParent.id;
+      opt.textContent = `${newParent.name} (*${newParent.birthYear || "?"})`;
+      opt.selected = true;
+      selectEl.appendChild(opt);
+      selectEl.value = newParent.id;
+    }
+
+    // Esconde a caixinha inline e limpa o nome
+    if (nameInput) nameInput.value = "";
+    this.toggleInlineNewParent(parentType);
+
+    this.checkFormBastardAndTwinHints();
+    if (typeof this.showToast === "function") {
+      this.showToast(`${isFather ? "Pai" : "Mãe"} "${name}" cadastrado(a) e vinculado(a) com sucesso!`);
+    }
   }
 
   checkFormBastardAndTwinHints() {
