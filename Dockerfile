@@ -1,38 +1,21 @@
 # ============================================================================
-# DOCKERFILE - Deploy do FamilyTree no Render (PHP 8.3 + Apache + MongoDB)
-# Otimizado para o plano gratuito (512 MB de RAM)
+# DOCKERFILE - Deploy do FamilyTree no Render (Node.js 20 Alpine + MongoDB Atlas)
+# Ultraleve: ~45MB de RAM, ideal para o plano gratuito do Render (512 MB de RAM)
 # ============================================================================
 
-FROM php:8.3-apache
+FROM node:20-alpine
 
-# Extensão oficial pecl/mongodb + OPcache; remove ferramentas de build depois
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        libssl-dev \
-        pkg-config \
-    && pecl install mongodb \
-    && docker-php-ext-enable mongodb \
-    && docker-php-ext-install opcache \
-    && a2enmod rewrite deflate expires headers \
-    && a2dismod -f autoindex status \
-    && apt-get purge -y --auto-remove pkg-config \
-    && rm -rf /var/lib/apt/lists/* /tmp/pear
+WORKDIR /app
 
-# Configurações de baixo consumo de memória
-COPY docker/php-lowmem.ini /usr/local/etc/php/conf.d/zz-lowmem.ini
-COPY docker/apache-lowmem.conf /etc/apache2/conf-available/zz-lowmem.conf
-RUN a2enconf zz-lowmem
+# Instalação de dependências
+COPY package*.json ./
+RUN npm install --omit=dev
 
 # Código-fonte
-WORKDIR /var/www/html
-COPY . /var/www/html/
+COPY . .
 
-RUN rm -rf /var/www/html/docker \
-    && sed -i 's/\r$//' /var/www/html/entrypoint.sh \
-    && mkdir -p /tmp/familytree_cache \
-    && chown -R www-data:www-data /var/www/html /tmp/familytree_cache \
-    && chmod +x /var/www/html/entrypoint.sh
+EXPOSE 8000
+ENV PORT=8000
+ENV NODE_ENV=production
 
-EXPOSE 80
-
-ENTRYPOINT ["/var/www/html/entrypoint.sh"]
+CMD ["node", "server.js"]

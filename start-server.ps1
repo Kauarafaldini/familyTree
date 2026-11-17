@@ -1,18 +1,11 @@
-# PowerShell Runner para o Servidor PHP
-$phpExe = (Get-Command php -ErrorAction SilentlyContinue).Source
-if (-not $phpExe) {
-    $wingetPhp = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\php.exe"
-    if (Test-Path $wingetPhp) {
-        $phpExe = $wingetPhp
-    }
-}
-
-if (-not $phpExe) {
-    Write-Error "PHP 8.3 não encontrado. Instale via 'winget install PHP.PHP.8.3'."
+# PowerShell Runner para o Servidor Node.js
+$nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+if (-not $nodeExe) {
+    Write-Error "Node.js não encontrado no PATH. Instale o Node.js v18+ a partir de https://nodejs.org/"
     exit 1
 }
 
-Write-Host "Iniciando servidor PHP em http://localhost:8000..." -ForegroundColor Cyan
+Write-Host "Iniciando servidor Node.js em http://localhost:8000..." -ForegroundColor Cyan
 Write-Host "Conectando ao MongoDB Atlas (familytree)..." -ForegroundColor Green
 Start-Process "http://localhost:8000/"
-& $phpExe -S localhost:8000
+node server.js

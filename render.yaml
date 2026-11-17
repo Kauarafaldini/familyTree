@@ -1,10 +1,14 @@
 services:
   - type: web
     name: familytree
-    runtime: docker
+    runtime: node
     plan: free
     region: oregon
-    dockerfilePath: ./Dockerfile
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: MONGODB_URI
         value: mongodb+srv://kauarsamtos0_db_user:vM8h0GYWkFoy4H6L@familytree.lhbb3e2.mongodb.net/familytree?retryWrites=true&w=majority
+      - key: NODE_ENV
+        value: production
+

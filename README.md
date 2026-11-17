@@ -1,39 +1,41 @@
 # 🍇 Crônicas & Linhagens — Sistema de Árvore Genealógica de Fantasia
 
-Aplicação web completa e responsiva para construção de mundos de fantasia, árvores genealógicas em formato de **cachos de uva**, leis de sucessão real, grimório de criações e rascunho de mapa interativo.
+Aplicação web completa e responsiva para construção de mundos de fantasia, árvores genealógicas em formato de **cachos de uva**, cronologia histórica expansiva, leis de sucessão real, grimório de criações e cartografia com modelagem de continentes.
 
-Todos os dados mocados foram removidos para início de trabalho com dados reais, com persistência direta no **MongoDB Atlas** através de uma camada de API em **PHP**.
+Todos os dados são persistidos diretamente no **MongoDB Atlas** através de uma camada de API moderna em **Node.js / Express**, com baixíssimo consumo de memória (ideal para o plano gratuito do Render).
 
 ---
 
-## 🗄️ Arquitetura de Banco de Dados & Backend PHP
+## 🗄️ Arquitetura de Banco de Dados & Backend Node.js
 
 - **Banco de Dados:** MongoDB Atlas
   - **Cluster:** `familytree.lhbb3e2.mongodb.net`
   - **Database:** `familytree`
   - **Coleções:**
     - `world_state`: Estado consolidado do mundo para sincronização rápida e atômica.
+    - `worlds_index`: Catálogo e estatísticas de múltiplos mundos/histórias.
     - `characters`: Coleção individual de personagens para consultas e relatórios.
     - `houses`: Casas e dinastias cadastradas.
     - `territories`: Províncias, continentes e coordenadas geográficas.
-    - `timeline`: Marcos cronológicos e eventos históricos.
+    - `settlements`: Capitais reais e cidades/vilas no mapa.
+    - `timeline_events`: Marcos cronológicos, guerras e acontecimentos históricos.
     - `creations`: Grimório de magias, poções, artefatos e relíquias.
-- **Backend / Camada de Comunicação:** PHP 8.3 com a extensão oficial `ext-mongodb`
-  - `config.php`: Credenciais seguras e pooling de conexão com o MongoDB Atlas.
-  - `db.php`: Classe de serviço `FamilyTreeDB` com métodos para ping, carga, salvamento e estatísticas.
-  - `api.php`: Endpoint REST / JSON com suporte a CORS para comunicação com o frontend.
+- **Backend / Camada de Servidor:** Node.js v18+ com Express e o driver oficial `mongodb`
+  - `server.js`: Servidor unificado que entrega tanto os arquivos estáticos (HTML/CSS/JS) quanto os endpoints da API REST `/api` (com alias `/api.php` para retrocompatibilidade).
+  - `package.json`: Dependências leves (`express`, `mongodb`, `cors`, `dotenv`).
+  - `.env`: Configuração das variáveis de ambiente (`MONGODB_URI` e `PORT`).
 
 ---
 
 ## ☁️ Como Subir no Render (Passo a Passo Completo)
 
-O projeto já inclui um [Dockerfile](file:///c:/projetos/familyTree/Dockerfile) e um [render.yaml](file:///c:/projetos/familyTree/render.yaml) configurados para o Render compilar o **PHP 8.3 + Apache + ext-mongodb** automaticamente.
+O projeto está configurado via [render.yaml](file:///c:/projetos/familyTree/render.yaml) e [Dockerfile](file:///c:/projetos/familyTree/Dockerfile) com runtime **Node.js**, consumindo menos de 50MB de RAM (nunca atinge o limite de 512MB do plano gratuito).
 
 ### Passo 1: Enviar as alterações para o GitHub
 No terminal do seu projeto:
 ```bash
 git add .
-git commit -m "feat: configuracao para deploy no Render com PHP e MongoDB"
+git commit -m "feat: migracao da API para Node.js e MongoDB Atlas"
 git push origin main
 ```
 
@@ -47,25 +49,20 @@ git push origin main
 - **Name:** `familytree` (ou o nome que preferir para a sua URL)
 - **Region:** `Oregon (US West)` ou a mais próxima de você
 - **Branch:** `main`
-- **Runtime:** O Render detectará automaticamente **Docker**.
+- **Runtime:** `Node` (ou `Docker`)
+- **Build Command:** `npm install`
+- **Start Command:** `npm start`
 - **Instance Type:** Selecione **`Free`** ($0/mês).
 
-### Passo 4: Variável de Ambiente (Opcional, pois já está no config.php)
-Se desejar reforçar a variável de ambiente:
-- Em **Environment Variables**, adicione:
-  - **Key:** `MONGODB_URI`
-  - **Value:** `mongodb+srv://kauarsamtos0_db_user:vM8h0GYWkFoy4H6L@familytree.lhbb3e2.mongodb.net/familytree?retryWrites=true&w=majority`
+### Passo 4: Variável de Ambiente
+Em **Environment Variables**, adicione:
+- **Key:** `MONGODB_URI`
+- **Value:** `mongodb+srv://kauarsamtos0_db_user:vM8h0GYWkFoy4H6L@familytree.lhbb3e2.mongodb.net/familytree?retryWrites=true&w=majority`
 
 ### Passo 5: Criar e Publicar
 Clique no botão **`Deploy Web Service`**.
 
-O Render irá:
-1. Baixar o código do GitHub;
-2. Montar a imagem Docker com PHP 8.3 e compilar o driver do MongoDB;
-3. Subir o servidor Apache com o frontend e o backend;
-4. Gerar sua URL pública gratuita com HTTPS (ex: `https://familytree-xxxx.onrender.com`).
-
-Pronto! Seu site e sua API em PHP estarão 100% online conectados diretamente ao seu MongoDB Atlas.
+Pronto! Seu site e sua API em Node.js estarão 100% online conectados diretamente ao seu cluster MongoDB Atlas.
 
 ---
 
@@ -75,25 +72,30 @@ Pronto! Seu site e sua API em PHP estarão 100% online conectados diretamente ao
 Dê um duplo clique no arquivo **`start-server.bat`** (ou execute no PowerShell via `./start-server.ps1`).
 
 O script irá:
-1. Detectar o interpretador do PHP 8.3 com o driver do MongoDB.
-2. Iniciar o servidor web embutido em `http://localhost:8000`.
-3. Abrir o seu navegador padrão automaticamente conectado ao banco de dados.
+1. Detectar o Node.js.
+2. Iniciar o servidor em `http://localhost:8000`.
+3. Abrir o seu navegador padrão automaticamente conectado ao MongoDB Atlas.
 
 ### Opção 2: Linha de Comando Manual
-```powershell
-php -S localhost:8000
+```bash
+npm install
+npm start
 ```
 Depois, acesse `http://localhost:8000` no seu navegador.
 
 ---
 
-## 📡 Endpoints da API PHP
+## 📡 Endpoints da API Node.js (/api e /api.php)
 
-- `GET /api.php?action=ping`: Testa a conexão com o MongoDB Atlas e retorna o status.
-- `GET /api.php?action=load`: Carrega o mundo salvo no MongoDB Atlas.
-- `POST /api.php?action=save`: Salva o estado completo no MongoDB (atualiza `world_state` e as coleções individuais).
-- `POST /api.php?action=reset`: Reseta o banco para um estado limpo em branco.
-- `GET /api.php?action=stats`: Retorna as contagens de documentos no MongoDB.
+- `GET /api?action=ping`: Testa a conexão com o MongoDB Atlas e retorna o status.
+- `GET /api?action=list_worlds`: Lista todas as histórias e mundos registrados.
+- `GET /api?action=load&world_id=X`: Carrega o mundo salvo no MongoDB Atlas (suporta ETag e HTTP 304).
+- `POST /api?action=save&world_id=X`: Salva o estado completo no MongoDB (`world_state` e coleções individuais).
+- `POST /api?action=create_world`: Cria uma nova história independente no códice.
+- `POST /api?action=rename_world&world_id=X`: Renomeia o título de uma história.
+- `POST /api?action=delete_world&world_id=X`: Exclui uma história.
+- `POST /api?action=reset&world_id=X`: Reseta o banco para um estado limpo em branco.
+- `GET /api?action=stats&world_id=X`: Retorna as contagens de documentos e consumo de RAM do Node.js.
 
 ---
 

@@ -352,14 +352,14 @@ class WorldEngine {
   }
 
   // --------------------------------------------------------------------------
-  // Sincronização com MongoDB Atlas via PHP & Múltiplas Histórias
+  // Sincronização com MongoDB Atlas via Node.js API & Múltiplas Histórias
   // --------------------------------------------------------------------------
   initDatabase() {
     this.apiUrl = (window.location.protocol === "http:" || window.location.protocol === "https:")
-      ? "./api.php"
-      : "http://localhost:8000/api.php";
+      ? "./api"
+      : "http://localhost:8000/api";
     this.dbStatus = "init";
-    this.dbMessage = "Iniciando comunicação com MongoDB...";
+    this.dbMessage = "Iniciando comunicação com MongoDB Atlas...";
     this.lastSavedAt = null;
     this.saveDebounceTimer = null;
 
@@ -441,7 +441,7 @@ class WorldEngine {
         throw new Error(json.message || "Resposta inválida do servidor");
       }
     } catch (err) {
-      console.warn("MongoDB / PHP API offline:", err.message);
+      console.warn("MongoDB / Node.js API offline:", err.message);
       this.setDbStatus("offline", "MongoDB Offline (Modo Local)");
       return false;
     }
@@ -485,8 +485,8 @@ class WorldEngine {
           throw new Error(json.message || "Erro retornado ao salvar");
         }
       } catch (err) {
-        console.warn("Aviso ao salvar no MongoDB via PHP:", err.message);
-        this.setDbStatus("offline", "Salvo localmente (PHP/Mongo offline)");
+        console.warn("Aviso ao salvar no MongoDB via Node.js API:", err.message);
+        this.setDbStatus("offline", "Salvo localmente (Node/Mongo offline)");
       } finally {
         this._saveInFlight = false;
         if (this._savePending) {
@@ -644,7 +644,7 @@ class WorldEngine {
         return true;
       }
     } catch (err) {
-      console.warn("Erro ao resetar no MongoDB via PHP:", err.message);
+      console.warn("Erro ao resetar no MongoDB via Node.js API:", err.message);
       this.data = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
       this.saveToStorage();
     }
