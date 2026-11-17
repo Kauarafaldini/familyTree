@@ -241,9 +241,125 @@ class FamilyTreeDB {
         unset($doc, $bulk);
 
         $this->updateIndex($worldId, $title, $year, $chars, $houses);
+        $this->syncIndividualCollections($worldId, $rawJson);
         $this->writeCache($worldId, $rawJson);
 
         return ['charactersCount' => $chars, 'housesCount' => $houses];
+    }
+
+    /**
+     * Sincroniza coleções individuais no MongoDB Atlas para visualização e consulta estruturada
+     */
+    public function syncIndividualCollections($worldId, $jsonOrArray) {
+        $data = is_array($jsonOrArray) ? $jsonOrArray : json_decode($jsonOrArray, true);
+        if (!is_array($data)) return;
+
+        // 1. Coleção 'worlds'
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $meta = $data['meta'] ?? [];
+            $bulk->update(['_id' => $worldId], ['$set' => [
+                'id' => $worldId,
+                'title' => $meta['worldTitle'] ?? 'Crônicas & Linhagens',
+                'currentYear' => (int)($meta['currentYear'] ?? 1000),
+                'charactersCount' => count($data['characters'] ?? []),
+                'housesCount' => count($data['houses'] ?? []),
+                'territoriesCount' => count($data['territories'] ?? []),
+                'settlementsCount' => count($data['settlements'] ?? []),
+                'updatedAt' => date('c')
+            ]], ['upsert' => true]);
+            $this->manager->executeBulkWrite("{$this->dbName}.worlds", $bulk);
+        } catch (Throwable $e) {}
+
+        // 2. Coleção 'characters'
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $bulk->delete(['world_id' => $worldId]);
+            if (!empty($data['characters']) && is_array($data['characters'])) {
+                foreach ($data['characters'] as $c) {
+                    $doc = $c;
+                    $doc['_id'] = $worldId . '_' . ($c['id'] ?? uniqid());
+                    $doc['world_id'] = $worldId;
+                    $bulk->insert($doc);
+                }
+            }
+            $this->manager->executeBulkWrite("{$this->dbName}.characters", $bulk);
+        } catch (Throwable $e) {}
+
+        // 3. Coleção 'houses'
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $bulk->delete(['world_id' => $worldId]);
+            if (!empty($data['houses']) && is_array($data['houses'])) {
+                foreach ($data['houses'] as $h) {
+                    $doc = $h;
+                    $doc['_id'] = $worldId . '_' . ($h['id'] ?? uniqid());
+                    $doc['world_id'] = $worldId;
+                    $bulk->insert($doc);
+                }
+            }
+            $this->manager->executeBulkWrite("{$this->dbName}.houses", $bulk);
+        } catch (Throwable $e) {}
+
+        // 4. Coleção 'territories'
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $bulk->delete(['world_id' => $worldId]);
+            if (!empty($data['territories']) && is_array($data['territories'])) {
+                foreach ($data['territories'] as $t) {
+                    $doc = $t;
+                    $doc['_id'] = $worldId . '_' . ($t['id'] ?? uniqid());
+                    $doc['world_id'] = $worldId;
+                    $bulk->insert($doc);
+                }
+            }
+            $this->manager->executeBulkWrite("{$this->dbName}.territories", $bulk);
+        } catch (Throwable $e) {}
+
+        // 5. Coleção 'settlements'
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $bulk->delete(['world_id' => $worldId]);
+            if (!empty($data['settlements']) && is_array($data['settlements'])) {
+                foreach ($data['settlements'] as $s) {
+                    $doc = $s;
+                    $doc['_id'] = $worldId . '_' . ($s['id'] ?? uniqid());
+                    $doc['world_id'] = $worldId;
+                    $bulk->insert($doc);
+                }
+            }
+            $this->manager->executeBulkWrite("{$this->dbName}.settlements", $bulk);
+        } catch (Throwable $e) {}
+
+        // 6. Coleção 'timeline_events'
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $bulk->delete(['world_id' => $worldId]);
+            if (!empty($data['timelineMilestones']) && is_array($data['timelineMilestones'])) {
+                foreach ($data['timelineMilestones'] as $ev) {
+                    $doc = $ev;
+                    $doc['_id'] = $worldId . '_' . ($ev['id'] ?? uniqid());
+                    $doc['world_id'] = $worldId;
+                    $bulk->insert($doc);
+                }
+            }
+            $this->manager->executeBulkWrite("{$this->dbName}.timeline_events", $bulk);
+        } catch (Throwable $e) {}
+
+        // 7. Coleção 'creations' (Grimório)
+        try {
+            $bulk = new MongoDB\Driver\BulkWrite();
+            $bulk->delete(['world_id' => $worldId]);
+            if (!empty($data['creations']) && is_array($data['creations'])) {
+                foreach ($data['creations'] as $cr) {
+                    $doc = $cr;
+                    $doc['_id'] = $worldId . '_' . ($cr['id'] ?? uniqid());
+                    $doc['world_id'] = $worldId;
+                    $bulk->insert($doc);
+                }
+            }
+            $this->manager->executeBulkWrite("{$this->dbName}.creations", $bulk);
+        } catch (Throwable $e) {}
     }
 
     /** Compatibilidade com chamadas que passam array. */

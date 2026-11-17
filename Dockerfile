@@ -7,6 +7,7 @@ FROM php:8.3-apache
 
 # Extensão oficial pecl/mongodb + OPcache; remove ferramentas de build depois
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
         libssl-dev \
         pkg-config \
     && pecl install mongodb \
