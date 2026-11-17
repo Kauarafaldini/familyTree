@@ -3,12 +3,19 @@
 //             Detecção de Inconsistências e Histórico de Reversão
 // ============================================================================
 
-const STORAGE_KEY = "fantasy_family_tree_v1";
+const BASE_STORAGE_KEY = "fantasy_family_tree_v1";
 
 class WorldEngine {
   constructor() {
+    this.currentWorldId = localStorage.getItem("current_world_id") || "main_world";
+    this.worldsList = [];
     this.data = this.loadFromStorage();
     this.initDatabase();
+  }
+
+  getStorageKey(worldId = null) {
+    const wId = worldId || this.currentWorldId || "main_world";
+    return `${BASE_STORAGE_KEY}_${wId}`;
   }
 
   // Sanitiza o nome do personagem para exibir somente nome e sobrenome, sem cargos ou títulos
@@ -22,9 +29,15 @@ class WorldEngine {
     return clean.replace(/\s+/g, " ").trim();
   }
 
-  loadFromStorage() {
+  loadFromStorage(targetWorldId = null) {
+    const wId = targetWorldId || this.currentWorldId || "main_world";
+    const storageKey = this.getStorageKey(wId);
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      let saved = localStorage.getItem(storageKey);
+      // Migração de cache anterior sem sufixo se for o mundo principal
+      if (!saved && wId === "main_world") {
+        saved = localStorage.getItem(BASE_STORAGE_KEY);
+      }
       if (saved) {
         // Se o cache contiver dados mockados antigos da versão demonstrativa, descarta para iniciar com dados reais
         if (
@@ -33,8 +46,12 @@ class WorldEngine {
           saved.includes("house_ravencrest") ||
           saved.includes("char_aldric")
         ) {
-          try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+          try {
+            localStorage.removeItem(storageKey);
+            localStorage.removeItem(BASE_STORAGE_KEY);
+          } catch (e) {}
           const initialData = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+          initialData.meta.worldId = wId;
           this.ensureTerritoryPolygons(initialData.territories);
           return initialData;
         }
@@ -42,6 +59,31 @@ class WorldEngine {
         const parsed = JSON.parse(saved);
         if (parsed && Array.isArray(parsed.characters) && Array.isArray(parsed.houses)) {
           let modified = false;
+
+          if (!parsed.meta) {
+            parsed.meta = { ...DEFAULT_WORLD_DATA.meta, worldId: wId };
+            modified = true;
+          }
+          if (!parsed.meta.worldId) {
+            parsed.meta.worldId = wId;
+            modified = true;
+          }
+
+          if (!parsed.customPresets || typeof parsed.customPresets !== "object") {
+            parsed.customPresets = {
+              socialRanks: [],
+              genders: [],
+              races: [],
+              creationCategories: [],
+              powerLevels: [],
+              timelineCategories: [],
+              timelineImportances: [],
+              territoryTypes: [],
+              settlementTypes: [],
+              successionLaws: []
+            };
+            modified = true;
+          }
 
           if (!Array.isArray(parsed.races)) {
             parsed.races = Array.isArray(DEFAULT_WORLD_DATA.races) ? DEFAULT_WORLD_DATA.races.slice() : ["Humano", "Elfo", "Anão", "Orc"];
@@ -89,7 +131,7 @@ class WorldEngine {
           }
           if (modified) {
             try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+              localStorage.setItem(storageKey, JSON.stringify(parsed));
             } catch (e) {}
           }
           return parsed;
@@ -99,6 +141,7 @@ class WorldEngine {
       console.warn("Erro ao carregar localStorage, usando dados iniciais:", e);
     }
     const initialData = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+    initialData.meta.worldId = wId;
     this.ensureTerritoryPolygons(initialData.territories);
     return initialData;
   }
@@ -132,11 +175,61 @@ class WorldEngine {
     return changed;
   }
 
-  getRaces() {
-    const list = Array.isArray(this.data.races) && this.data.races.length > 0
-      ? this.data.races.slice()
-      : (Array.isArray(DEFAULT_WORLD_DATA.races) ? DEFAULT_WORLD_DATA.races.slice() : ["Humano", "Elfo", "Anão", "Orc"]);
+  // --------------------------------------------------------------------------
+  // Gestão de Presets Personalizados & Padrão (Categorias Customizáveis da Autora)
+  // --------------------------------------------------------------------------
+  ensureCustomPresets() {
+    if (!this.data.customPresets || typeof this.data.customPresets !== "object") {
+      this.data.customPresets = {
+        socialRanks: [],
+        genders: [],
+        races: [],
+        creationCategories: [],
+        powerLevels: [],
+        timelineCategories: [],
+        timelineImportances: [],
+        territoryTypes: [],
+        settlementTypes: [],
+        successionLaws: []
+      };
+    }
+  }
 
+  getPresets(category) {
+    this.ensureCustomPresets();
+    const standard = (typeof STANDARD_PRESETS !== "undefined" && Array.isArray(STANDARD_PRESETS[category]))
+      ? STANDARD_PRESETS[category]
+      : [];
+    const custom = (this.data.customPresets && Array.isArray(this.data.customPresets[category]))
+      ? this.data.customPresets[category]
+      : [];
+
+    if (standard.length > 0 && typeof standard[0] === "string") {
+      const merged = [...standard];
+      custom.forEach(c => {
+        const label = typeof c === "string" ? c : (c.label || c.name || c.key || "");
+        if (label && !merged.some(m => m.toLowerCase() === label.toLowerCase())) {
+          merged.push(label);
+        }
+      });
+      return merged;
+    }
+
+    const merged = standard.map(s => ({ ...s, isStandard: true }));
+    custom.forEach(c => {
+      const key = typeof c === "string" ? c.toLowerCase().replace(/\s+/g, "_") : c.key;
+      const label = typeof c === "string" ? c : (c.label || key);
+      if (key && !merged.some(m => m.key === key)) {
+        merged.push({ key, label, isCustom: true, ...(typeof c === "object" ? c : {}) });
+      }
+    });
+    return merged;
+  }
+
+  getSocialRanks() { return this.getPresets("socialRanks"); }
+  getGenders() { return this.getPresets("genders"); }
+  getRaces() {
+    const list = this.getPresets("races");
     if (Array.isArray(this.data.characters)) {
       this.data.characters.forEach(c => {
         const r = c.race || c.creatureType;
@@ -147,22 +240,119 @@ class WorldEngine {
     }
     return list;
   }
+  getTimelineCategories() { return this.getPresets("timelineCategories"); }
+  getTimelineImportances() { return this.getPresets("timelineImportances"); }
+  getCreationCategories() { return this.getPresets("creationCategories"); }
+  getPowerLevels() { return this.getPresets("powerLevels"); }
+  getTerritoryTypes() { return this.getPresets("territoryTypes"); }
+  getSettlementTypes() { return this.getPresets("settlementTypes"); }
+  getSuccessionLaws() { return this.getPresets("successionLaws"); }
 
-  addRace(raceName) {
-    if (!raceName || typeof raceName !== "string") return;
-    const name = raceName.trim();
-    if (!name) return;
-    if (!Array.isArray(this.data.races)) {
-      this.data.races = this.getRaces();
+  addCustomPreset(category, rawItem) {
+    this.ensureCustomPresets();
+    if (!Array.isArray(this.data.customPresets[category])) {
+      this.data.customPresets[category] = [];
     }
-    if (!this.data.races.some(r => r.toLowerCase() === name.toLowerCase())) {
-      this.data.races.push(name);
+
+    const isStringList = ["races", "powerLevels", "territoryTypes", "creationCategories"].includes(category);
+    let createdItem = null;
+
+    if (isStringList) {
+      const label = (typeof rawItem === "string" ? rawItem : (rawItem.label || rawItem.name || "")).trim();
+      if (!label) return null;
+      const existing = this.getPresets(category);
+      if (existing.some(x => x.toLowerCase() === label.toLowerCase())) {
+        return label;
+      }
+      this.data.customPresets[category].push(label);
+      if (category === "races" && Array.isArray(this.data.races)) {
+        if (!this.data.races.some(r => r.toLowerCase() === label.toLowerCase())) {
+          this.data.races.push(label);
+        }
+      }
+      createdItem = label;
+    } else {
+      let key = "";
+      let label = "";
+      if (typeof rawItem === "string") {
+        label = rawItem.trim();
+        key = label.toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9_]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "");
+      } else if (rawItem && typeof rawItem === "object") {
+        label = (rawItem.label || rawItem.name || "").trim();
+        key = (rawItem.key || "").trim().toLowerCase();
+        if (!key && label) {
+          key = label.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9_]/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_|_$/g, "");
+        }
+      }
+      if (!label || !key) return null;
+
+      const existing = this.getPresets(category);
+      const found = existing.find(x => x.key === key || (x.label && x.label.toLowerCase() === label.toLowerCase()));
+      if (found) return found;
+
+      const newItem = { key, label, isCustom: true };
+      if (rawItem && typeof rawItem === "object") {
+        if (rawItem.icon) newItem.icon = rawItem.icon;
+        if (rawItem.color) newItem.color = rawItem.color;
+      }
+
+      this.data.customPresets[category].push(newItem);
+      createdItem = newItem;
+    }
+
+    this.saveToStorage();
+    return createdItem;
+  }
+
+  removeCustomPreset(category, keyOrLabel) {
+    this.ensureCustomPresets();
+    if (!Array.isArray(this.data.customPresets[category])) return false;
+    const target = (keyOrLabel || "").toString().trim().toLowerCase();
+
+    const before = this.data.customPresets[category].length;
+    this.data.customPresets[category] = this.data.customPresets[category].filter(item => {
+      if (typeof item === "string") {
+        return item.toLowerCase() !== target;
+      } else if (item && typeof item === "object") {
+        return (item.key || "").toLowerCase() !== target && (item.label || "").toLowerCase() !== target;
+      }
+      return true;
+    });
+
+    const removed = this.data.customPresets[category].length < before;
+    if (removed) {
+      if (category === "races" && Array.isArray(this.data.races)) {
+        this.data.races = this.data.races.filter(r => r.toLowerCase() !== target);
+      }
       this.saveToStorage();
     }
+    return removed;
+  }
+
+  isCustomPreset(category, keyOrLabel) {
+    this.ensureCustomPresets();
+    if (!Array.isArray(this.data.customPresets[category])) return false;
+    const target = (keyOrLabel || "").toString().trim().toLowerCase();
+    return this.data.customPresets[category].some(item => {
+      if (typeof item === "string") return item.toLowerCase() === target;
+      return (item.key || "").toLowerCase() === target || (item.label || "").toLowerCase() === target;
+    });
+  }
+
+  addRace(raceName) {
+    return this.addCustomPreset("races", raceName);
   }
 
   // --------------------------------------------------------------------------
-  // Sincronização com Banco de Dados MongoDB Atlas via PHP
+  // Sincronização com MongoDB Atlas via PHP & Múltiplas Histórias
   // --------------------------------------------------------------------------
   initDatabase() {
     this.apiUrl = (window.location.protocol === "http:" || window.location.protocol === "https:")
@@ -173,10 +363,25 @@ class WorldEngine {
     this.lastSavedAt = null;
     this.saveDebounceTimer = null;
 
-    // Dispara sincronização inicial com o MongoDB em segundo plano
     setTimeout(() => {
-      this.fetchFromDatabase();
+      this.fetchFromDatabase(this.currentWorldId);
     }, 100);
+
+    // Ao fechar/ocultar a aba, envia imediatamente alterações ainda pendentes
+    window.addEventListener("pagehide", () => {
+      if (!this.saveDebounceTimer) return;
+      clearTimeout(this.saveDebounceTimer);
+      this.saveDebounceTimer = null;
+      try {
+        const body = JSON.stringify(this.data);
+        fetch(`${this.apiUrl}?action=save&world_id=${encodeURIComponent(this.currentWorldId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: body.length < 60000
+        });
+      } catch (e) {}
+    });
   }
 
   setDbStatus(status, message) {
@@ -187,21 +392,49 @@ class WorldEngine {
     }
   }
 
-  async fetchFromDatabase() {
+  async fetchWorldsList() {
+    try {
+      const res = await fetch(`${this.apiUrl}?action=list_worlds`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json && json.status === "success" && Array.isArray(json.worlds)) {
+        this.worldsList = json.worlds;
+        return this.worldsList;
+      }
+    } catch (e) {
+      console.warn("Erro ao listar histórias:", e.message);
+    }
+    return this.worldsList || [];
+  }
+
+  async fetchFromDatabase(worldId = null) {
+    const targetWorldId = worldId || this.currentWorldId || "main_world";
     try {
       this.setDbStatus("syncing", "Conectando ao MongoDB Atlas...");
-      const res = await fetch(`${this.apiUrl}?action=load`, { cache: "no-store" });
+      // "no-cache" = o navegador revalida com ETag; se nada mudou o servidor responde 304 sem corpo
+      const res = await fetch(`${this.apiUrl}?action=load&world_id=${encodeURIComponent(targetWorldId)}`, { cache: "no-cache" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json && json.status === "success" && json.data) {
+        this.currentWorldId = targetWorldId;
+        localStorage.setItem("current_world_id", this.currentWorldId);
         this.data = json.data;
+        if (Array.isArray(json.worlds)) {
+          this.worldsList = json.worlds;
+        }
+        this.ensureCustomPresets();
         this.ensureTerritoryPolygons(this.data.territories);
+        if (!this._lastSavedPayload) this._lastSavedPayload = {};
+        this._lastSavedPayload[this.currentWorldId] = JSON.stringify(this.data);
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+          localStorage.setItem(this.getStorageKey(this.currentWorldId), JSON.stringify(this.data));
         } catch (e) {}
         this.setDbStatus("connected", "MongoDB Atlas Conectado");
         if (window.app && typeof window.app.renderAll === "function") {
           window.app.renderAll();
+        }
+        if (window.app && typeof window.app.updateHeaderWorldTitle === "function") {
+          window.app.updateHeaderWorldTitle();
         }
         return true;
       } else {
@@ -214,23 +447,38 @@ class WorldEngine {
     }
   }
 
+  // Salvamento leve: agrupa alterações (debounce), ignora se nada mudou e
+  // mantém no máximo UMA requisição em andamento por vez (evita fila no servidor).
   saveToDatabase(immediate = false) {
     if (this.saveDebounceTimer) {
       clearTimeout(this.saveDebounceTimer);
       this.saveDebounceTimer = null;
     }
+    if (!this._lastSavedPayload) this._lastSavedPayload = {};
 
     const doSave = async () => {
+      if (this._saveInFlight) {
+        this._savePending = true; // salva de novo quando a atual terminar
+        return;
+      }
+      const worldId = this.currentWorldId;
+      const body = JSON.stringify(this.data);
+      if (this._lastSavedPayload[worldId] === body) {
+        return; // nada mudou desde o último salvamento
+      }
+
+      this._saveInFlight = true;
       try {
         this.setDbStatus("syncing", "Salvando no MongoDB...");
-        const res = await fetch(`${this.apiUrl}?action=save`, {
+        const res = await fetch(`${this.apiUrl}?action=save&world_id=${encodeURIComponent(worldId)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(this.data)
+          body
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (json && json.status === "success") {
+          this._lastSavedPayload[worldId] = body;
           this.lastSavedAt = new Date();
           this.setDbStatus("connected", "Salvo no MongoDB");
         } else {
@@ -239,26 +487,155 @@ class WorldEngine {
       } catch (err) {
         console.warn("Aviso ao salvar no MongoDB via PHP:", err.message);
         this.setDbStatus("offline", "Salvo localmente (PHP/Mongo offline)");
+      } finally {
+        this._saveInFlight = false;
+        if (this._savePending) {
+          this._savePending = false;
+          this.saveDebounceTimer = setTimeout(doSave, 1500);
+        }
       }
     };
 
     if (immediate) {
       return doSave();
     } else {
-      this.saveDebounceTimer = setTimeout(doSave, 350);
+      this.saveDebounceTimer = setTimeout(doSave, 2000);
+    }
+  }
+
+  saveToStorage() {
+    try {
+      this.ensureCustomPresets();
+      localStorage.setItem(this.getStorageKey(), JSON.stringify(this.data));
+    } catch (e) {
+      console.error("Erro ao salvar no localStorage:", e);
+    }
+    this.saveToDatabase();
+  }
+
+  async switchWorld(worldId) {
+    if (!worldId || worldId === this.currentWorldId) return;
+    this.currentWorldId = worldId;
+    localStorage.setItem("current_world_id", worldId);
+    this.data = this.loadFromStorage(worldId);
+    if (window.app && typeof window.app.renderAll === "function") {
+      window.app.renderAll();
+    }
+    if (window.app && typeof window.app.updateHeaderWorldTitle === "function") {
+      window.app.updateHeaderWorldTitle();
+    }
+    await this.fetchFromDatabase(worldId);
+  }
+
+  async createNewWorld(title, initialYear = 1000) {
+    const worldTitle = (title || "").trim() || "Nova História";
+    try {
+      this.setDbStatus("syncing", "Criando nova história no MongoDB...");
+      const res = await fetch(`${this.apiUrl}?action=create_world`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: worldTitle, currentYear: Number(initialYear) || 1000 })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json && json.status === "success" && json.world) {
+        this.currentWorldId = json.world.id;
+        localStorage.setItem("current_world_id", this.currentWorldId);
+        this.data = json.world.data;
+        if (Array.isArray(json.worlds)) this.worldsList = json.worlds;
+        this.saveToStorage();
+        this.setDbStatus("connected", `História "${worldTitle}" criada!`);
+        if (window.app && typeof window.app.renderAll === "function") {
+          window.app.renderAll();
+        }
+        if (window.app && typeof window.app.updateHeaderWorldTitle === "function") {
+          window.app.updateHeaderWorldTitle();
+        }
+        return json.world;
+      }
+    } catch (e) {
+      console.warn("Erro ao criar mundo no MongoDB:", e);
+      const newId = "world_" + Date.now();
+      const newWorldData = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+      newWorldData.meta.worldId = newId;
+      newWorldData.meta.worldTitle = worldTitle;
+      newWorldData.meta.currentYear = Number(initialYear) || 1000;
+      this.currentWorldId = newId;
+      localStorage.setItem("current_world_id", newId);
+      this.data = newWorldData;
+      this.saveToStorage();
+      if (window.app && typeof window.app.renderAll === "function") {
+        window.app.renderAll();
+      }
+      if (window.app && typeof window.app.updateHeaderWorldTitle === "function") {
+        window.app.updateHeaderWorldTitle();
+      }
+      return { id: newId, title: worldTitle, data: newWorldData };
+    }
+  }
+
+  async deleteWorld(worldId) {
+    if (!worldId) return false;
+    try {
+      this.setDbStatus("syncing", "Excluindo história...");
+      const res = await fetch(`${this.apiUrl}?action=delete_world&world_id=${encodeURIComponent(worldId)}`, {
+        method: "POST"
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json && json.status === "success") {
+        if (Array.isArray(json.worlds)) this.worldsList = json.worlds;
+        try { localStorage.removeItem(this.getStorageKey(worldId)); } catch (e) {}
+        if (this.currentWorldId === worldId) {
+          const nextWorld = (this.worldsList && this.worldsList[0]) ? this.worldsList[0].id : "main_world";
+          await this.switchWorld(nextWorld);
+        }
+        return true;
+      } else {
+        throw new Error(json.message || "Erro retornado ao excluir");
+      }
+    } catch (e) {
+      console.warn("Erro ao excluir mundo:", e);
+      alert("Não foi possível excluir a história: " + e.message);
+      return false;
+    }
+  }
+
+  async renameWorld(worldId, newTitle) {
+    const cleanTitle = (newTitle || "").trim();
+    if (!cleanTitle) return false;
+    try {
+      const res = await fetch(`${this.apiUrl}?action=rename_world&world_id=${encodeURIComponent(worldId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: cleanTitle })
+      });
+      if (this.currentWorldId === worldId) {
+        if (!this.data.meta) this.data.meta = {};
+        this.data.meta.worldTitle = cleanTitle;
+        this.saveToStorage();
+        if (window.app && typeof window.app.updateHeaderWorldTitle === "function") {
+          window.app.updateHeaderWorldTitle();
+        }
+      }
+      await this.fetchWorldsList();
+      return true;
+    } catch (e) {
+      console.warn("Erro ao renomear mundo:", e);
+      return false;
     }
   }
 
   async resetDatabase() {
     try {
       this.setDbStatus("syncing", "Resetando no MongoDB...");
-      const res = await fetch(`${this.apiUrl}?action=reset`, { method: "POST" });
+      const res = await fetch(`${this.apiUrl}?action=reset&world_id=${encodeURIComponent(this.currentWorldId)}`, { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json && json.status === "success") {
         this.data = json.data || JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+          localStorage.setItem(this.getStorageKey(), JSON.stringify(this.data));
         } catch (e) {}
         this.setDbStatus("connected", "MongoDB Resetado com Sucesso");
         if (window.app && typeof window.app.renderAll === "function") {
@@ -273,17 +650,16 @@ class WorldEngine {
     }
   }
 
-  saveToStorage() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
-    } catch (e) {
-      console.error("Erro ao salvar no localStorage:", e);
-    }
-    this.saveToDatabase();
-  }
-
   resetToDefault() {
     this.resetDatabase();
+  }
+
+  createBlankWorld() {
+    const clean = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+    clean.meta.worldId = this.currentWorldId;
+    this.data = clean;
+    this.ensureTerritoryPolygons(this.data.territories);
+    this.saveToStorage();
   }
 
   createBlankWorld() {

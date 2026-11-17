@@ -2057,3 +2057,363 @@ body {
   letter-spacing: 0.3px !important;
   line-height: 1.2 !important;
 }
+
+/* ==========================================================================
+   SELETOR DE HISTÓRIAS / MUNDOS INDEPENDENTES & PRESETS DA AUTORA
+   ========================================================================== */
+.world-switcher-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(38, 28, 20, 0.95), rgba(20, 15, 10, 0.98));
+  border: 1px solid var(--border-gold);
+  border-radius: 20px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(223, 186, 115, 0.2);
+  color: #f3ede2;
+  font-family: var(--font-body);
+}
+
+.world-switcher-pill:hover {
+  border-color: var(--gold-leaf);
+  box-shadow: 0 0 12px rgba(223, 186, 115, 0.4), inset 0 1px 0 rgba(223, 186, 115, 0.3);
+  transform: translateY(-1px);
+}
+
+.world-pill-icon {
+  font-size: 1rem;
+}
+
+.world-pill-name {
+  font-family: var(--font-title);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--gold-leaf);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-pill-arrow {
+  font-size: 0.65rem;
+  color: #bfa175;
+  transition: transform 0.2s ease;
+}
+
+/* Caixa Inline para Opção "+ Outro..." */
+.outro-inline-box {
+  display: none;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(30, 22, 15, 0.95);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  gap: 6px;
+  align-items: center;
+}
+
+.outro-inline-box input {
+  flex: 1;
+  font-size: 0.85rem !important;
+  padding: 4px 8px !important;
+  background: #140f0a !important;
+  border: 1px solid var(--border-gold-subtle) !important;
+  color: #fff !important;
+  border-radius: 3px !important;
+}
+
+/* Modal de Configurações de Presets */
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-gold-subtle);
+  margin-bottom: 16px;
+}
+
+.settings-tab-btn {
+  background: rgba(26, 20, 14, 0.8);
+  border: 1px solid var(--border-gold-subtle);
+  color: #caa875;
+  font-family: var(--font-title);
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.settings-tab-btn:hover {
+  color: #f3ede2;
+  border-color: var(--gold-leaf);
+}
+
+.settings-tab-btn.active {
+  background: linear-gradient(135deg, rgba(82, 60, 32, 0.9), rgba(46, 33, 17, 0.95));
+  border-color: var(--gold-leaf);
+  color: var(--gold-leaf);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.presets-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.preset-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(22, 17, 12, 0.9);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.preset-card:hover {
+  border-color: rgba(223, 186, 115, 0.5);
+  background: rgba(30, 23, 16, 0.95);
+}
+
+.preset-card.is-custom {
+  border-left: 3px solid var(--gold-leaf);
+}
+
+.preset-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preset-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #f3ede2;
+}
+
+.preset-badges {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.badge-preset-standard {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(80, 80, 80, 0.35);
+  color: #a8a29e;
+  border: 1px solid rgba(120, 120, 120, 0.3);
+}
+
+.badge-preset-custom {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(223, 186, 115, 0.2);
+  color: var(--gold-leaf);
+  border: 1px solid rgba(223, 186, 115, 0.4);
+  font-weight: 700;
+}
+
+/* Cards do Gerenciador de Histórias */
+.world-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.world-card-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(24, 18, 12, 0.9);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.world-card-item:hover {
+  border-color: rgba(223, 186, 115, 0.5);
+  background: rgba(32, 24, 16, 0.95);
+}
+
+.world-card-item.active-world {
+  border-color: var(--gold-leaf);
+  background: linear-gradient(135deg, rgba(46, 34, 20, 0.9), rgba(28, 20, 12, 0.95));
+  box-shadow: 0 0 10px rgba(223, 186, 115, 0.2);
+}
+
+.world-card-title {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f3ede2;
+  margin-bottom: 2px;
+}
+
+.world-card-meta {
+  font-size: 0.78rem;
+  color: #bfa175;
+}
+
+.world-card-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ==========================================================================
+   MODAL DE ENQUADRAMENTO CIRCULAR DE FOTO / RETRATO
+   ========================================================================== */
+.cropper-modal-window {
+  max-width: 580px !important;
+  width: 95% !important;
+}
+
+.cropper-stage-layout {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+
+.cropper-viewport-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.cropper-viewport {
+  width: 240px;
+  height: 240px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0a0805;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.9), 0 4px 12px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.cropper-viewport:active {
+  cursor: grabbing;
+}
+
+.cropper-viewport img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  user-select: none;
+  max-width: none;
+  max-height: none;
+}
+
+.cropper-circular-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(10, 7, 4, 0.72);
+  border: 2.5px solid var(--gold-leaf);
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.cropper-circular-overlay::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.cropper-hint {
+  font-size: 0.75rem;
+  color: #a8a29e;
+  font-style: italic;
+}
+
+.cropper-controls-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.cropper-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.cropper-preview-box label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  margin: 0;
+}
+
+.cropper-preview-circle {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--gold-leaf);
+  box-shadow: 0 0 10px rgba(223, 186, 115, 0.35), inset 0 0 6px rgba(0, 0, 0, 0.7);
+  background: radial-gradient(circle at 50% 35%, #2a2118, #110d09);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cropper-preview-circle canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Ferramenta de Borracha e Ajuste de Tamanho no Mapa */
+.map-canvas-container.tool-eraser canvas {
+  cursor: crosshair !important;
+}
+
+.icon-size-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 17, 12, 0.8);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
