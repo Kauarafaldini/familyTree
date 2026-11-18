@@ -998,6 +998,16 @@ body {
   gap: 10px;
 }
 
+.map-scope-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(18, 14, 10, 0.65);
+  border: 1px solid var(--border-brass);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
 .map-zoom-section {
   display: flex;
   align-items: center;
@@ -1637,8 +1647,8 @@ body {
 
 .timeline-h-viewport {
   width: 100%;
-  height: 560px;
-  min-height: 520px;
+  height: 620px;
+  min-height: 580px;
   overflow-x: auto;
   overflow-y: hidden;
   position: relative;
@@ -1656,7 +1666,7 @@ body {
 .timeline-h-canvas {
   position: relative;
   height: 100%;
-  min-height: 520px;
+  min-height: 580px;
   /* Largura calculada dinamicamente pelo JS */
 }
 
@@ -1665,7 +1675,7 @@ body {
   position: absolute;
   left: 60px;
   right: 60px;
-  top: 160px;
+  top: 200px;
   height: 4px;
   background: linear-gradient(90deg, rgba(197, 160, 89, 0.2) 0%, #c5a059 4%, #f3d790 50%, #c5a059 96%, rgba(197, 160, 89, 0.2) 100%);
   border-radius: 2px;
@@ -1676,7 +1686,7 @@ body {
 /* Ticks temporais diretamente no eixo horizontal */
 .timeline-axis-tick {
   position: absolute;
-  top: 160px;
+  top: 200px;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -1741,7 +1751,7 @@ body {
 /* Nó do Acontecimento Histórico no Eixo Horizontal */
 .timeline-h-node {
   position: absolute;
-  top: 160px;
+  top: 200px;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -1752,15 +1762,15 @@ body {
 
 .timeline-h-node:hover,
 .timeline-h-node.selected {
-  z-index: 40;
+  z-index: 45;
 }
 
-/* Linhas verticais conectoras (agulhas) */
+/* Linhas verticais conectoras (agulhas) escalonadas por andares */
 .timeline-stem-up {
   position: absolute;
   bottom: 16px;
   width: 1.5px;
-  height: 22px;
+  height: 22px; /* padrão, ajustado inline pelo tier */
   background: linear-gradient(0deg, var(--gold-leaf), rgba(197, 160, 89, 0.3));
   pointer-events: none;
 }
@@ -1769,7 +1779,7 @@ body {
   position: absolute;
   top: 16px;
   width: 1.5px;
-  height: 22px;
+  height: 22px; /* padrão, ajustado inline pelo tier */
   background: linear-gradient(180deg, var(--gold-leaf), rgba(197, 160, 89, 0.3));
   pointer-events: none;
 }
@@ -1803,34 +1813,41 @@ body {
   box-shadow: 0 0 14px rgba(245, 158, 11, 0.75);
 }
 
-/* Caixa Superior: Nome e Data do Acontecimento */
+/* Caixa Superior: Nome e Data do Acontecimento com andares escalonados */
 .timeline-node-top-label {
   position: absolute;
-  bottom: 38px;
+  bottom: 38px; /* padrão, ajustado inline pelo tier */
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 220px;
+  width: 170px;
+  max-width: 170px;
   text-align: center;
   pointer-events: auto;
   cursor: pointer;
   transition: transform 0.2s ease;
+  z-index: 10;
 }
 
 .timeline-h-node:hover .timeline-node-top-label {
   transform: translateY(-3px);
+  z-index: 50;
 }
 
 .timeline-node-event-title {
   font-family: var(--font-display);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 700;
   color: #fff9e6;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
   line-height: 1.25;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
-  max-width: 200px;
+  max-width: 170px;
   word-break: break-word;
+  background: rgba(18, 14, 10, 0.78);
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .timeline-node-event-date {

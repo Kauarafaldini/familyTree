@@ -289,7 +289,9 @@
           <button class="btn btn-sm btn-medieval" onclick="app.adjustTimelineZoom(0.3)"
             title="Aumentar zoom da cronologia">+</button>
           <button class="btn btn-sm btn-medieval" onclick="app.resetTimelineZoom()"
-            title="Redefinir escala padrão">1:1</button>
+            title="Redefinir escala padrão (1:1)">1:1</button>
+          <button class="btn btn-sm btn-gold" onclick="app.fitTimelineToScreen()"
+            title="Ajustar escala para ver toda a cronologia do começo ao fim na tela">🔍 Ver Tudo</button>
         </div>
       </div>
 
@@ -423,6 +425,23 @@
 
       <!-- Controles de Edição (Apenas visíveis quando o usuário clica no lápis) -->
       <div class="map-edit-controls" id="mapEditControls" style="display: none;">
+        <!-- Seção: Alvo de Edição (Bordas vs Interior) + Cadeado -->
+        <div class="toolbar-section map-scope-section">
+          <span class="toolbar-section-label">Alvo de Edição:</span>
+          <button class="btn btn-sm btn-medieval" id="btnScopeBorder" onclick="app.setMapEditScope('border')"
+            title="Editar apenas o tamanho e contorno do continente: exibe as bolinhas de ajuste nas bordas para modelar">
+            🌍 Tamanho / Bordas
+          </button>
+          <button class="btn btn-sm btn-gold active-tool" id="btnScopeInterior" onclick="app.setMapEditScope('interior')"
+            title="Editar o que tem dentro do continente: esconde as bolinhas para você desenhar montanhas, árvores, rios e fundar cidades sem atrapalhar">
+            🏰 Interior (Dentro)
+          </button>
+          <button class="btn btn-sm btn-medieval" id="btnToggleLock" onclick="app.toggleCurrentTerritoryLock()"
+            title="Travar ou destravar o continente selecionado com cadeado contra edições acidentais de tamanho">
+            <span id="lockBtnIcon">🔒</span> <span id="lockBtnText">Travar Borda</span>
+          </button>
+        </div>
+
         <div class="toolbar-section">
           <span class="toolbar-section-label">Territórios &amp; Continentes:</span>
           <button class="btn btn-sm btn-gold map-continent-btn" id="mapToolAddContinent"
@@ -593,9 +612,7 @@
     </div>
 
     <div class="map-helper-bar" id="mapHelperBar" style="display: none;">
-      <span><strong>Modo de Edição Ativo:</strong> Arraste os <strong>pontos dourados nas bordas</strong> para esculpir
-        o continente, arraste o interior para movê-lo, ou use os botões de <strong>Montanhas</strong>,
-        <strong>Árvores</strong>, <strong>Estrada</strong> ou <strong>Rio</strong> para traçar sobre a terra.</span>
+      <span id="mapHelperBarContent"><strong>Modo de Edição Ativo:</strong> Use <strong>🌍 Tamanho / Bordas</strong> para ajustar as bolinhas da costa, ou <strong>🏰 Interior</strong> para desenhar relevo e fundar cidades sem as bolinhas atrapalharem. Você também pode clicar no <strong>🔒 Cadeado</strong> para travar o continente!</span>
     </div>
 
     <div class="map-studio-layout">

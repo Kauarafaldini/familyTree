@@ -42,6 +42,7 @@ class FantasyGenealogyApp {
     this.selectedTerritoryId =
       (this.engine.data.territories[0] && this.engine.data.territories[0].id) || null;
     this.isMapEditMode = false; // Começa sempre em Modo de Exibição
+    this.mapEditScope = "interior"; // "interior" (bolinhas de borda ocultas) ou "border" (bolinhas ativas para modelar)
     this.mapTool = "select"; // select, draw_mountain, draw_tree, draw_road, draw_river, add_capital, add_city
     this.showContinentNames = true; // Exibe ou oculta os nomes dos continentes no mapa
     this.selectedSettlementId = null;
@@ -3430,7 +3431,7 @@ class FantasyGenealogyApp {
     let base = 140;
     if (this.timelineZoomMode === "month") base = 340;
     if (this.timelineZoomMode === "day") base = 980;
-    return base * this.timelineZoom;
+    return Math.max(2.5, base * this.timelineZoom);
   }
 
   updateTimelineZoomModeFromZoom() {
@@ -3578,14 +3579,33 @@ class FantasyGenealogyApp {
     // 1. Linha do Eixo Central Horizontal
     html += `<div class="timeline-main-axis" style="left:${paddingX - 40}px; right:${paddingX - 40}px;"></div>`;
 
-    // 2. Marcas do tempo (Ticks)
-    for (let yr = startYear; yr <= endYear; yr++) {
-      const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
-      const isDecade = yr % 10 === 0;
-      const isFive = yr % 5 === 0;
+    // 2. Marcas do tempo (Ticks dinâmicos por nível de zoom para evitar sobreposição)
+    if (this.timelineZoomMode === "year") {
+      let tickStep = 1;
+      let labelStep = 5;
+      if (pixelsPerYear < 6) {
+        tickStep = 25;
+        labelStep = 50;
+      } else if (pixelsPerYear < 14) {
+        tickStep = 10;
+        labelStep = 25;
+      } else if (pixelsPerYear < 35) {
+        tickStep = 5;
+        labelStep = 10;
+      } else if (pixelsPerYear < 80) {
+        tickStep = 2;
+        labelStep = 5;
+      } else {
+        tickStep = 1;
+        labelStep = 5;
+      }
 
-      if (this.timelineZoomMode === "year") {
-        if (isFive) {
+      for (let yr = startYear; yr <= endYear; yr += tickStep) {
+        const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
+        const isMajor = yr % labelStep === 0;
+        const isDecade = yr % 10 === 0;
+
+        if (isMajor) {
           html += `
             <div class="timeline-axis-tick" style="left:${yrLeft}px;">
               <div class="${isDecade ? "axis-tick-mark-major" : "axis-tick-mark-minor"}"></div>
@@ -3599,7 +3619,10 @@ class FantasyGenealogyApp {
             </div>
           `;
         }
-      } else if (this.timelineZoomMode === "month") {
+      }
+    } else if (this.timelineZoomMode === "month") {
+      for (let yr = startYear; yr <= endYear; yr++) {
+        const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
         html += `
           <div class="timeline-axis-tick" style="left:${yrLeft}px;">
             <div class="axis-tick-mark-major"></div>
@@ -3616,7 +3639,10 @@ class FantasyGenealogyApp {
             </div>
           `;
         }
-      } else if (this.timelineZoomMode === "day") {
+      }
+    } else if (this.timelineZoomMode === "day") {
+      for (let yr = startYear; yr <= endYear; yr++) {
+        const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
         html += `
           <div class="timeline-axis-tick" style="left:${yrLeft}px;">
             <div class="axis-tick-mark-major"></div>
@@ -3645,8 +3671,25 @@ class FantasyGenealogyApp {
       }
     }
 
-    // 3. Nós dos Acontecimentos na Linha Horizontal
-    filteredEvents.forEach(ev => {
+    // 3. Nós dos Acontecimentos na Linha Horizontal (Ordenados e Escalonados em Andares sem Sobreposição)
+    const sortedEvents = filteredEvents.slice().sort((a, b) => {
+      const ya = Number(a.year) || 0;
+      const yb = Number(b.year) || 0;
+      if (ya !== yb) return ya - yb;
+      const ma = Number(a.month) || 1;
+      const mb = Number(b.month) || 1;
+      if (ma !== mb) return ma - mb;
+      const da = Number(a.day) || 1;
+      const db = Number(b.day) || 1;
+      if (da !== db) return da - db;
+      return (a.title || "").localeCompare(b.title || "");
+    });
+
+    const minSealDistance = 38; // Distância mínima entre centros de selos heráldicos para que nunca se sobreponham
+    let lastPlacedSealX = -9999;
+    const tierLastX = [-9999, -9999, -9999]; // Rastreamento de andares verticais (Tier 0, 1, 2)
+
+    sortedEvents.forEach(ev => {
       const yr = Number(ev.year) || startYear;
       const m = Number(ev.month) || 1;
       const d = Number(ev.day) || 1;
@@ -3654,7 +3697,39 @@ class FantasyGenealogyApp {
       const yrFrac = yr - startYear;
       const mFrac = (m - 1) / 12;
       const dFrac = (d - 1) / (12 * 30);
-      const nodeX = paddingX + (yrFrac + mFrac + dFrac) * pixelsPerYear;
+      const rawX = paddingX + (yrFrac + mFrac + dFrac) * pixelsPerYear;
+
+      // Nudge suave se houver colisão de selos no mesmo ano/mês (afasta para a direita apenas o mínimo necessário)
+      const nodeX = Math.max(rawX, lastPlacedSealX + minSealDistance);
+      lastPlacedSealX = nodeX;
+
+      // Atribuição de andar (Tier) para que nomes não colidam (rótulos têm ~170px de largura)
+      let chosenTier = 0;
+      const minLabelDist = 135;
+      if (nodeX - tierLastX[0] >= minLabelDist) {
+        chosenTier = 0;
+      } else if (nodeX - tierLastX[1] >= minLabelDist) {
+        chosenTier = 1;
+      } else if (nodeX - tierLastX[2] >= minLabelDist) {
+        chosenTier = 2;
+      } else {
+        let maxDist = -1;
+        let bestTier = 0;
+        for (let t = 0; t < 3; t++) {
+          const dist = nodeX - tierLastX[t];
+          if (dist > maxDist) {
+            maxDist = dist;
+            bestTier = t;
+          }
+        }
+        chosenTier = bestTier;
+      }
+      tierLastX[chosenTier] = nodeX;
+
+      const stemUpHeight = 22 + chosenTier * 46;
+      const labelBottom = 38 + chosenTier * 46;
+      const stemDownHeight = 22 + (chosenTier % 2) * 22;
+      const cardTop = 38 + (chosenTier % 2) * 22;
 
       const meta = this.getTimelineCategoryMeta(ev.category);
       const isEpic = ev.importance === "epic";
@@ -3708,11 +3783,11 @@ class FantasyGenealogyApp {
              style="left:${nodeX}px;"
              onclick="app.selectTimelineNode('${ev.id}')">
           
-          <!-- Haste conectora superior -->
-          <div class="timeline-stem-up"></div>
+          <!-- Haste conectora superior escalonada -->
+          <div class="timeline-stem-up" style="height:${stemUpHeight}px;"></div>
 
-          <!-- Rótulo Superior: Nome do Evento e Data -->
-          <div class="timeline-node-top-label" title="${this.escapeHtml(ev.title)} (${dateText})">
+          <!-- Rótulo Superior: Nome do Evento e Data em andar dinâmico -->
+          <div class="timeline-node-top-label" style="bottom:${labelBottom}px;" title="${this.escapeHtml(ev.title)} (${dateText})">
             <div class="timeline-node-event-title">${this.escapeHtml(ev.title)}</div>
             <div class="timeline-node-event-date">${dateText}</div>
           </div>
@@ -3722,11 +3797,11 @@ class FantasyGenealogyApp {
             <span>${meta.icon}</span>
           </div>
 
-          <!-- Haste conectora inferior -->
-          <div class="timeline-stem-down"></div>
+          <!-- Haste conectora inferior escalonada -->
+          <div class="timeline-stem-down" style="height:${stemDownHeight}px;"></div>
 
           <!-- Caixa Inferior: Resumo do Conto da Cronologia (Desdobra ao aproximar o zoom ou ao passar o mouse) -->
-          <div class="timeline-node-summary-card" onclick="event.stopPropagation()">
+          <div class="timeline-node-summary-card" style="top:${cardTop}px;" onclick="event.stopPropagation()">
             <div class="timeline-card-badges">
               <span class="badge-pill ${meta.badgeClass}" style="border-color:${meta.color}; color:${meta.color}; font-size:0.7rem;">
                 ${meta.icon} ${meta.label}
@@ -3759,6 +3834,10 @@ class FantasyGenealogyApp {
         </div>
       `;
     });
+
+    if (lastPlacedSealX + paddingX > totalWidth) {
+      track.style.width = `${lastPlacedSealX + paddingX}px`;
+    }
 
     track.innerHTML = html;
   }
@@ -3821,7 +3900,11 @@ class FantasyGenealogyApp {
   }
 
   adjustTimelineZoom(delta) {
-    const newZoom = Math.max(0.4, Math.min(6.5, Number((this.timelineZoom + delta).toFixed(2))));
+    let step = delta;
+    if (this.timelineZoom <= 0.35 && Math.abs(delta) > 0.05) {
+      step = delta > 0 ? 0.05 : -0.05;
+    }
+    const newZoom = Math.max(0.04, Math.min(6.5, Number((this.timelineZoom + step).toFixed(2))));
     if (newZoom !== this.timelineZoom) {
       this.timelineZoom = newZoom;
       this.updateTimelineZoomModeFromZoom();
@@ -3833,6 +3916,50 @@ class FantasyGenealogyApp {
     this.timelineZoom = 1.0;
     this.timelineZoomMode = "year";
     this.renderTimeline();
+  }
+
+  // Ajusta o zoom perfeitamente para ver o início e o fim da cronologia na tela sem scroll excessivo
+  fitTimelineToScreen() {
+    const viewport = document.getElementById("timelineHorizontalViewport");
+    if (!viewport) return;
+
+    const filteredEvents = this.getFilteredTimelineEvents();
+    if (!filteredEvents || filteredEvents.length === 0) {
+      this.resetTimelineZoom();
+      return;
+    }
+
+    let minYear = Infinity;
+    let maxYear = -Infinity;
+    filteredEvents.forEach(e => {
+      const y = Number(e.year);
+      if (!isNaN(y)) {
+        if (y < minYear) minYear = y;
+        if (y > maxYear) maxYear = y;
+      }
+    });
+
+    if (minYear === Infinity) {
+      minYear = (this.engine.data.currentYear || 1220) - 20;
+      maxYear = (this.engine.data.currentYear || 1220) + 10;
+    }
+
+    const startYear = Math.floor((minYear - 4) / 5) * 5;
+    const endYear = Math.ceil((maxYear + 4) / 5) * 5;
+    const totalYears = Math.max(10, endYear - startYear);
+
+    const paddingX = 160;
+    const availableWidth = Math.max(380, viewport.clientWidth - (paddingX * 2));
+    const neededPixelsPerYear = availableWidth / totalYears;
+
+    let targetZoom = neededPixelsPerYear / 140;
+    targetZoom = Math.max(0.04, Math.min(6.0, Number(targetZoom.toFixed(2))));
+
+    this.timelineZoom = targetZoom;
+    this.updateTimelineZoomModeFromZoom();
+    this.renderTimeline();
+
+    viewport.scrollTo({ left: 0, behavior: "smooth" });
   }
 
   toggleTimelineSortOrder() {
@@ -4188,7 +4315,7 @@ class FantasyGenealogyApp {
       // Fator de aproximação / afastamento
       const zoomFactor = e.deltaY < 0 ? 1.2 : 0.833;
       let newZoom = Number((this.timelineZoom * zoomFactor).toFixed(2));
-      newZoom = Math.max(0.4, Math.min(6.5, newZoom));
+      newZoom = Math.max(0.04, Math.min(6.5, newZoom));
 
       if (newZoom !== this.timelineZoom) {
         this.timelineZoom = newZoom;
@@ -4663,6 +4790,7 @@ class FantasyGenealogyApp {
       if (badgeTextEl) badgeTextEl.textContent = "Modo de Edição";
       if (controls) controls.style.display = "flex";
       if (helperBar) helperBar.style.display = "flex";
+      this.updateMapScopeUI();
     } else {
       if (btn) {
         btn.classList.remove("btn-editing-active");
@@ -4678,6 +4806,92 @@ class FantasyGenealogyApp {
       if (badgeTextEl) badgeTextEl.textContent = "Modo de Exibição";
       if (controls) controls.style.display = "none";
       if (helperBar) helperBar.style.display = "none";
+    }
+  }
+
+  setMapEditScope(scope) {
+    this.mapEditScope = scope === "border" ? "border" : "interior";
+    if (this.mapEditScope === "border") {
+      this.setMapTool("select");
+    }
+    this.updateMapScopeUI();
+    this.drawMapCanvas();
+    this.renderMapStudio();
+    if (typeof this.showToast === "function") {
+      if (this.mapEditScope === "border") {
+        this.showToast("🌍 Modo Tamanho/Bordas: use as bolinhas para modelar o formato do continente.");
+      } else {
+        this.showToast("🏰 Modo Interior: bolinhas de borda ocultas. Desenhe e posicione itens livremente sem atrapalhar!");
+      }
+    }
+  }
+
+  updateMapScopeUI() {
+    const btnBorder = document.getElementById("btnScopeBorder");
+    const btnInterior = document.getElementById("btnScopeInterior");
+    if (btnBorder && btnInterior) {
+      if (this.mapEditScope === "border") {
+        btnBorder.classList.add("active-tool", "btn-gold");
+        btnBorder.classList.remove("btn-medieval");
+        btnInterior.classList.remove("active-tool", "btn-gold");
+        btnInterior.classList.add("btn-medieval");
+      } else {
+        btnInterior.classList.add("active-tool", "btn-gold");
+        btnInterior.classList.remove("btn-medieval");
+        btnBorder.classList.remove("active-tool", "btn-gold");
+        btnBorder.classList.add("btn-medieval");
+      }
+    }
+
+    // Atualiza botão de cadeado do continente selecionado
+    const t = this.engine.getTerritory(this.selectedTerritoryId);
+    const lockIcon = document.getElementById("lockBtnIcon");
+    const lockText = document.getElementById("lockBtnText");
+    const lockBtn = document.getElementById("btnToggleLock");
+    if (t) {
+      const isLocked = Boolean(t.locked);
+      if (lockIcon) lockIcon.textContent = isLocked ? "🔒" : "🔓";
+      if (lockText) lockText.textContent = isLocked ? "Destravar Borda" : "Travar Borda";
+      if (lockBtn) {
+        lockBtn.title = isLocked
+          ? `Bordas de "${t.name}" estão travadas com cadeado. Clique para destravar e modelar.`
+          : `Bordas de "${t.name}" estão destravadas. Clique para travar contra edições acidentais.`;
+        if (isLocked) {
+          lockBtn.classList.add("btn-gold");
+          lockBtn.classList.remove("btn-medieval");
+        } else {
+          lockBtn.classList.remove("btn-gold");
+          lockBtn.classList.add("btn-medieval");
+        }
+      }
+    }
+  }
+
+  toggleCurrentTerritoryLock(terrId = null) {
+    const targetId = terrId || this.selectedTerritoryId;
+    const t = this.engine.getTerritory(targetId);
+    if (!t) return;
+    const snapshot = this.engine.createSnapshot();
+    t.locked = !t.locked;
+    this.engine.recordAuditLog(
+      "TERRITÓRIO",
+      "Cadeado de Continente",
+      t.locked ? `Borda Travada: ${t.name}` : `Borda Destravada: ${t.name}`,
+      t.locked
+        ? `O continente "${t.name}" foi travado com cadeado. As bolinhas de ajuste foram desativadas para proteger seu tamanho e forma enquanto você edita o interior.`
+        : `O continente "${t.name}" foi destravado. Suas bordas e tamanho agora podem ser modelados livremente.`,
+      snapshot
+    );
+    this.engine.saveToStorage();
+    this.updateMapScopeUI();
+    this.drawMapCanvas();
+    this.renderMapStudio();
+    if (typeof this.showToast === "function") {
+      this.showToast(
+        t.locked
+          ? `🔒 Bordas de "${t.name}" travadas! As bolinhas sumiram para você editar o interior livremente.`
+          : `🔓 Bordas de "${t.name}" destravadas para modelar tamanho e formato.`
+      );
     }
   }
 
@@ -4712,6 +4926,12 @@ class FantasyGenealogyApp {
     if (!this.isMapEditMode) {
       this.isMapEditMode = true;
       this.updateMapEditModeUI();
+    }
+    // Se selecionou uma ferramenta de desenho interno ou carimbo, muda automaticamente para escopo "interior"
+    // para que as bolinhas da borda do continente não atrapalhem o traço nem os cliques
+    if (tool !== "select" && this.mapEditScope === "border") {
+      this.mapEditScope = "interior";
+      this.updateMapScopeUI();
     }
     this.mapTool = tool;
     const toolIds = [
@@ -4864,6 +5084,8 @@ class FantasyGenealogyApp {
 
     this.engine.data.territories.push(newTerr);
     this.selectedTerritoryId = newTerr.id;
+    this.mapEditScope = "border";
+    this.updateMapScopeUI();
     this.setMapTool("select");
 
     this.engine.recordAuditLog(
@@ -4909,14 +5131,14 @@ class FantasyGenealogyApp {
   }
 
   findHitVertex(pt) {
-    if (!this.isMapEditMode) return null;
+    if (!this.isMapEditMode || this.mapEditScope === "interior") return null;
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
     const selected = this.engine.getTerritory(this.selectedTerritoryId);
     const hitThreshold = 12 / this.mapZoom;
     const midThreshold = 10 / this.mapZoom;
 
-    // 1. Pontos principais da borda do território selecionado
-    if (selected && Array.isArray(selected.points)) {
+    // 1. Pontos principais da borda do território selecionado (se não estiver com cadeado)
+    if (selected && Array.isArray(selected.points) && !selected.locked) {
       for (let i = 0; i < selected.points.length; i++) {
         const p = selected.points[i];
         if (Math.hypot(pt.x - p.x, pt.y - p.y) <= hitThreshold) {
@@ -4936,10 +5158,10 @@ class FantasyGenealogyApp {
       }
     }
 
-    // 3. Pontos da borda de qualquer outro território
+    // 3. Pontos da borda de qualquer outro território (se não estiver com cadeado)
     for (let tIdx = this.engine.data.territories.length - 1; tIdx >= 0; tIdx--) {
       const t = this.engine.data.territories[tIdx];
-      if (!t || !Array.isArray(t.points)) continue;
+      if (!t || !Array.isArray(t.points) || t.locked) continue;
       for (let i = 0; i < t.points.length; i++) {
         const p = t.points[i];
         if (Math.hypot(pt.x - p.x, pt.y - p.y) <= hitThreshold) {
@@ -4976,6 +5198,12 @@ class FantasyGenealogyApp {
   subdivideSelectedTerritoryPoints() {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
+    if (t.locked) {
+      if (typeof this.showToast === "function") this.showToast(`🔒 "${t.name}" está com a borda travada. Destrave-a para modelar o tamanho.`);
+      return;
+    }
+    this.mapEditScope = "border";
+    this.updateMapScopeUI();
     this.engine.ensureTerritoryPolygons([t]);
     if (t.points.length >= 128) {
       if (typeof this.showToast === "function") this.showToast("Limite de 128 pontos de modelagem atingido.");
@@ -5012,6 +5240,12 @@ class FantasyGenealogyApp {
   reduceSelectedTerritoryPoints() {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
+    if (t.locked) {
+      if (typeof this.showToast === "function") this.showToast(`🔒 "${t.name}" está com a borda travada. Destrave-a para modelar o tamanho.`);
+      return;
+    }
+    this.mapEditScope = "border";
+    this.updateMapScopeUI();
     this.engine.ensureTerritoryPolygons([t]);
     if (t.points.length <= 8) {
       if (typeof this.showToast === "function") this.showToast("Mínimo de 8 pontos mantido para preservar o formato da terra.");
@@ -5039,6 +5273,12 @@ class FantasyGenealogyApp {
   scaleSelectedTerritory(factor = 1.15) {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
+    if (t.locked) {
+      if (typeof this.showToast === "function") this.showToast(`🔒 "${t.name}" está com a borda travada. Destrave-a para modelar o tamanho.`);
+      return;
+    }
+    this.mapEditScope = "border";
+    this.updateMapScopeUI();
     this.engine.ensureTerritoryPolygons([t]);
 
     const snapshot = this.engine.createSnapshot();
@@ -5067,6 +5307,12 @@ class FantasyGenealogyApp {
   smoothSelectedTerritoryPoints() {
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
     if (!t) return;
+    if (t.locked) {
+      if (typeof this.showToast === "function") this.showToast(`🔒 "${t.name}" está com a borda travada. Destrave-a para modelar o contorno.`);
+      return;
+    }
+    this.mapEditScope = "border";
+    this.updateMapScopeUI();
     this.engine.ensureTerritoryPolygons([t]);
 
     const snapshot = this.engine.createSnapshot();
@@ -5098,6 +5344,12 @@ class FantasyGenealogyApp {
   resetTerritoryPolygonShape(terrId) {
     const t = this.engine.getTerritory(terrId);
     if (!t) return;
+    if (t.locked) {
+      if (typeof this.showToast === "function") this.showToast(`🔒 "${t.name}" está com a borda travada. Destrave-a para redefinir o formato.`);
+      return;
+    }
+    this.mapEditScope = "border";
+    this.updateMapScopeUI();
     const snapshot = this.engine.createSnapshot();
     t.points = this.engine.generateContinentPoints(t.x || 480, t.y || 280, 110, 85, 24, Date.now() % 19);
     this.updateTerritoryCentroid(t);
@@ -5343,10 +5595,10 @@ class FantasyGenealogyApp {
 
     // Menu de contexto no canvas (botão direito): remove vértice clicado se houver mais de 6
     canvas.addEventListener("contextmenu", e => {
-      if (!this.isMapEditMode) return;
+      if (!this.isMapEditMode || this.mapEditScope === "interior") return;
       const pt = this.getMapWorldCoords(e);
       const hit = this.findHitVertex(pt);
-      if (hit && hit.kind === "vertex" && hit.terr && hit.terr.points.length > 6) {
+      if (hit && hit.kind === "vertex" && hit.terr && !hit.terr.locked && hit.terr.points.length > 6) {
         e.preventDefault();
         const snapshot = this.engine.createSnapshot();
         hit.terr.points.splice(hit.index, 1);
@@ -5547,40 +5799,44 @@ class FantasyGenealogyApp {
         this.renderMapStudio();
         return;
       }
-      const hit = this.findHitVertex(pt);
-      if (hit && hit.kind === "vertex") {
-        this.selectedTerritoryId = hit.terr.id;
-        this.selectedMapItemId = null;
-        this.mapDragSnapshot = this.engine.createSnapshot();
-        this.mapDragModified = false;
-        this.draggingVertex = { terrId: hit.terr.id, index: hit.index };
-        this.renderMapStudio();
-        return;
-      }
+      if (this.mapEditScope === "border") {
+        const hit = this.findHitVertex(pt);
+        if (hit && hit.kind === "vertex" && !hit.terr.locked) {
+          this.selectedTerritoryId = hit.terr.id;
+          this.selectedMapItemId = null;
+          this.mapDragSnapshot = this.engine.createSnapshot();
+          this.mapDragModified = false;
+          this.draggingVertex = { terrId: hit.terr.id, index: hit.index };
+          this.renderMapStudio();
+          return;
+        }
 
-      if (hit && hit.kind === "midpoint") {
-        this.selectedTerritoryId = hit.terr.id;
-        this.selectedMapItemId = null;
-        this.pushMapUndoState();
-        this.mapDragSnapshot = this.engine.createSnapshot();
-        hit.terr.points.splice(hit.index + 1, 0, { x: pt.x, y: pt.y });
-        this.mapDragModified = true;
-        this.draggingVertex = { terrId: hit.terr.id, index: hit.index + 1 };
-        this.renderMapStudio();
-        return;
+        if (hit && hit.kind === "midpoint" && !hit.terr.locked) {
+          this.selectedTerritoryId = hit.terr.id;
+          this.selectedMapItemId = null;
+          this.pushMapUndoState();
+          this.mapDragSnapshot = this.engine.createSnapshot();
+          hit.terr.points.splice(hit.index + 1, 0, { x: pt.x, y: pt.y });
+          this.mapDragModified = true;
+          this.draggingVertex = { terrId: hit.terr.id, index: hit.index + 1 };
+          this.renderMapStudio();
+          return;
+        }
       }
 
       const hitTerr = this.findHitTerritoryBody(pt);
       if (hitTerr) {
         this.selectedTerritoryId = hitTerr.id;
         this.selectedMapItemId = null;
-        this.mapDragSnapshot = this.engine.createSnapshot();
-        this.mapDragModified = false;
-        this.draggingTerritory = {
-          terrId: hitTerr.id,
-          lastX: pt.x,
-          lastY: pt.y
-        };
+        if (this.mapEditScope === "border" && !hitTerr.locked) {
+          this.mapDragSnapshot = this.engine.createSnapshot();
+          this.mapDragModified = false;
+          this.draggingTerritory = {
+            terrId: hitTerr.id,
+            lastX: pt.x,
+            lastY: pt.y
+          };
+        }
         this.renderMapStudio();
         return;
       }
@@ -5729,29 +5985,42 @@ class FantasyGenealogyApp {
 
       const hitStamp = this.findHitMapStamp(pt);
       const hitSettle = this.findHitSettlement(pt);
-      const hit = this.findHitVertex(pt);
-      const prevHover = this.hoveredMapHandle;
-      this.hoveredMapHandle = hit;
-      if (
-        (prevHover && !hit) ||
-        (!prevHover && hit) ||
-        (prevHover &&
-          hit &&
-          (prevHover.index !== hit.index ||
-            prevHover.kind !== hit.kind ||
-            prevHover.terr.id !== hit.terr.id))
-      ) {
-        this.drawMapCanvas();
-      }
 
-      if (hitStamp || hitSettle) {
-        canvas.style.cursor = "pointer";
-      } else if (hit) {
-        canvas.style.cursor = hit.kind === "midpoint" ? "copy" : "grab";
-      } else if (this.findHitTerritoryBody(pt)) {
-        canvas.style.cursor = "move";
+      if (this.mapEditScope === "border") {
+        const hit = this.findHitVertex(pt);
+        const prevHover = this.hoveredMapHandle;
+        this.hoveredMapHandle = hit;
+        if (
+          (prevHover && !hit) ||
+          (!prevHover && hit) ||
+          (prevHover &&
+            hit &&
+            (prevHover.index !== hit.index ||
+              prevHover.kind !== hit.kind ||
+              prevHover.terr.id !== hit.terr.id))
+        ) {
+          this.drawMapCanvas();
+        }
+
+        if (hitStamp || hitSettle) {
+          canvas.style.cursor = "pointer";
+        } else if (hit) {
+          canvas.style.cursor = hit.kind === "midpoint" ? "copy" : "grab";
+        } else if (this.findHitTerritoryBody(pt) && !this.findHitTerritoryBody(pt).locked) {
+          canvas.style.cursor = "move";
+        } else {
+          canvas.style.cursor = "grab";
+        }
       } else {
-        canvas.style.cursor = "grab";
+        // Modo Interior: bolinhas de borda ocultas e inativas
+        this.hoveredMapHandle = null;
+        if (hitStamp || hitSettle) {
+          canvas.style.cursor = "pointer";
+        } else if (this.findHitTerritoryBody(pt)) {
+          canvas.style.cursor = "default";
+        } else {
+          canvas.style.cursor = "grab";
+        }
       }
     });
 
@@ -6238,6 +6507,63 @@ class FantasyGenealogyApp {
     ctx.restore();
   }
 
+  // Utilitário para quebra de linha elegante de nomes de cidades e capitais sem cortar palavras
+  splitSettlementNameLines(text, maxCharsPerLine = 14) {
+    if (!text) return [];
+    const str = String(text).trim();
+    if (str.length <= maxCharsPerLine) return [str];
+    const words = str.split(/\s+/);
+    if (words.length === 1) {
+      const parts = [];
+      for (let i = 0; i < str.length; i += maxCharsPerLine) {
+        parts.push(str.slice(i, i + maxCharsPerLine));
+      }
+      return parts;
+    }
+    const lines = [];
+    let current = "";
+    words.forEach(w => {
+      if (!current) {
+        current = w;
+      } else if ((current + " " + w).length <= maxCharsPerLine) {
+        current += " " + w;
+      } else {
+        lines.push(current);
+        current = w;
+      }
+    });
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  // Renderiza o nome da cidade/capital sem caixa de fundo, com contorno suave (halo) e quebra de linha
+  drawSettlementLabel(ctx, text, yOffset, isCapital, isSelected) {
+    if (!text) return;
+    const lines = this.splitSettlementNameLines(text, 14);
+    const fontSize = isCapital ? 10.5 : 9.5;
+    const lineHeight = fontSize + 3.5;
+
+    ctx.save();
+    ctx.font = `${isCapital ? "700" : "600"} ${fontSize}px Cinzel, Georgia, serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    lines.forEach((line, idx) => {
+      const lineY = yOffset + (idx * lineHeight);
+      // Halo / Contorno nítido escuro para legibilidade máxima sobre qualquer mapa/solo sem precisar de fundo retangular
+      ctx.strokeStyle = "rgba(10, 8, 5, 0.94)";
+      ctx.lineWidth = 2.8;
+      ctx.lineJoin = "round";
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, 0, lineY);
+
+      // Preenchimento de tom nobre / dourado
+      ctx.fillStyle = isSelected ? "#fbbf24" : (isCapital ? "#fef08a" : "#f5f5f4");
+      ctx.fillText(line, 0, lineY);
+    });
+    ctx.restore();
+  }
+
   // Desenha um assentamento como um PONTO ENVOLTO EM UM CÍRCULO cartográfico com o nome legível
   drawSettlementPoint(ctx, settle, isSelected = false) {
     ctx.save();
@@ -6281,27 +6607,9 @@ class FantasyGenealogyApp {
       ctx.setLineDash([]);
     }
 
-    // Nome da cidade/capital com contraste nítido em qualquer relevo
+    // Nome da cidade/capital sem fundo envolvente, com quebra de linha se for longo
     if (settle.name) {
-      const fontSize = isCapital ? 10.5 : 9.5;
-      ctx.font = `${isCapital ? "700" : "600"} ${fontSize}px Cinzel, Georgia, serif`;
-      const metrics = ctx.measureText(settle.name);
-      const tw = metrics.width;
-      const bw = tw + 8;
-      const bh = 14;
-      const by = outerRadius + 3;
-
-      ctx.fillStyle = "rgba(16, 12, 8, 0.88)";
-      ctx.fillRect(-bw / 2, by, bw, bh);
-
-      ctx.strokeStyle = isSelected ? "#f59e0b" : (isCapital ? "rgba(185, 28, 28, 0.8)" : "rgba(197, 160, 89, 0.6)");
-      ctx.lineWidth = 0.9;
-      ctx.strokeRect(-bw / 2, by, bw, bh);
-
-      ctx.fillStyle = isCapital ? "#fef08a" : "#f5f5f4";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(settle.name, 0, by + bh / 2 + 0.5);
+      this.drawSettlementLabel(ctx, settle.name, outerRadius + 4, isCapital, isSelected);
     }
 
     ctx.restore();
@@ -6402,26 +6710,9 @@ class FantasyGenealogyApp {
     ctx.fillStyle = "#dc2626";
     ctx.fill();
 
-    // Nome da Capital (placa heráldica de cartografia antiga)
+    // Nome da Capital (sem caixa envolvente, com contorno nítido e quebra de linha)
     if (name) {
-      ctx.font = "700 10px Cinzel, Georgia, serif";
-      const metrics = ctx.measureText(name);
-      const tw = metrics.width;
-      const bw = tw + 10;
-      const bh = 15;
-      const by = 13 * s;
-
-      ctx.fillStyle = "rgba(16, 12, 8, 0.88)";
-      ctx.fillRect(-bw / 2, by, bw, bh);
-
-      ctx.strokeStyle = isSelected ? "#f59e0b" : "#c5a059";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-bw / 2, by, bw, bh);
-
-      ctx.fillStyle = "#fff8e7";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(name, 0, by + bh / 2 + 0.5);
+      this.drawSettlementLabel(ctx, name, 13 * s + 2, true, isSelected);
     }
 
     ctx.restore();
@@ -6500,26 +6791,9 @@ class FantasyGenealogyApp {
     ctx.quadraticCurveTo(11 * s, -9 * s, 10 * s, -12 * s);
     ctx.stroke();
 
-    // 3. Nome da Cidade / Vila
+    // 3. Nome da Cidade / Vila (sem caixa envolvente, com contorno nítido e quebra de linha)
     if (name) {
-      ctx.font = "600 9.5px Cinzel, Georgia, serif";
-      const metrics = ctx.measureText(name);
-      const tw = metrics.width;
-      const bw = tw + 8;
-      const bh = 14;
-      const by = 11 * s;
-
-      ctx.fillStyle = "rgba(16, 12, 8, 0.85)";
-      ctx.fillRect(-bw / 2, by, bw, bh);
-
-      ctx.strokeStyle = isSelected ? "#38bdf8" : "rgba(197, 160, 89, 0.6)";
-      ctx.lineWidth = 0.9;
-      ctx.strokeRect(-bw / 2, by, bw, bh);
-
-      ctx.fillStyle = "#e8dcbc";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(name, 0, by + bh / 2 + 0.5);
+      this.drawSettlementLabel(ctx, name, 11 * s + 2, false, isSelected);
     }
 
     ctx.restore();
@@ -6769,10 +7043,12 @@ class FantasyGenealogyApp {
 
     // ------------------------------------------------------------------------
     // 4. PONTOS DE CONTROLE NAS BORDAS DOS TERRITÓRIOS (MODELAGEM PELA AUTORA)
-    // Apenas visíveis quando o MODO DE EDIÇÃO estiver ativado!
+    // Apenas visíveis quando o MODO DE EDIÇÃO estiver ativado E o escopo for "border"!
+    // Se o continente estiver com cadeado (t.locked), as bolinhas nunca aparecem!
     // ------------------------------------------------------------------------
-    if (this.isMapEditMode) {
+    if (this.isMapEditMode && this.mapEditScope === "border") {
       territories.forEach(t => {
+        if (t.locked) return; // Se o continente tiver cadeado, NUNCA desenha as bolinhas de ajuste!
         if (!Array.isArray(t.points) || t.points.length < 3) return;
         const isSelected = t.id === this.selectedTerritoryId;
 
@@ -6850,6 +7126,20 @@ class FantasyGenealogyApp {
             ctx.lineWidth = 1 / this.mapZoom;
             ctx.stroke();
           });
+          ctx.restore();
+        }
+      });
+    }
+
+    // Indicador sutil de cadeado no continente quando travado
+    if (this.isMapEditMode) {
+      territories.forEach(t => {
+        if (t.locked && t.points && t.points.length >= 3) {
+          ctx.save();
+          ctx.font = `600 ${Math.max(12, Math.round(15 / this.mapZoom))}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🔒", t.x, t.y - (18 / this.mapZoom));
           ctx.restore();
         }
       });
@@ -7026,13 +7316,21 @@ class FantasyGenealogyApp {
       .map(c => `<option value="${c.id}">${this.escapeHtml(c.name)}</option>`)
       .join("");
 
+    this.updateMapScopeUI();
+
     panel.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
         <div>
-          <span class="creation-cat-tag">${this.escapeHtml(t.type || "Território / Continente")}${this.isMapEditMode ? ` &bull; ${borderPointsCount} pontos na borda` : ""}</span>
-          <h2 style="font-family:var(--font-display); font-size:1rem; margin-top:6px; color:var(--gold-leaf); text-transform:uppercase;">${this.escapeHtml(t.name)}</h2>
+          <span class="creation-cat-tag">${this.escapeHtml(t.type || "Território / Continente")}${t.locked ? ' &bull; 🔒 Borda Travada' : (this.isMapEditMode ? ` &bull; 🔓 ${borderPointsCount} pontos na borda` : "")}</span>
+          <h2 style="font-family:var(--font-display); font-size:1rem; margin-top:6px; color:var(--gold-leaf); text-transform:uppercase;">${this.escapeHtml(t.name)} ${t.locked ? '🔒' : ''}</h2>
         </div>
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          ${this.isMapEditMode ? `
+            <button class="btn btn-sm ${t.locked ? 'btn-gold' : 'btn-medieval'}" onclick="app.toggleCurrentTerritoryLock('${t.id}')"
+              title="${t.locked ? 'Destravar para modelar tamanho e formato' : 'Travar borda com cadeado para editar apenas o interior'}">
+              ${t.locked ? '🔓 Destravar' : '🔒 Travar Borda'}
+            </button>
+          ` : ''}
           <button class="btn btn-sm btn-medieval" onclick="app.openTerritoryModal('${t.id}')" title="Alterar nome, cor e casa deste território">Editar</button>
           ${this.isMapEditMode ? `<button class="btn btn-sm btn-danger" onclick="app.openDeleteTerritoryModal('${t.id}')" title="Apagar território">&times;</button>` : ""}
         </div>
@@ -7045,14 +7343,24 @@ class FantasyGenealogyApp {
 
       ${
         this.isMapEditMode
-          ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-              <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Dobrar a quantidade de pontos na borda">+ Pontos na Borda</button>
-              <button class="btn btn-sm btn-medieval" onclick="app.reduceSelectedTerritoryPoints()" title="Reduzir pela metade a quantidade de pontos da borda">&minus; Pontos na Borda</button>
-              <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.2)" title="Ampliar território em 20%">+ Expandir</button>
-              <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.85)" title="Reduzir território em 15%">&minus; Reduzir</button>
-              <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar o contorno costeiro">Suavizar Costa</button>
-              <button class="btn btn-sm btn-medieval" onclick="app.resetTerritoryPolygonShape('${t.id}')" title="Restaurar formato circular de continente">Redefinir Formato</button>
-            </div>`
+          ? (t.locked
+              ? `<div class="card-box" style="padding:10px 12px; margin-bottom:12px; background:rgba(220,38,38,0.1); border-left:3px solid #dc2626;">
+                   <div style="font-size:0.83rem; color:var(--ink-primary); line-height:1.5;">
+                     🔒 <strong>Borda Travada com Cadeado:</strong> O contorno e tamanho deste continente estão protegidos contra edições acidentais. Você pode desenhar relevo (montanhas, árvores, rios) e fundar cidades livremente sem as bolinhas atrapalharem.
+                     <div style="margin-top:6px;">
+                       <button class="btn btn-sm btn-medieval" onclick="app.toggleCurrentTerritoryLock('${t.id}')">🔓 Destravar para Modelar Bordas</button>
+                     </div>
+                   </div>
+                 </div>`
+              : `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                  <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()" title="Dobrar a quantidade de pontos na borda">+ Pontos na Borda</button>
+                  <button class="btn btn-sm btn-medieval" onclick="app.reduceSelectedTerritoryPoints()" title="Reduzir pela metade a quantidade de pontos da borda">&minus; Pontos na Borda</button>
+                  <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.2)" title="Ampliar território em 20%">+ Expandir</button>
+                  <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.85)" title="Reduzir território em 15%">&minus; Reduzir</button>
+                  <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()" title="Suavizar o contorno costeiro">Suavizar Costa</button>
+                  <button class="btn btn-sm btn-medieval" onclick="app.resetTerritoryPolygonShape('${t.id}')" title="Restaurar formato circular de continente">Redefinir Formato</button>
+                </div>`
+            )
           : ""
       }
 
