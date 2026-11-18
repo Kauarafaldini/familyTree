@@ -68,11 +68,11 @@
     </nav>
 
     <div class="header-actions">
-      <!-- Indicador de Conexão com MongoDB Atlas via PHP -->
+      <!-- Indicador de Conexão com MongoDB Atlas via Node.js -->
       <div class="db-status-pill" id="dbStatusBadge" onclick="app.openDatabaseModal()"
-        title="Status da sincronização com MongoDB Atlas via PHP. Clique para detalhes e sincronização manual.">
+        title="Status da sincronização com MongoDB Atlas via Node.js. Clique para gerenciar envio e sincronização.">
         <span class="db-status-dot" id="dbStatusDot"></span>
-        <span class="db-status-text" id="dbStatusText">MongoDB (PHP)</span>
+        <span class="db-status-text" id="dbStatusText">MongoDB Atlas</span>
       </div>
 
       <div class="year-box" title="Ano corrente da narrativa (calcula maioridade de 18 anos dos sucessores)">
@@ -84,11 +84,11 @@
           title="Gerenciar categorias e presets personalizados (Outros...)">⚙️ Configurações</button>
         <button class="btn btn-medieval" onclick="app.openWorldManagerModal()"
           title="Criar ou alternar histórias independentes da autora">📖 Histórias</button>
-        <button class="btn btn-medieval" onclick="app.exportWorldJson()"
-          title="Salvar pergaminho em arquivo JSON">Exportar Códice</button>
+        <button class="btn btn-medieval" onclick="app.openExportModal()"
+          title="Exportar pergaminho em arquivo compactado (.gz) ou JSON">Exportar Códice</button>
         <button class="btn btn-medieval" onclick="document.getElementById('importJsonInput').click()"
-          title="Carregar pergaminho salvo">Importar Códice</button>
-        <input type="file" id="importJsonInput" accept=".json" style="display:none"
+          title="Carregar pergaminho salvo (.json ou .json.gz)">Importar Códice</button>
+        <input type="file" id="importJsonInput" accept=".json,.gz,.json.gz" style="display:none"
           onchange="app.importWorldJson(event)" />
         <button class="btn btn-medieval" onclick="app.openResetWorldModal()"
           title="Configurações e restauração do mundo">Reino</button>

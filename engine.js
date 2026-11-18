@@ -459,12 +459,13 @@ class WorldEngine {
     const doSave = async () => {
       if (this._saveInFlight) {
         this._savePending = true; // salva de novo quando a atual terminar
-        return;
+        return { inFlight: true };
       }
       const worldId = this.currentWorldId;
+      this.pruneAuditLogSnapshots(15);
       const body = JSON.stringify(this.data);
-      if (this._lastSavedPayload[worldId] === body) {
-        return; // nada mudou desde o último salvamento
+      if (!immediate && this._lastSavedPayload[worldId] === body) {
+        return { success: true, unchanged: true }; // nada mudou desde o último salvamento
       }
 
       this._saveInFlight = true;
@@ -481,12 +482,14 @@ class WorldEngine {
           this._lastSavedPayload[worldId] = body;
           this.lastSavedAt = new Date();
           this.setDbStatus("connected", "Salvo no MongoDB");
+          return { success: true, data: json };
         } else {
           throw new Error(json.message || "Erro retornado ao salvar");
         }
       } catch (err) {
         console.warn("Aviso ao salvar no MongoDB via Node.js API:", err.message);
         this.setDbStatus("offline", "Salvo localmente (Node/Mongo offline)");
+        return { success: false, error: err.message };
       } finally {
         this._saveInFlight = false;
         if (this._savePending) {
@@ -503,12 +506,55 @@ class WorldEngine {
     }
   }
 
+  async pushToDatabaseNow() {
+    this.pruneAuditLogSnapshots(3);
+    if (this._lastSavedPayload) {
+      delete this._lastSavedPayload[this.currentWorldId];
+    }
+    return await this.saveToDatabase(true);
+  }
+
+  pruneAuditLogSnapshots(keepCount = 3) {
+    if (!this.data || !Array.isArray(this.data.auditLogs)) return;
+    let countWithSnapshot = 0;
+    for (let i = 0; i < this.data.auditLogs.length; i++) {
+      const log = this.data.auditLogs[i];
+      if (log && log.snapshot) {
+        countWithSnapshot++;
+        if (countWithSnapshot > keepCount) {
+          log.snapshot = null;
+          log.canRevert = false;
+        }
+      }
+    }
+  }
+
+  prepareExportData(keepSnapshots = 0) {
+    const copy = JSON.parse(JSON.stringify(this.data));
+    if (Array.isArray(copy.auditLogs)) {
+      copy.auditLogs = copy.auditLogs.map((l, i) => {
+        if (i >= keepSnapshots && l.snapshot) {
+          return { ...l, snapshot: null, canRevert: false };
+        }
+        return l;
+      });
+    }
+    return copy;
+  }
+
   saveToStorage() {
     try {
       this.ensureCustomPresets();
+      this.pruneAuditLogSnapshots(3);
       localStorage.setItem(this.getStorageKey(), JSON.stringify(this.data));
     } catch (e) {
-      console.error("Erro ao salvar no localStorage:", e);
+      console.warn("Aviso ao salvar no localStorage, reduzindo snapshots:", e);
+      try {
+        this.pruneAuditLogSnapshots(1);
+        localStorage.setItem(this.getStorageKey(), JSON.stringify(this.data));
+      } catch (e2) {
+        console.error("localStorage ainda cheio após podar snapshots:", e2);
+      }
     }
     this.saveToDatabase();
   }
@@ -806,6 +852,7 @@ class WorldEngine {
     };
 
     this.data.auditLogs.unshift(logEntry);
+    this.pruneAuditLogSnapshots(3);
     this.saveToStorage();
     return logEntry;
   }

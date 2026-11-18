@@ -19,8 +19,8 @@ const DB_NAME = process.env.MONGO_DB_NAME || "familytree";
 
 // Configurações do Express
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.json({ limit: "150mb" }));
+app.use(express.urlencoded({ extended: true, limit: "150mb" }));
 
 // Servir arquivos estáticos do frontend
 app.use(
@@ -380,6 +380,22 @@ async function handleApiRequest(req, res) {
         const year = Number(payload.meta?.currentYear) || 1000;
         const charsCount = Array.isArray(payload.characters) ? payload.characters.length : 0;
         const housesCount = Array.isArray(payload.houses) ? payload.houses.length : 0;
+
+        // Proteção contra o limite de 16MB do BSON do MongoDB:
+        // Mantém apenas os últimos 15 snapshots completos nos logs de auditoria
+        if (Array.isArray(payload.auditLogs)) {
+          let countWithSnapshot = 0;
+          for (let i = 0; i < payload.auditLogs.length; i++) {
+            const log = payload.auditLogs[i];
+            if (log && log.snapshot) {
+              countWithSnapshot++;
+              if (countWithSnapshot > 15) {
+                log.snapshot = null;
+                log.canRevert = false;
+              }
+            }
+          }
+        }
 
         // Atualização atômica no world_state
         await database.collection("world_state").replaceOne(

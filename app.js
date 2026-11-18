@@ -159,14 +159,36 @@ class FantasyGenealogyApp {
 
   async syncDatabaseNow() {
     if (typeof this.showToast === "function") {
-      this.showToast("Sincronizando com MongoDB Atlas via PHP...");
+      this.showToast("⬇️ Baixando dados do MongoDB Atlas...");
     }
     const ok = await this.engine.fetchFromDatabase();
     if (ok) {
       if (typeof this.showToast === "function") {
-        this.showToast("Mundo sincronizado com MongoDB Atlas!");
+        this.showToast("✓ Manuscrito baixado e sincronizado do MongoDB Atlas!");
       }
     } else {
+      if (typeof this.showToast === "function") {
+        this.showToast("⚠️ Não foi possível sincronizar com o MongoDB Atlas.");
+      }
+      this.openDatabaseModal();
+    }
+  }
+
+  async pushDatabaseNow() {
+    if (typeof this.showToast === "function") {
+      this.showToast("⬆️ Enviando alterações locais diretamente para o MongoDB Atlas...");
+    }
+    const res = await this.engine.pushToDatabaseNow();
+    if (res && res.success) {
+      if (typeof this.showToast === "function") {
+        this.showToast("✓ Códice enviado com sucesso para a nuvem MongoDB Atlas!");
+      }
+      this.syncHeaderAndBadges();
+    } else {
+      const errMsg = (res && res.error) ? res.error : "Falha na comunicação";
+      if (typeof this.showToast === "function") {
+        this.showToast("⚠️ Falha ao subir alterações: " + errMsg);
+      }
       this.openDatabaseModal();
     }
   }
@@ -176,31 +198,32 @@ class FantasyGenealogyApp {
     const bodyHtml = `
       <div class="card-box" style="padding:16px; margin-bottom:14px; border-left:4px solid ${isOnline ? '#10b981' : '#f59e0b'};">
         <h4 style="color:var(--gold-leaf); font-family:var(--font-display); margin-bottom:8px;">
-          ${isOnline ? '🟢 MongoDB Atlas Conectado' : '🟡 Conexão com MongoDB Atlas via PHP'}
+          ${isOnline ? '🟢 MongoDB Atlas Conectado' : '🟡 Modo Local / MongoDB Desconectado'}
         </h4>
         <p style="font-size:0.92rem; color:var(--ink-secondary); line-height:1.6;">
           <strong>Banco de Dados:</strong> MongoDB Atlas (Database: <code>familytree</code>)<br/>
           <strong>Cluster:</strong> <code>familytree.lhbb3e2.mongodb.net</code><br/>
-          <strong>Driver:</strong> PHP 8.3 com extensão oficial <code>mongodb</code> (ext-mongodb)<br/>
+          <strong>API:</strong> Node.js & Express (porta 8000)<br/>
           <strong>Status da Conexão:</strong> ${this.escapeHtml(this.engine.dbMessage || 'Aguardando')}
         </p>
       </div>
       <div style="font-size:0.88rem; color:var(--ink-dim); line-height:1.6;">
-        <p><strong>Como funciona a persistência em tempo real:</strong></p>
+        <p><strong>Ações de Sincronização Direta:</strong></p>
         <ul style="padding-left:18px; margin-top:6px;">
-          <li>Cada personagem, casa dinástica, continente, evento e criação é salvo imediatamente no seu MongoDB Atlas.</li>
-          <li>Os dados estão organizados no banco nas coleções <code>world_state</code>, <code>characters</code>, <code>houses</code>, <code>territories</code>, <code>timeline</code> e <code>creations</code>.</li>
-          <li>Inicie o servidor local executando <code>start-server.bat</code> ou com o comando <code>php -S localhost:8000</code>.</li>
+          <li><strong>⬆️ Subir Alterações Locais:</strong> Envia e sobrescreve o banco MongoDB Atlas diretamente com todos os dados atuais do seu navegador.</li>
+          <li><strong>⬇️ Baixar do Banco:</strong> Baixa a versão armazenada na nuvem do MongoDB Atlas para o seu navegador.</li>
+          <li>As alterações também são enviadas automaticamente em segundo plano enquanto você cria ou edita histórias.</li>
         </ul>
       </div>
     `;
 
     const footerHtml = `
       <button class="btn btn-medieval" onclick="app.closeModal()">Fechar</button>
-      <button class="btn btn-gold" onclick="app.syncDatabaseNow(); app.closeModal();">Sincronizar Agora</button>
+      <button class="btn btn-medieval" onclick="app.syncDatabaseNow(); app.closeModal();" title="Baixa do banco para o navegador">⬇️ Baixar do Banco</button>
+      <button class="btn btn-gold" onclick="app.pushDatabaseNow(); app.closeModal();" title="Envia o códice local direto para o MongoDB Atlas">⬆️ Subir Alterações para a Nuvem</button>
     `;
 
-    this.showModal("Conexão MongoDB via PHP", bodyHtml, footerHtml);
+    this.showModal("Nuvem & Sincronização (MongoDB Atlas)", bodyHtml, footerHtml);
   }
 
   syncHeaderAndBadges() {
@@ -7823,36 +7846,252 @@ class FantasyGenealogyApp {
   }
 
   // --------------------------------------------------------------------------
-  // ARQUIVO DO REINO / EXPORTAÇÃO
+  // ARQUIVO DO REINO / EXPORTAÇÃO COMPACTADA & IMPORTAÇÃO INTELIGENTE
   // --------------------------------------------------------------------------
-  exportWorldJson() {
-    const jsonStr = JSON.stringify(this.engine.data, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `codice_linhagens_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  openExportModal() {
+    const cleanData = typeof this.engine.prepareExportData === "function"
+      ? this.engine.prepareExportData(0)
+      : this.engine.data;
+    const minifiedJson = JSON.stringify(cleanData);
+    const uncompressedKb = (minifiedJson.length / 1024).toFixed(0);
+    const estimatedGzipKb = Math.round(minifiedJson.length / 1024 * 0.48);
+    const preferred = localStorage.getItem("preferred_export_format") || "";
+
+    const bodyHtml = `
+      <div class="card-box" style="padding:16px; margin-bottom:14px; border-left:4px solid var(--gold-leaf);">
+        <h4 style="color:var(--gold-leaf); font-family:var(--font-display); margin-bottom:8px;">
+          📦 Exportação Compactada do Códice
+        </h4>
+        <p style="font-size:0.92rem; color:var(--ink-secondary); line-height:1.6;">
+          O manuscrito agora sai <strong>otimizado e compacto</strong>, sem snapshots redundantes de memória. Todas as opções preservam 100% de seus personagens, linhagens, mapas, fotos e histórico dos anais.
+        </p>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <!-- Opção 1: GZIP Ultra-Compacto -->
+        <div class="card-box" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border:1px solid rgba(212,175,55,0.45); background:rgba(212,175,55,0.06); border-radius:8px;">
+          <div style="max-width:70%;">
+            <div style="font-weight:700; color:var(--gold-leaf); font-size:1.02rem;">
+              📦 Compactado GZIP (.json.gz)
+              <span class="badge-pill" style="background:#10b981; color:#fff; font-size:0.72rem; margin-left:6px; font-weight:600;">Recomendado</span>
+            </div>
+            <div style="font-size:0.83rem; color:var(--ink-dim); margin-top:4px; line-height:1.4;">
+              Tamanho ultra-reduzido (~${estimatedGzipKb} KB). Ideal para backups, envios rápidos e armazenamento leve. Pode ser reimportado diretamente no sistema.
+            </div>
+          </div>
+          <button class="btn btn-gold" onclick="app.downloadExport('gzip')">Baixar .json.gz</button>
+        </div>
+
+        <!-- Opção 2: JSON Minificado -->
+        <div class="card-box" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border:1px solid rgba(255,255,255,0.12); border-radius:8px;">
+          <div style="max-width:70%;">
+            <div style="font-weight:700; color:var(--ink-primary); font-size:1.02rem;">
+              📄 JSON Compacto (.json)
+            </div>
+            <div style="font-size:0.83rem; color:var(--ink-dim); margin-top:4px; line-height:1.4;">
+              Arquivo JSON otimizado sem espaços extras (~${uncompressedKb} KB). Compatível diretamente com qualquer visualizador de texto.
+            </div>
+          </div>
+          <button class="btn btn-medieval" onclick="app.downloadExport('minified')">Baixar .json</button>
+        </div>
+
+        <!-- Opção 3: JSON Formatado -->
+        <div class="card-box" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border:1px solid rgba(255,255,255,0.12); border-radius:8px;">
+          <div style="max-width:70%;">
+            <div style="font-weight:700; color:var(--ink-dim); font-size:0.98rem;">
+              📝 JSON Formatado / Indentado (.json)
+            </div>
+            <div style="font-size:0.83rem; color:var(--ink-dim); margin-top:4px; line-height:1.4;">
+              Com quebras de linha e recuos para leitura manual (~${Math.round(uncompressedKb * 1.2)} KB).
+            </div>
+          </div>
+          <button class="btn btn-medieval" onclick="app.downloadExport('pretty')">Baixar Formatado</button>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; padding:8px 12px; background:rgba(0,0,0,0.25); border-radius:6px; display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="chkRememberExportFormat" ${preferred ? "checked" : ""} onchange="app.toggleRememberExportFormat(this.checked)" />
+        <label for="chkRememberExportFormat" style="font-size:0.84rem; color:var(--ink-secondary); cursor:pointer;">
+          Sempre baixar automaticamente no meu formato escolhido ao clicar em <em>Exportar Códice</em>
+        </label>
+      </div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Fechar</button>
+    `;
+
+    this.showModal("Exportar Códice Narrativo", bodyHtml, footerHtml);
   }
 
-  importWorldJson(event) {
+  toggleRememberExportFormat(checked) {
+    if (!checked) {
+      localStorage.removeItem("preferred_export_format");
+    } else {
+      if (!localStorage.getItem("preferred_export_format")) {
+        localStorage.setItem("preferred_export_format", "gzip");
+      }
+    }
+  }
+
+  async downloadExport(format = "gzip") {
+    const chk = document.getElementById("chkRememberExportFormat");
+    if (chk && chk.checked) {
+      localStorage.setItem("preferred_export_format", format);
+    }
+
+    const cleanData = typeof this.engine.prepareExportData === "function"
+      ? this.engine.prepareExportData(0)
+      : this.engine.data;
+
+    const worldTitle = (cleanData.meta && cleanData.meta.worldTitle)
+      ? cleanData.meta.worldTitle.replace(/[^a-zA-Z0-9_\-]/g, "_").toLowerCase()
+      : "reino";
+    const baseName = `codice_${worldTitle}_${Date.now()}`;
+
+    try {
+      if (format === "gzip") {
+        const jsonStr = JSON.stringify(cleanData);
+        let compressedBlob;
+        let fileName;
+        if (typeof CompressionStream !== "undefined") {
+          const stream = new Blob([jsonStr], { type: "application/json" })
+            .stream()
+            .pipeThrough(new CompressionStream("gzip"));
+          compressedBlob = await new Response(stream).blob();
+          fileName = `${baseName}.json.gz`;
+        } else {
+          compressedBlob = new Blob([jsonStr], { type: "application/json" });
+          fileName = `${baseName}.json`;
+        }
+
+        const url = URL.createObjectURL(compressedBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        const sizeKb = (compressedBlob.size / 1024).toFixed(0);
+        if (typeof this.showToast === "function") {
+          this.showToast(`✓ Códice compactado exportado (${fileName} - ${sizeKb} KB)!`);
+        }
+      } else if (format === "minified") {
+        const jsonStr = JSON.stringify(cleanData);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        const sizeKb = (blob.size / 1024).toFixed(0);
+        if (typeof this.showToast === "function") {
+          this.showToast(`✓ Códice JSON compacto exportado (${sizeKb} KB)!`);
+        }
+      } else {
+        const jsonStr = JSON.stringify(cleanData, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        const sizeKb = (blob.size / 1024).toFixed(0);
+        if (typeof this.showToast === "function") {
+          this.showToast(`✓ Códice JSON formatado exportado (${sizeKb} KB)!`);
+        }
+      }
+      this.closeModal();
+    } catch (err) {
+      console.error("Erro ao exportar códice:", err);
+      alert("Erro ao exportar códice: " + err.message);
+    }
+  }
+
+  exportWorldJson(format = null) {
+    if (format) {
+      this.downloadExport(format);
+      return;
+    }
+    const preferred = localStorage.getItem("preferred_export_format");
+    if (preferred) {
+      this.downloadExport(preferred);
+    } else {
+      this.openExportModal();
+    }
+  }
+
+  async importWorldJson(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const parsed = JSON.parse(e.target.result);
-        if (parsed && Array.isArray(parsed.characters)) {
-          this.engine.data = parsed;
-          this.engine.saveToStorage();
-          this.init();
+    try {
+      let jsonText = "";
+      const isGzipName = file.name.endsWith(".gz") || file.name.endsWith(".gzip");
+      const isGzipType = file.type === "application/gzip" || file.type === "application/x-gzip";
+
+      if ((isGzipName || isGzipType) && typeof DecompressionStream !== "undefined") {
+        const stream = file.stream().pipeThrough(new DecompressionStream("gzip"));
+        jsonText = await new Response(stream).text();
+      } else {
+        // Detecção automática de magic bytes do gzip (0x1f 0x8b)
+        const headerBuf = await file.slice(0, 2).arrayBuffer();
+        const headerBytes = new Uint8Array(headerBuf);
+        if (headerBytes[0] === 0x1f && headerBytes[1] === 0x8b && typeof DecompressionStream !== "undefined") {
+          const stream = file.stream().pipeThrough(new DecompressionStream("gzip"));
+          jsonText = await new Response(stream).text();
+        } else {
+          jsonText = await file.text();
         }
-      } catch (err) {
-        alert("Manuscrito corrompido ou formato JSON inválido.");
       }
-    };
-    reader.readAsText(file);
+
+      const parsed = JSON.parse(jsonText);
+      if (parsed && (Array.isArray(parsed.characters) || parsed.meta)) {
+        // Otimização de snapshots para caber no MongoDB (16MB BSON) e localStorage (5MB)
+        if (Array.isArray(parsed.auditLogs)) {
+          let countSnap = 0;
+          for (let i = 0; i < parsed.auditLogs.length; i++) {
+            if (parsed.auditLogs[i] && parsed.auditLogs[i].snapshot) {
+              countSnap++;
+              if (countSnap > 3) {
+                parsed.auditLogs[i].snapshot = null;
+                parsed.auditLogs[i].canRevert = false;
+              }
+            }
+          }
+        }
+        this.engine.data = parsed;
+        this.engine.ensureCustomPresets();
+        if (Array.isArray(this.engine.data.territories)) {
+          this.engine.ensureTerritoryPolygons(this.engine.data.territories);
+        }
+        this.engine.saveToStorage();
+        if (typeof this.showToast === "function") {
+          this.showToast("⬆️ Enviando códice importado diretamente para o MongoDB Atlas...");
+        }
+        const pushRes = await this.engine.pushToDatabaseNow();
+        this.init();
+        if (pushRes && pushRes.success) {
+          if (typeof this.showToast === "function") {
+            this.showToast("✓ Códice importado e salvo com sucesso no MongoDB Atlas!");
+          }
+        } else {
+          if (typeof this.showToast === "function") {
+            this.showToast("Códice carregado localmente. Use 'Subir Alterações' para reenviar se necessário.");
+          }
+        }
+      } else {
+        alert("Manuscrito corrompido ou formato de códice inválido.");
+      }
+    } catch (err) {
+      console.error("Erro ao importar códice:", err);
+      alert("Manuscrito corrompido ou formato inválido: " + err.message);
+    } finally {
+      if (event.target) event.target.value = "";
+    }
   }
 
   openResetWorldModal() {
@@ -7863,10 +8102,11 @@ class FantasyGenealogyApp {
       </div>
 
       <div class="card-box" style="margin-top:10px;">
-        <h2>Persistência & Banco de Dados</h2>
-        <p class="sub-desc">Os dados são sincronizados automaticamente com o <strong>MongoDB Atlas</strong> via PHP. Você pode sincronizar manualmente ou limpar os dados para iniciar uma nova linhagem em branco.</p>
+        <h2>Persistência & Banco de Dados (MongoDB Atlas)</h2>
+        <p class="sub-desc">Os dados são sincronizados com o cluster <strong>MongoDB Atlas</strong> via Node.js. Você pode enviar alterações locais para a nuvem, restaurar a versão do banco ou limpar os dados para iniciar do zero.</p>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn btn-gold" onclick="app.syncDatabaseNow(); app.closeModal();">Sincronizar com MongoDB Atlas</button>
+          <button class="btn btn-gold" onclick="app.pushDatabaseNow(); app.closeModal();">⬆️ Subir Alterações para a Nuvem</button>
+          <button class="btn btn-medieval" onclick="app.syncDatabaseNow(); app.closeModal();">⬇️ Baixar do Banco (Sincronizar)</button>
           <button class="btn btn-danger" onclick="app.startBlankWorld()">Limpar Pergaminho e Iniciar do Zero</button>
         </div>
       </div>
