@@ -2506,3 +2506,315 @@ body {
   border-radius: 4px;
   padding: 3px 8px;
 }
+
+
+/* ============================================================================
+   PORTAL DE AUTENTICAÇÃO (LOGIN, CADASTRO E TROCA DE SENHA NO 1º ACESSO)
+   ============================================================================ */
+body.auth-locked {
+  overflow: hidden !important;
+}
+
+body.auth-locked > header,
+body.auth-locked > section {
+  filter: blur(6px) brightness(0.4);
+  pointer-events: none;
+  user-select: none;
+}
+
+.auth-portal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 50% 25%, rgba(62, 44, 26, 0.78) 0%, rgba(12, 9, 6, 0.96) 75%),
+    #0d0a07;
+  backdrop-filter: blur(8px);
+  overflow-y: auto;
+}
+
+body.auth-locked .auth-portal-overlay,
+.auth-portal-overlay.open {
+  display: flex;
+}
+
+.auth-portal-card {
+  width: 100%;
+  max-width: 450px;
+  background: linear-gradient(180deg, #241c14 0%, #17120d 100%);
+  border: 1.5px solid var(--border-gold-bright);
+  border-radius: 10px;
+  padding: 28px 28px 24px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(223, 186, 115, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  position: relative;
+  margin: auto;
+}
+
+.auth-portal-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.auth-portal-sigil {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  border: 2px solid var(--gold-leaf);
+  background: radial-gradient(circle, #3a2a1c 0%, #16100b 80%);
+  box-shadow: 0 0 18px rgba(223, 186, 115, 0.25), var(--shadow-bevel);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-portal-sigil img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.auth-portal-title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--gold-leaf);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.auth-portal-subtitle {
+  font-size: 0.92rem;
+  color: var(--ink-secondary);
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: #120e0a;
+  padding: 5px;
+  border-radius: 7px;
+  border: 1px solid var(--border-gold-subtle);
+  margin-bottom: 18px;
+}
+
+.auth-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-secondary);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 9px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.auth-tab-btn:hover {
+  color: var(--gold-leaf);
+  background: rgba(197, 160, 89, 0.08);
+}
+
+.auth-tab-btn.active {
+  background: linear-gradient(180deg, #352719 0%, #241a10 100%);
+  border-color: var(--border-gold-bright);
+  color: var(--gold-leaf);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.auth-feedback-banner {
+  padding: 10px 13px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+
+.auth-feedback-banner.error {
+  background: rgba(139, 32, 46, 0.28);
+  border: 1px solid #dc2626;
+  color: #fecaca;
+}
+
+.auth-feedback-banner.success {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid #10b981;
+  color: #a7f3d0;
+}
+
+.auth-feedback-banner.info {
+  background: rgba(197, 160, 89, 0.16);
+  border: 1px solid var(--border-gold-bright);
+  color: var(--gold-leaf);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.auth-form .form-group {
+  margin-bottom: 0;
+}
+
+.auth-form label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.auth-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-password-wrap input {
+  width: 100%;
+  padding-right: 40px !important;
+}
+
+.auth-eye-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 6px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.auth-eye-btn:hover {
+  color: var(--gold-leaf);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.auth-submit-btn {
+  width: 100%;
+  padding: 11px 16px;
+  font-size: 0.9rem;
+  margin-top: 4px;
+  justify-content: center;
+}
+
+.auth-switch-hint {
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--ink-secondary);
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(197, 160, 89, 0.16);
+}
+
+.auth-link-btn {
+  background: none;
+  border: none;
+  color: var(--gold-leaf);
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0 3px;
+}
+
+.auth-link-btn:hover {
+  color: #fff2cc;
+}
+
+.auth-first-access-box {
+  background: rgba(197, 160, 89, 0.12);
+  border: 1px solid var(--border-gold-bright);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  color: var(--ink-parchment);
+  line-height: 1.5;
+}
+
+.auth-first-access-badge {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  letter-spacing: 0.6px;
+}
+
+/* Selo de Usuário no Cabeçalho */
+.user-account-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #271f17 0%, #18130e 100%);
+  border: 1px solid var(--border-gold-bright);
+  color: var(--gold-leaf);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: var(--shadow-bevel);
+}
+
+.user-account-pill:hover {
+  background: linear-gradient(180deg, #33281d 0%, #211912 100%);
+  box-shadow: 0 0 10px rgba(223, 186, 115, 0.28);
+}
+
+.user-pill-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b202e 0%, #58121b 100%);
+  border: 1px solid var(--gold-leaf);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-pill-name {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-logout-top {
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  color: #fca5a5 !important;
+}
+
+.btn-logout-top:hover {
+  background: rgba(139, 32, 46, 0.35) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}

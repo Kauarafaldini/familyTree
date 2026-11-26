@@ -4,18 +4,93 @@
 // ============================================================================
 
 const BASE_STORAGE_KEY = "fantasy_family_tree_v1";
+const AUTH_TOKEN_KEY = "familytree_auth_token_v1";
+const AUTH_USER_KEY = "familytree_auth_user_v1";
 
 class WorldEngine {
   constructor() {
-    this.currentWorldId = localStorage.getItem("current_world_id") || "main_world";
+    this.apiUrl = (window.location.protocol === "http:" || window.location.protocol === "https:")
+      ? "./api"
+      : "http://localhost:8000/api";
+    this.authToken = localStorage.getItem(AUTH_TOKEN_KEY) || null;
+    this.currentUser = this.loadStoredUser();
     this.worldsList = [];
-    this.data = this.loadFromStorage();
+    this.currentWorldId = this.getStoredCurrentWorldId();
+    this.data = (this.authToken && this.currentUser && !this.currentUser.mustChangePassword)
+      ? this.loadFromStorage(this.currentWorldId)
+      : this.getEmptyWorldData("main_world");
     this.initDatabase();
   }
 
+  loadStoredUser() {
+    try {
+      const raw = localStorage.getItem(AUTH_USER_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return (parsed && parsed.id && parsed.email) ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  persistAuthSession(token, user) {
+    this.authToken = token || null;
+    this.currentUser = user || null;
+    try {
+      if (token && user) {
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      } else {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+      }
+    } catch (e) {}
+  }
+
+  isAuthenticated() {
+    return Boolean(this.authToken && this.currentUser && this.currentUser.id);
+  }
+
+  mustChangePasswordNow() {
+    return Boolean(this.isAuthenticated() && this.currentUser.mustChangePassword);
+  }
+
+  getAuthHeaders(extra = {}) {
+    const headers = { ...extra };
+    if (this.authToken) {
+      headers["Authorization"] = `Bearer ${this.authToken}`;
+    }
+    return headers;
+  }
+
+  getStoredCurrentWorldId() {
+    if (this.currentUser && this.currentUser.id) {
+      return localStorage.getItem(`current_world_id_${this.currentUser.id}`) || "main_world";
+    }
+    return "main_world";
+  }
+
+  setStoredCurrentWorldId(worldId) {
+    const clean = worldId || "main_world";
+    this.currentWorldId = clean;
+    if (this.currentUser && this.currentUser.id) {
+      try {
+        localStorage.setItem(`current_world_id_${this.currentUser.id}`, clean);
+      } catch (e) {}
+    }
+  }
+
   getStorageKey(worldId = null) {
+    const uId = (this.currentUser && this.currentUser.id) ? this.currentUser.id : "guest";
     const wId = worldId || this.currentWorldId || "main_world";
-    return `${BASE_STORAGE_KEY}_${wId}`;
+    return `${BASE_STORAGE_KEY}_${uId}_${wId}`;
+  }
+
+  getEmptyWorldData(worldId = "main_world") {
+    const initialData = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
+    initialData.meta.worldId = worldId;
+    this.ensureTerritoryPolygons(initialData.territories);
+    return initialData;
   }
 
   // Sanitiza o nome do personagem para exibir somente nome e sobrenome, sem cargos ou títulos
@@ -30,13 +105,16 @@ class WorldEngine {
   }
 
   loadFromStorage(targetWorldId = null) {
+    if (!this.isAuthenticated()) {
+      return this.getEmptyWorldData(targetWorldId || "main_world");
+    }
     const wId = targetWorldId || this.currentWorldId || "main_world";
     const storageKey = this.getStorageKey(wId);
     try {
       let saved = localStorage.getItem(storageKey);
-      // Migração de cache anterior sem sufixo se for o mundo principal
-      if (!saved && wId === "main_world") {
-        saved = localStorage.getItem(BASE_STORAGE_KEY);
+      // Migração de cache anterior apenas para a conta da Maria Zafalon no mundo principal
+      if (!saved && this.currentUser.id === "user_maria_zafalon" && wId === "main_world") {
+        saved = localStorage.getItem(`${BASE_STORAGE_KEY}_main_world`) || localStorage.getItem(BASE_STORAGE_KEY);
       }
       if (saved) {
         // Se o cache contiver dados mockados antigos da versão demonstrativa, descarta para iniciar com dados reais
@@ -352,36 +430,224 @@ class WorldEngine {
   }
 
   // --------------------------------------------------------------------------
-  // Sincronização com MongoDB Atlas via Node.js API & Múltiplas Histórias
+  // Autenticação Multi-Usuário & Sincronização com MongoDB Atlas via Node.js API
   // --------------------------------------------------------------------------
   initDatabase() {
-    this.apiUrl = (window.location.protocol === "http:" || window.location.protocol === "https:")
-      ? "./api"
-      : "http://localhost:8000/api";
     this.dbStatus = "init";
-    this.dbMessage = "Iniciando comunicação com MongoDB Atlas...";
+    this.dbMessage = "Aguardando autenticação...";
     this.lastSavedAt = null;
     this.saveDebounceTimer = null;
 
-    setTimeout(() => {
-      this.fetchFromDatabase(this.currentWorldId);
-    }, 100);
-
-    // Ao fechar/ocultar a aba, envia imediatamente alterações ainda pendentes
+    // Ao fechar/ocultar a aba, envia imediatamente alterações ainda pendentes do usuário autenticado
     window.addEventListener("pagehide", () => {
-      if (!this.saveDebounceTimer) return;
+      if (!this.saveDebounceTimer || !this.isAuthenticated() || this.mustChangePasswordNow()) return;
       clearTimeout(this.saveDebounceTimer);
       this.saveDebounceTimer = null;
       try {
         const body = JSON.stringify(this.data);
-        fetch(`${this.apiUrl}?action=save&world_id=${encodeURIComponent(this.currentWorldId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-          keepalive: body.length < 60000
-        });
+        fetch(
+          `${this.apiUrl}?action=save&world_id=${encodeURIComponent(this.currentWorldId)}&auth_token=${encodeURIComponent(this.authToken)}`,
+          {
+            method: "POST",
+            headers: this.getAuthHeaders({ "Content-Type": "application/json" }),
+            body,
+            keepalive: body.length < 60000
+          }
+        );
       } catch (e) {}
     });
+  }
+
+  async verifyAuthSession() {
+    if (!this.authToken) {
+      return { authenticated: false };
+    }
+    try {
+      const res = await fetch(`${this.apiUrl}?action=me`, {
+        method: "GET",
+        headers: this.getAuthHeaders(),
+        cache: "no-store"
+      });
+      if (res.status === 401) {
+        this.logout(false);
+        return { authenticated: false };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json && json.status === "success" && json.user) {
+        this.persistAuthSession(this.authToken, json.user);
+        if (Array.isArray(json.worlds)) {
+          this.worldsList = json.worlds;
+        }
+        if (json.user.mustChangePassword) {
+          return { authenticated: true, mustChangePassword: true, user: json.user };
+        }
+        let targetWorld = this.getStoredCurrentWorldId();
+        if (this.worldsList.length > 0 && !this.worldsList.some(w => (w.id || w._id) === targetWorld)) {
+          targetWorld = json.activeWorldId || this.worldsList[0].id || this.worldsList[0]._id;
+        }
+        this.setStoredCurrentWorldId(targetWorld);
+        this.data = this.loadFromStorage(targetWorld);
+        await this.fetchFromDatabase(targetWorld);
+        return { authenticated: true, mustChangePassword: false, user: json.user };
+      }
+      this.logout(false);
+      return { authenticated: false };
+    } catch (err) {
+      console.warn("Aviso ao validar sessão no servidor:", err.message);
+      if (this.currentUser) {
+        return {
+          authenticated: true,
+          mustChangePassword: Boolean(this.currentUser.mustChangePassword),
+          user: this.currentUser,
+          offline: true
+        };
+      }
+      return { authenticated: false };
+    }
+  }
+
+  async login(email, password) {
+    try {
+      const res = await fetch(`${this.apiUrl}?action=login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.status !== "success" || !json.token || !json.user) {
+        return {
+          success: false,
+          message: json.message || "E-mail ou senha incorretos."
+        };
+      }
+
+      this.persistAuthSession(json.token, json.user);
+      this.worldsList = Array.isArray(json.worlds) ? json.worlds : [];
+      this._lastSavedPayload = {};
+
+      let targetWorld = this.getStoredCurrentWorldId();
+      if (this.worldsList.length > 0 && !this.worldsList.some(w => (w.id || w._id) === targetWorld)) {
+        targetWorld = json.activeWorldId || this.worldsList[0].id || this.worldsList[0]._id;
+      }
+      this.setStoredCurrentWorldId(targetWorld);
+
+      if (!json.user.mustChangePassword) {
+        this.data = this.loadFromStorage(targetWorld);
+        await this.fetchFromDatabase(targetWorld);
+      } else {
+        this.data = this.getEmptyWorldData(targetWorld);
+      }
+
+      return {
+        success: true,
+        user: json.user,
+        mustChangePassword: Boolean(json.user.mustChangePassword),
+        message: json.message
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: "Não foi possível conectar ao servidor de autenticação: " + err.message
+      };
+    }
+  }
+
+  async register(name, email, password) {
+    try {
+      const res = await fetch(`${this.apiUrl}?action=register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.status !== "success" || !json.token || !json.user) {
+        return {
+          success: false,
+          message: json.message || "Não foi possível realizar o cadastro."
+        };
+      }
+
+      this.persistAuthSession(json.token, json.user);
+      this.worldsList = Array.isArray(json.worlds) ? json.worlds : [];
+      this._lastSavedPayload = {};
+
+      const targetWorld = json.activeWorldId || (this.worldsList[0] && (this.worldsList[0].id || this.worldsList[0]._id)) || "main_world";
+      this.setStoredCurrentWorldId(targetWorld);
+      this.data = this.getEmptyWorldData(targetWorld);
+      await this.fetchFromDatabase(targetWorld);
+
+      return {
+        success: true,
+        user: json.user,
+        message: json.message
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: "Não foi possível conectar ao servidor para criar sua conta: " + err.message
+      };
+    }
+  }
+
+  async changePassword(newPassword, currentPassword = "") {
+    try {
+      const res = await fetch(`${this.apiUrl}?action=change_password`, {
+        method: "POST",
+        headers: this.getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ newPassword, currentPassword })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.status !== "success" || !json.token || !json.user) {
+        return {
+          success: false,
+          message: json.message || "Não foi possível alterar sua senha."
+        };
+      }
+
+      this.persistAuthSession(json.token, json.user);
+      if (Array.isArray(json.worlds)) {
+        this.worldsList = json.worlds;
+      }
+
+      let targetWorld = this.getStoredCurrentWorldId();
+      if (this.worldsList.length > 0 && !this.worldsList.some(w => (w.id || w._id) === targetWorld)) {
+        targetWorld = json.activeWorldId || this.worldsList[0].id || this.worldsList[0]._id;
+      }
+      this.setStoredCurrentWorldId(targetWorld);
+      this.data = this.loadFromStorage(targetWorld);
+      await this.fetchFromDatabase(targetWorld);
+
+      return {
+        success: true,
+        user: json.user,
+        message: json.message || "Senha alterada com sucesso!"
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: "Falha de comunicação ao alterar a senha: " + err.message
+      };
+    }
+  }
+
+  logout(resetUi = true) {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+      this.saveDebounceTimer = null;
+    }
+    this._saveInFlight = false;
+    this._savePending = false;
+    this._lastSavedPayload = {};
+    this.worldsList = [];
+    this.persistAuthSession(null, null);
+    this.currentWorldId = "main_world";
+    this.data = this.getEmptyWorldData("main_world");
+    this.setDbStatus("offline", "Sessão encerrada");
+
+    if (resetUi && window.app && typeof window.app.onUserLoggedOut === "function") {
+      window.app.onUserLoggedOut();
+    }
   }
 
   setDbStatus(status, message) {
@@ -393,8 +659,16 @@ class WorldEngine {
   }
 
   async fetchWorldsList() {
+    if (!this.isAuthenticated() || this.mustChangePasswordNow()) return [];
     try {
-      const res = await fetch(`${this.apiUrl}?action=list_worlds`, { cache: "no-store" });
+      const res = await fetch(`${this.apiUrl}?action=list_worlds`, {
+        headers: this.getAuthHeaders(),
+        cache: "no-store"
+      });
+      if (res.status === 401) {
+        this.logout(true);
+        return [];
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json && json.status === "success" && Array.isArray(json.worlds)) {
@@ -408,16 +682,46 @@ class WorldEngine {
   }
 
   async fetchFromDatabase(worldId = null) {
+    if (!this.isAuthenticated()) return false;
+    if (this.mustChangePasswordNow()) {
+      if (window.app && typeof window.app.showAuthPortal === "function") {
+        window.app.showAuthPortal("first-password");
+      }
+      return false;
+    }
+
     const targetWorldId = worldId || this.currentWorldId || "main_world";
     try {
       this.setDbStatus("syncing", "Conectando ao MongoDB Atlas...");
-      // "no-cache" = o navegador revalida com ETag; se nada mudou o servidor responde 304 sem corpo
-      const res = await fetch(`${this.apiUrl}?action=load&world_id=${encodeURIComponent(targetWorldId)}`, { cache: "no-cache" });
+      const res = await fetch(
+        `${this.apiUrl}?action=load&world_id=${encodeURIComponent(targetWorldId)}`,
+        {
+          headers: this.getAuthHeaders(),
+          cache: "no-cache"
+        }
+      );
+
+      if (res.status === 401) {
+        this.logout(true);
+        return false;
+      }
+      if (res.status === 403) {
+        const errJson = await res.json().catch(() => ({}));
+        if (errJson.code === "MUST_CHANGE_PASSWORD") {
+          if (this.currentUser) this.currentUser.mustChangePassword = true;
+          this.persistAuthSession(this.authToken, this.currentUser);
+          if (window.app && typeof window.app.showAuthPortal === "function") {
+            window.app.showAuthPortal("first-password");
+          }
+          return false;
+        }
+      }
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json && json.status === "success" && json.data) {
-        this.currentWorldId = targetWorldId;
-        localStorage.setItem("current_world_id", this.currentWorldId);
+        const resolvedWorldId = json.world_id || targetWorldId;
+        this.setStoredCurrentWorldId(resolvedWorldId);
         this.data = json.data;
         if (Array.isArray(json.worlds)) {
           this.worldsList = json.worlds;
@@ -447,9 +751,10 @@ class WorldEngine {
     }
   }
 
-  // Salvamento leve: agrupa alterações (debounce), ignora se nada mudou e
-  // mantém no máximo UMA requisição em andamento por vez (evita fila no servidor).
   saveToDatabase(immediate = false) {
+    if (!this.isAuthenticated() || this.mustChangePasswordNow()) {
+      return Promise.resolve({ success: false, error: "Usuário não autenticado" });
+    }
     if (this.saveDebounceTimer) {
       clearTimeout(this.saveDebounceTimer);
       this.saveDebounceTimer = null;
@@ -457,15 +762,18 @@ class WorldEngine {
     if (!this._lastSavedPayload) this._lastSavedPayload = {};
 
     const doSave = async () => {
+      if (!this.isAuthenticated() || this.mustChangePasswordNow()) {
+        return { success: false, error: "Sessão encerrada" };
+      }
       if (this._saveInFlight) {
-        this._savePending = true; // salva de novo quando a atual terminar
+        this._savePending = true;
         return { inFlight: true };
       }
       const worldId = this.currentWorldId;
       this.pruneAuditLogSnapshots(15);
       const body = JSON.stringify(this.data);
       if (!immediate && this._lastSavedPayload[worldId] === body) {
-        return { success: true, unchanged: true }; // nada mudou desde o último salvamento
+        return { success: true, unchanged: true };
       }
 
       this._saveInFlight = true;
@@ -473,9 +781,13 @@ class WorldEngine {
         this.setDbStatus("syncing", "Salvando no MongoDB...");
         const res = await fetch(`${this.apiUrl}?action=save&world_id=${encodeURIComponent(worldId)}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: this.getAuthHeaders({ "Content-Type": "application/json" }),
           body
         });
+        if (res.status === 401) {
+          this.logout(true);
+          return { success: false, error: "Sessão expirada" };
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (json && json.status === "success") {
@@ -543,6 +855,7 @@ class WorldEngine {
   }
 
   saveToStorage() {
+    if (!this.isAuthenticated() || this.mustChangePasswordNow()) return;
     try {
       this.ensureCustomPresets();
       this.pruneAuditLogSnapshots(3);
@@ -561,8 +874,7 @@ class WorldEngine {
 
   async switchWorld(worldId) {
     if (!worldId || worldId === this.currentWorldId) return;
-    this.currentWorldId = worldId;
-    localStorage.setItem("current_world_id", worldId);
+    this.setStoredCurrentWorldId(worldId);
     this.data = this.loadFromStorage(worldId);
     if (window.app && typeof window.app.renderAll === "function") {
       window.app.renderAll();
@@ -579,14 +891,17 @@ class WorldEngine {
       this.setDbStatus("syncing", "Criando nova história no MongoDB...");
       const res = await fetch(`${this.apiUrl}?action=create_world`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ title: worldTitle, currentYear: Number(initialYear) || 1000 })
       });
+      if (res.status === 401) {
+        this.logout(true);
+        return null;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json && json.status === "success" && json.world) {
-        this.currentWorldId = json.world.id;
-        localStorage.setItem("current_world_id", this.currentWorldId);
+        this.setStoredCurrentWorldId(json.world.id);
         this.data = json.world.data;
         if (Array.isArray(json.worlds)) this.worldsList = json.worlds;
         this.saveToStorage();
@@ -606,8 +921,7 @@ class WorldEngine {
       newWorldData.meta.worldId = newId;
       newWorldData.meta.worldTitle = worldTitle;
       newWorldData.meta.currentYear = Number(initialYear) || 1000;
-      this.currentWorldId = newId;
-      localStorage.setItem("current_world_id", newId);
+      this.setStoredCurrentWorldId(newId);
       this.data = newWorldData;
       this.saveToStorage();
       if (window.app && typeof window.app.renderAll === "function") {
@@ -625,15 +939,25 @@ class WorldEngine {
     try {
       this.setDbStatus("syncing", "Excluindo história...");
       const res = await fetch(`${this.apiUrl}?action=delete_world&world_id=${encodeURIComponent(worldId)}`, {
-        method: "POST"
+        method: "POST",
+        headers: this.getAuthHeaders()
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (res.status === 401) {
+        this.logout(true);
+        return false;
+      }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP ${res.status}`);
+      }
       const json = await res.json();
       if (json && json.status === "success") {
         if (Array.isArray(json.worlds)) this.worldsList = json.worlds;
         try { localStorage.removeItem(this.getStorageKey(worldId)); } catch (e) {}
         if (this.currentWorldId === worldId) {
-          const nextWorld = (this.worldsList && this.worldsList[0]) ? this.worldsList[0].id : "main_world";
+          const nextWorld = (this.worldsList && this.worldsList[0])
+            ? (this.worldsList[0].id || this.worldsList[0]._id)
+            : "main_world";
           await this.switchWorld(nextWorld);
         }
         return true;
@@ -653,9 +977,13 @@ class WorldEngine {
     try {
       const res = await fetch(`${this.apiUrl}?action=rename_world&world_id=${encodeURIComponent(worldId)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ title: cleanTitle })
       });
+      if (res.status === 401) {
+        this.logout(true);
+        return false;
+      }
       if (this.currentWorldId === worldId) {
         if (!this.data.meta) this.data.meta = {};
         this.data.meta.worldTitle = cleanTitle;
@@ -675,7 +1003,14 @@ class WorldEngine {
   async resetDatabase() {
     try {
       this.setDbStatus("syncing", "Resetando no MongoDB...");
-      const res = await fetch(`${this.apiUrl}?action=reset&world_id=${encodeURIComponent(this.currentWorldId)}`, { method: "POST" });
+      const res = await fetch(`${this.apiUrl}?action=reset&world_id=${encodeURIComponent(this.currentWorldId)}`, {
+        method: "POST",
+        headers: this.getAuthHeaders()
+      });
+      if (res.status === 401) {
+        this.logout(true);
+        return false;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (json && json.status === "success") {
@@ -704,49 +1039,6 @@ class WorldEngine {
     const clean = JSON.parse(JSON.stringify(DEFAULT_WORLD_DATA));
     clean.meta.worldId = this.currentWorldId;
     this.data = clean;
-    this.ensureTerritoryPolygons(this.data.territories);
-    this.saveToStorage();
-  }
-
-  createBlankWorld() {
-    this.data = {
-      meta: {
-        worldTitle: "Crônicas & Linhagens",
-        currentYear: 1000,
-        treeColorMode: "linhagem",
-        selectedHouseFilter: "all",
-        selectedRaceFilter: "all"
-      },
-      races: [
-        "Humano",
-        "Elfo",
-        "Anão",
-        "Orc",
-        "Bruxo / Feiticeiro",
-        "Sereia / Tritão",
-        "Draconiano",
-        "Vampiro",
-        "Fada / Silfo"
-      ],
-      houses: [],
-      territories: [],
-      mapStrokes: [],
-      settlements: [],
-      houseEvents: [],
-      characters: [],
-      creations: [],
-      creationCategories: [
-        "Magia",
-        "Poção",
-        "Encantamento",
-        "Artefato / Relíquia",
-        "Maldição",
-        "Ritual",
-        "Erva / Ingrediente",
-        "Criatura Mítica (Bestiário)"
-      ],
-      auditLogs: []
-    };
     this.ensureTerritoryPolygons(this.data.territories);
     this.saveToStorage();
   }

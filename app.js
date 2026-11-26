@@ -133,17 +133,431 @@ class FantasyGenealogyApp {
       dot.className = "db-status-dot " + (status || "offline");
       if (status === "connected") {
         txt.textContent = "MongoDB Atlas";
-        if (badge) badge.title = `🟢 Conectado ao MongoDB Atlas via PHP\n${message || ''}`;
+        if (badge) badge.title = `🟢 Conectado ao MongoDB Atlas via Node.js\n${message || ""}`;
       } else if (status === "syncing") {
         txt.textContent = "Sincronizando...";
-        if (badge) badge.title = `🟡 Sincronizando com MongoDB Atlas...\n${message || ''}`;
+        if (badge) badge.title = `🟡 Sincronizando com MongoDB Atlas...\n${message || ""}`;
       } else if (status === "offline") {
         txt.textContent = "Modo Local";
-        if (badge) badge.title = `🔴 PHP / MongoDB não detectado.\nRodando localmente.\nExecute start-server.bat para sincronizar com o MongoDB.`;
+        if (badge) badge.title = `🔴 Servidor Node.js / MongoDB não detectado.\n${message || "Rodando localmente."}`;
       } else {
-        txt.textContent = "MongoDB (PHP)";
+        txt.textContent = "MongoDB Atlas";
       }
     };
+
+    this.initAuthFlow();
+  }
+
+  // --------------------------------------------------------------------------
+  // Autenticação Multi-Usuário: Login, Cadastro & Troca de Senha no 1º Acesso
+  // --------------------------------------------------------------------------
+  async initAuthFlow() {
+    this.syncUserAccountUi();
+
+    if (!this.engine.isAuthenticated()) {
+      this.showAuthPortal("login");
+      return;
+    }
+
+    if (this.engine.mustChangePasswordNow()) {
+      this.showAuthPortal("first-password");
+      return;
+    }
+
+    // Se já possui sessão salva e sem troca pendente, libera a UI enquanto valida no servidor
+    this.hideAuthPortal();
+    const sessionCheck = await this.engine.verifyAuthSession();
+    if (!sessionCheck.authenticated) {
+      this.showAuthPortal("login", "Sua sessão expirou. Faça login novamente.", "info");
+    } else if (sessionCheck.mustChangePassword) {
+      this.showAuthPortal(
+        "first-password",
+        "Por segurança, defina sua nova senha pessoal neste primeiro acesso.",
+        "info"
+      );
+    } else {
+      this.hideAuthPortal();
+    }
+  }
+
+  syncUserAccountUi() {
+    const user = this.engine.currentUser;
+    const nameEl = document.getElementById("headerUserName");
+    const avatarEl = document.getElementById("userAvatarInitial");
+    if (!nameEl || !avatarEl) return;
+
+    if (user && user.name) {
+      nameEl.textContent = user.name;
+      const parts = user.name.trim().split(/\s+/).filter(Boolean);
+      const initials =
+        parts.length >= 2
+          ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+          : user.name.slice(0, 2).toUpperCase();
+      avatarEl.textContent = initials;
+    } else {
+      nameEl.textContent = "Visitante";
+      avatarEl.textContent = "👤";
+    }
+  }
+
+  setAuthFeedback(message = "", type = "error") {
+    const banner = document.getElementById("authFeedbackBanner");
+    if (!banner) return;
+    if (!message) {
+      banner.style.display = "none";
+      banner.textContent = "";
+      banner.className = "auth-feedback-banner";
+      return;
+    }
+    banner.className = `auth-feedback-banner ${type}`;
+    banner.textContent = message;
+    banner.style.display = "block";
+  }
+
+  switchAuthView(view = "login", clearBanner = true) {
+    if (clearBanner) this.setAuthFeedback("");
+
+    const tabsBox = document.getElementById("authModeTabs");
+    const tabLogin = document.getElementById("authTabLogin");
+    const tabReg = document.getElementById("authTabRegister");
+    const formLogin = document.getElementById("authFormLogin");
+    const formReg = document.getElementById("authFormRegister");
+    const formFirst = document.getElementById("authFormFirstPassword");
+    const subtitle = document.getElementById("authPortalSubtitle");
+
+    if (view === "first-password") {
+      if (tabsBox) tabsBox.style.display = "none";
+      if (formLogin) formLogin.style.display = "none";
+      if (formReg) formReg.style.display = "none";
+      if (formFirst) formFirst.style.display = "flex";
+      if (subtitle) subtitle.textContent = "Configuração de Segurança do Primeiro Acesso";
+
+      const welcomeEl = document.getElementById("firstAccessWelcomeText");
+      const userName = this.engine.currentUser?.name || "Autora";
+      if (welcomeEl) {
+        welcomeEl.innerHTML = `Olá, <strong>${this.escapeHtml(userName)}</strong>! Como este é o seu primeiro login utilizando a senha provisória, escolha abaixo sua nova senha pessoal para abrir suas histórias.`;
+      }
+      setTimeout(() => document.getElementById("first_new_password")?.focus(), 50);
+      return;
+    }
+
+    if (tabsBox) tabsBox.style.display = "grid";
+    if (formFirst) formFirst.style.display = "none";
+
+    if (view === "register") {
+      if (tabLogin) tabLogin.classList.remove("active");
+      if (tabReg) tabReg.classList.add("active");
+      if (formLogin) formLogin.style.display = "none";
+      if (formReg) formReg.style.display = "flex";
+      if (subtitle) subtitle.textContent = "Crie seu próprio acesso independente para suas histórias";
+      setTimeout(() => document.getElementById("reg_name")?.focus(), 50);
+    } else {
+      if (tabLogin) tabLogin.classList.add("active");
+      if (tabReg) tabReg.classList.remove("active");
+      if (formLogin) formLogin.style.display = "flex";
+      if (formReg) formReg.style.display = "none";
+      if (subtitle) subtitle.textContent = "Livro das Linhagens Reais • Acesso Individual por Autora";
+      setTimeout(() => document.getElementById("login_email")?.focus(), 50);
+    }
+  }
+
+  showAuthPortal(view = "login", message = "", messageType = "info") {
+    document.body.classList.add("auth-locked");
+    const overlay = document.getElementById("authPortalOverlay");
+    if (overlay) overlay.classList.add("open");
+    this.switchAuthView(view, false);
+    this.setAuthFeedback(message, messageType);
+  }
+
+  hideAuthPortal() {
+    document.body.classList.remove("auth-locked");
+    const overlay = document.getElementById("authPortalOverlay");
+    if (overlay) overlay.classList.remove("open");
+    this.setAuthFeedback("");
+    this.syncUserAccountUi();
+    this.renderAll();
+  }
+
+  toggleAuthPasswordVisibility(inputId, btnEl) {
+    const inp = document.getElementById(inputId);
+    if (!inp) return;
+    if (inp.type === "password") {
+      inp.type = "text";
+      if (btnEl) btnEl.textContent = "🙈";
+    } else {
+      inp.type = "password";
+      if (btnEl) btnEl.textContent = "👁️";
+    }
+  }
+
+  async submitLogin(event) {
+    if (event) event.preventDefault();
+    const emailInp = document.getElementById("login_email");
+    const pwdInp = document.getElementById("login_password");
+    const submitBtn = document.getElementById("btnLoginSubmit");
+
+    const email = (emailInp?.value || "").trim();
+    const password = pwdInp?.value || "";
+
+    if (!email || !password) {
+      this.setAuthFeedback("Preencha seu e-mail e sua senha para entrar.", "error");
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "⏳ Verificando credenciais...";
+    }
+    this.setAuthFeedback("");
+
+    const res = await this.engine.login(email, password);
+
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "📜 Entrar no Códice";
+    }
+
+    if (!res.success) {
+      this.setAuthFeedback(res.message || "E-mail ou senha incorretos.", "error");
+      return;
+    }
+
+    if (pwdInp) pwdInp.value = "";
+    this.syncUserAccountUi();
+
+    if (res.mustChangePassword) {
+      this.switchAuthView("first-password", false);
+      this.setAuthFeedback("Primeiro acesso confirmado! Defina agora sua nova senha definitiva.", "info");
+      return;
+    }
+
+    this.hideAuthPortal();
+    if (typeof this.showToast === "function") {
+      this.showToast(`✓ Bem-vinda(o), ${res.user.name}!`);
+    }
+  }
+
+  async submitRegister(event) {
+    if (event) event.preventDefault();
+    const nameInp = document.getElementById("reg_name");
+    const emailInp = document.getElementById("reg_email");
+    const pwdInp = document.getElementById("reg_password");
+    const confirmInp = document.getElementById("reg_password_confirm");
+    const submitBtn = document.getElementById("btnRegisterSubmit");
+
+    const name = (nameInp?.value || "").trim();
+    const email = (emailInp?.value || "").trim();
+    const password = pwdInp?.value || "";
+    const confirmPassword = confirmInp?.value || "";
+
+    if (name.length < 2) {
+      this.setAuthFeedback("Informe seu nome (pelo menos 2 caracteres).", "error");
+      return;
+    }
+    if (!email) {
+      this.setAuthFeedback("Informe um e-mail válido.", "error");
+      return;
+    }
+    if (password.length < 6) {
+      this.setAuthFeedback("A senha deve ter pelo menos 6 caracteres.", "error");
+      return;
+    }
+    if (password !== confirmPassword) {
+      this.setAuthFeedback("As senhas digitadas não coincidem.", "error");
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "⏳ Criando seu acesso...";
+    }
+    this.setAuthFeedback("");
+
+    const res = await this.engine.register(name, email, password);
+
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "✨ Criar Conta & Iniciar História";
+    }
+
+    if (!res.success) {
+      this.setAuthFeedback(res.message || "Não foi possível criar a conta.", "error");
+      return;
+    }
+
+    if (nameInp) nameInp.value = "";
+    if (emailInp) emailInp.value = "";
+    if (pwdInp) pwdInp.value = "";
+    if (confirmInp) confirmInp.value = "";
+
+    this.hideAuthPortal();
+    if (typeof this.showToast === "function") {
+      this.showToast(`✨ Conta criada! Bem-vinda(o), ${res.user.name}!`);
+    }
+  }
+
+  async submitFirstPasswordChange(event) {
+    if (event) event.preventDefault();
+    const newPwdInp = document.getElementById("first_new_password");
+    const confirmInp = document.getElementById("first_new_password_confirm");
+    const submitBtn = document.getElementById("btnFirstPwdSubmit");
+
+    const newPassword = newPwdInp?.value || "";
+    const confirmPassword = confirmInp?.value || "";
+
+    if (newPassword.length < 6) {
+      this.setAuthFeedback("A nova senha deve conter pelo menos 6 caracteres.", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      this.setAuthFeedback("A confirmação de senha não confere com a nova senha digitada.", "error");
+      return;
+    }
+    if (newPassword === "123456") {
+      this.setAuthFeedback("Por segurança, escolha uma senha diferente da senha provisória (123456).", "error");
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "⏳ Salvando nova senha e carregando história...";
+    }
+    this.setAuthFeedback("");
+
+    const res = await this.engine.changePassword(newPassword);
+
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "🔑 Salvar Nova Senha & Abrir Códice";
+    }
+
+    if (!res.success) {
+      this.setAuthFeedback(res.message || "Erro ao salvar nova senha.", "error");
+      return;
+    }
+
+    if (newPwdInp) newPwdInp.value = "";
+    if (confirmInp) confirmInp.value = "";
+
+    this.hideAuthPortal();
+    if (typeof this.showToast === "function") {
+      this.showToast(`🔑 Senha atualizada! Bem-vinda(o), ${res.user.name}!`);
+    }
+  }
+
+  openAccountModal() {
+    const user = this.engine.currentUser;
+    if (!user) {
+      this.showAuthPortal("login");
+      return;
+    }
+
+    const worldsCount = Array.isArray(this.engine.worldsList) && this.engine.worldsList.length > 0
+      ? this.engine.worldsList.length
+      : 1;
+
+    const bodyHtml = `
+      <div class="card-box" style="padding:14px 16px; margin-bottom:16px; border-left:4px solid var(--gold-leaf);">
+        <div style="font-family:var(--font-display); font-size:1.05rem; font-weight:700; color:var(--gold-leaf); margin-bottom:4px;">
+          👤 ${this.escapeHtml(user.name)}
+        </div>
+        <div style="font-size:0.9rem; color:var(--ink-secondary); line-height:1.6;">
+          <div><strong>E-mail de Acesso:</strong> ${this.escapeHtml(user.email)}</div>
+          <div><strong>Histórias Vinculadas à Conta:</strong> ${worldsCount} universo(s) privado(s)</div>
+        </div>
+      </div>
+
+      <div style="padding:14px; background:rgba(24,18,12,0.9); border:1px solid var(--border-gold-subtle); border-radius:6px;">
+        <div style="font-family:var(--font-display); font-size:0.86rem; font-weight:700; color:var(--gold-leaf); margin-bottom:10px; text-transform:uppercase;">
+          🔑 Alterar Minha Senha
+        </div>
+        <div id="accountPwdFeedback" class="auth-feedback-banner" style="display:none;"></div>
+        <div class="form-group">
+          <label>Senha Atual:</label>
+          <input type="password" id="acc_current_password" class="input-medieval" placeholder="Digite sua senha atual..." />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nova Senha (mín. 6 caracteres):</label>
+            <input type="password" id="acc_new_password" class="input-medieval" placeholder="Nova senha..." />
+          </div>
+          <div class="form-group">
+            <label>Confirmar Nova Senha:</label>
+            <input type="password" id="acc_confirm_password" class="input-medieval" placeholder="Repita a nova senha..." />
+          </div>
+        </div>
+        <button type="button" class="btn btn-gold btn-sm" id="btnAccountChangePwd" onclick="app.submitAccountPasswordChange()">
+          Salvar Nova Senha
+        </button>
+      </div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-danger" onclick="app.handleLogout()">🚪 Sair da Conta</button>
+      <button class="btn btn-medieval" onclick="app.closeModal()">Fechar</button>
+    `;
+
+    this.showModal("Minha Conta & Segurança", bodyHtml, footerHtml);
+  }
+
+  async submitAccountPasswordChange() {
+    const curInp = document.getElementById("acc_current_password");
+    const newInp = document.getElementById("acc_new_password");
+    const confInp = document.getElementById("acc_confirm_password");
+    const fb = document.getElementById("accountPwdFeedback");
+    const btn = document.getElementById("btnAccountChangePwd");
+
+    const showFb = (msg, type = "error") => {
+      if (!fb) return;
+      fb.className = `auth-feedback-banner ${type}`;
+      fb.textContent = msg;
+      fb.style.display = "block";
+    };
+
+    const currentPassword = curInp?.value || "";
+    const newPassword = newInp?.value || "";
+    const confirmPassword = confInp?.value || "";
+
+    if (!currentPassword) return showFb("Informe sua senha atual.");
+    if (newPassword.length < 6) return showFb("A nova senha deve ter no mínimo 6 caracteres.");
+    if (newPassword !== confirmPassword) return showFb("As senhas novas não coincidem.");
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Atualizando...";
+    }
+
+    const res = await this.engine.changePassword(newPassword, currentPassword);
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Salvar Nova Senha";
+    }
+
+    if (!res.success) {
+      return showFb(res.message || "Erro ao alterar senha.", "error");
+    }
+
+    if (curInp) curInp.value = "";
+    if (newInp) newInp.value = "";
+    if (confInp) confInp.value = "";
+    showFb("✓ Sua senha foi alterada com sucesso!", "success");
+  }
+
+  async handleLogout() {
+    this.closeModal();
+    this.closeCropModal();
+    this.closeResidentsDrawer();
+    if (this.engine.saveDebounceTimer && this.engine.isAuthenticated() && !this.engine.mustChangePasswordNow()) {
+      await this.engine.pushToDatabaseNow().catch(() => {});
+    }
+    this.engine.logout(true);
+  }
+
+  onUserLoggedOut() {
+    this.syncUserAccountUi();
+    this.renderAll();
+    this.showAuthPortal("login", "Sessão encerrada com segurança.", "info");
   }
 
   // --------------------------------------------------------------------------
@@ -230,6 +644,7 @@ class FantasyGenealogyApp {
   }
 
   syncHeaderAndBadges() {
+    this.syncUserAccountUi();
     const d = this.engine.data;
     const titleEl = document.getElementById("worldTitleDisplay");
     if (titleEl) titleEl.textContent = d.meta.worldTitle || "Crônicas & Linhagens";

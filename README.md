@@ -11,15 +11,11 @@ Todos os dados são persistidos diretamente no **MongoDB Atlas** através de uma
 - **Banco de Dados:** MongoDB Atlas
   - **Cluster:** `familytree.lhbb3e2.mongodb.net`
   - **Database:** `familytree`
-  - **Coleções:**
-    - `world_state`: Estado consolidado do mundo para sincronização rápida e atômica.
-    - `worlds_index`: Catálogo e estatísticas de múltiplos mundos/histórias.
-    - `characters`: Coleção individual de personagens para consultas e relatórios.
-    - `houses`: Casas e dinastias cadastradas.
-    - `territories`: Províncias, continentes e coordenadas geográficas.
-    - `settlements`: Capitais reais e cidades/vilas no mapa.
-    - `timeline_events`: Marcos cronológicos, guerras e acontecimentos históricos.
-    - `creations`: Grimório de magias, poções, artefatos e relíquias.
+  - **Coleções (Compatíveis com Multi-Usuário):**
+    - `users`: Contas de acesso individuais (`name`, `email` único, `passwordHash` com Scrypt, `mustChangePassword` e controle de sessão).
+    - `world_state`: Estado consolidado de cada história vinculado ao `ownerId` do usuário.
+    - `worlds_index`: Catálogo e estatísticas das histórias de cada usuário (`ownerId`).
+    - `worlds`, `characters`, `houses`, `territories`, `settlements`, `timeline_events`, `creations`: Coleções individuais estruturadas com isolamento por `owner_id` e `world_id`.
 - **Backend / Camada de Servidor:** Node.js v18+ com Express e o driver oficial `mongodb`
   - `server.js`: Servidor unificado que entrega tanto os arquivos estáticos (HTML/CSS/JS) quanto os endpoints da API REST `/api` (com alias `/api.php` para retrocompatibilidade).
   - `package.json`: Dependências leves (`express`, `mongodb`, `cors`, `dotenv`).
@@ -77,20 +73,6 @@ npm install
 npm start
 ```
 Depois, acesse `http://localhost:8000` no seu navegador.
-
----
-
-## 📡 Endpoints da API Node.js (/api e /api.php)
-
-- `GET /api?action=ping`: Testa a conexão com o MongoDB Atlas e retorna o status.
-- `GET /api?action=list_worlds`: Lista todas as histórias e mundos registrados.
-- `GET /api?action=load&world_id=X`: Carrega o mundo salvo no MongoDB Atlas (suporta ETag e HTTP 304).
-- `POST /api?action=save&world_id=X`: Salva o estado completo no MongoDB (`world_state` e coleções individuais).
-- `POST /api?action=create_world`: Cria uma nova história independente no códice.
-- `POST /api?action=rename_world&world_id=X`: Renomeia o título de uma história.
-- `POST /api?action=delete_world&world_id=X`: Exclui uma história.
-- `POST /api?action=reset&world_id=X`: Reseta o banco para um estado limpo em branco.
-- `GET /api?action=stats&world_id=X`: Retorna as contagens de documentos e consumo de RAM do Node.js.
 
 ---
 
