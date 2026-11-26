@@ -58,7 +58,13 @@ app.use(
   express.static(path.join(__dirname), {
     etag: true,
     lastModified: true,
-    maxAge: process.env.NODE_ENV === "production" ? "1h" : 0
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html") || filePath.endsWith(".js") || filePath.endsWith(".css")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+    }
   })
 );
 

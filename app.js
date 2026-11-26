@@ -83,18 +83,27 @@ class FantasyGenealogyApp {
   }
 
   init() {
-    this.syncHeaderAndBadges();
-    this.populateFilterControls();
-    this.renderTree();
-    this.renderHousesAndSuccessionTab();
-    this.renderTimeline();
-    this.renderGrimoire();
-    this.initMapCanvasEvents();
-    this.initMiniMapEvents();
-    this.initTimelineEvents();
-    this.renderMapStudio();
-    this.renderAuditHistory();
-    this.initCropperEvents();
+    this.initAuthFlow();
+
+    if (this.engine.isAuthenticated() && !this.engine.mustChangePasswordNow()) {
+      this.syncHeaderAndBadges();
+      this.populateFilterControls();
+      this.renderTree();
+      this.renderHousesAndSuccessionTab();
+      this.renderTimeline();
+      this.renderGrimoire();
+      this.initMapCanvasEvents();
+      this.initMiniMapEvents();
+      this.initTimelineEvents();
+      this.renderMapStudio();
+      this.renderAuditHistory();
+      this.initCropperEvents();
+    } else {
+      this.initMapCanvasEvents();
+      this.initMiniMapEvents();
+      this.initTimelineEvents();
+      this.initCropperEvents();
+    }
 
     window.addEventListener("keydown", e => {
       const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
@@ -264,7 +273,10 @@ class FantasyGenealogyApp {
   showAuthPortal(view = "login", message = "", messageType = "info") {
     document.body.classList.add("auth-locked");
     const overlay = document.getElementById("authPortalOverlay");
-    if (overlay) overlay.classList.add("open");
+    if (overlay) {
+      overlay.classList.add("open");
+      overlay.style.display = "flex";
+    }
     this.switchAuthView(view, false);
     this.setAuthFeedback(message, messageType);
   }
@@ -272,7 +284,10 @@ class FantasyGenealogyApp {
   hideAuthPortal() {
     document.body.classList.remove("auth-locked");
     const overlay = document.getElementById("authPortalOverlay");
-    if (overlay) overlay.classList.remove("open");
+    if (overlay) {
+      overlay.classList.remove("open");
+      overlay.style.display = "none";
+    }
     this.setAuthFeedback("");
     this.syncUserAccountUi();
     this.renderAll();
