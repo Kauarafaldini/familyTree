@@ -778,12 +778,14 @@ class WorldEngine {
   }
 
   getSiblings(char) {
-    if (!char || (!char.fatherId && !char.motherId)) return [];
+    if (!char) return [];
     return this.data.characters.filter(c => {
       if (c.id === char.id) return false;
-      const sameFather = char.fatherId && c.fatherId === char.fatherId;
-      const sameMother = char.motherId && c.motherId === char.motherId;
-      return sameFather || sameMother;
+      const sameFather = char.fatherId && c.fatherId && c.fatherId === char.fatherId;
+      const sameMother = char.motherId && c.motherId && c.motherId === char.motherId;
+      const directSibling = (Array.isArray(char.siblingIds) && char.siblingIds.includes(c.id)) ||
+                            (Array.isArray(c.siblingIds) && c.siblingIds.includes(char.id));
+      return Boolean(sameFather || sameMother || directSibling);
     });
   }
 

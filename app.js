@@ -571,9 +571,15 @@ class FantasyGenealogyApp {
       if (c.motherId && charIds.has(c.motherId)) return true;
       if (c.twinOfId && charIds.has(c.twinOfId)) return true;
       if (Array.isArray(c.spouseIds) && c.spouseIds.some(spId => charIds.has(spId))) return true;
+      if (Array.isArray(c.siblingIds) && c.siblingIds.some(sibId => charIds.has(sibId))) return true;
       const hasChild = chars.some(other => (other.fatherId === c.id || other.motherId === c.id));
       if (hasChild) return true;
-      const hasSibling = chars.some(other => other.id !== c.id && ((c.fatherId && other.fatherId === c.fatherId) || (c.motherId && other.motherId === c.motherId)));
+      const hasSibling = chars.some(other => other.id !== c.id && (
+        (c.fatherId && other.fatherId && c.fatherId === other.fatherId) ||
+        (c.motherId && other.motherId && c.motherId === other.motherId) ||
+        (Array.isArray(c.siblingIds) && c.siblingIds.includes(other.id)) ||
+        (Array.isArray(other.siblingIds) && other.siblingIds.includes(c.id))
+      ));
       return hasSibling;
     };
 
@@ -665,12 +671,14 @@ class FantasyGenealogyApp {
             }
           }
 
-          // 3. Irmãos que compartilham o mesmo pai ou mãe ficam em seguida
+          // 3. Irmãos que compartilham o mesmo pai/mãe ou laço fraterno direto
           rowList.forEach(other => {
             if (placed.has(other.id)) return;
             const sameFather = person.fatherId && other.fatherId && person.fatherId === other.fatherId;
             const sameMother = person.motherId && other.motherId && person.motherId === other.motherId;
-            if (sameFather || sameMother) {
+            const directSibling = (Array.isArray(person.siblingIds) && person.siblingIds.includes(other.id)) ||
+                                  (Array.isArray(other.siblingIds) && other.siblingIds.includes(person.id));
+            if (sameFather || sameMother || directSibling) {
               placePersonAndTies(other);
             }
           });
@@ -813,25 +821,30 @@ class FantasyGenealogyApp {
         const isAvuncular = Boolean(avuncular || mDetail.isAvuncular);
 
         if (isAvuncular) {
-          // Trança de União Avuncular (Azul-Real e Ouro Envelhecido)
+          // Trança de União Avuncular (Azul-Real e Ouro Envelhecido) - Clicável para Desfazer/Inspecionar
           svgHtml += `
-            <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
-                  fill="none" stroke="#294873" stroke-width="3.5" filter="url(#shadowMedieval)" />
-            <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
-                  fill="none" stroke="#c5a059" stroke-width="2" stroke-dasharray="6 5" />
-            <rect x="${midX - 70}" y="${midY - 11}" width="140" height="20" rx="2"
-                  fill="#1c1611" stroke="#c5a059" stroke-width="1.2" />
-            <text x="${midX}" y="${midY + 3}" fill="#dfba73" font-family="Cinzel, serif" font-size="9" font-weight="600" text-anchor="middle" letter-spacing="0.5">
-              Matrimônio Avuncular (${mDetail.year || "Linhagem"})
-            </text>
+            <g class="tree-marriage-link tree-marriage-avuncular" onclick="app.openMarriageInspectionModal('${c.id}', '${spId}')" style="cursor:pointer;" title="Matrimônio Avuncular: Clique para Inspecionar, Desfazer ou Divorciar">
+              <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
+                    fill="none" stroke="#294873" stroke-width="3.8" filter="url(#shadowMedieval)" />
+              <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
+                    fill="none" stroke="#c5a059" stroke-width="2.2" stroke-dasharray="6 5" />
+              <rect x="${midX - 74}" y="${midY - 12}" width="148" height="22" rx="3"
+                    fill="#1c1611" stroke="#c5a059" stroke-width="1.3" />
+              <text x="${midX}" y="${midY + 3}" fill="#dfba73" font-family="Cinzel, serif" font-size="9" font-weight="600" text-anchor="middle" letter-spacing="0.5">
+                💍 Matrimônio Avuncular (${mDetail.year || "Linhagem"})
+              </text>
+            </g>
           `;
         } else {
-          // Casamento Nobre Padrão (Linha Azul-Real com Selo Central)
+          // Casamento Nobre Padrão (Linha Azul-Real com Selo Central Clicável)
           svgHtml += `
-            <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
-                  fill="none" stroke="#294873" stroke-width="3" filter="url(#shadowMedieval)" />
-            <circle cx="${midX}" cy="${midY + 3}" r="7" fill="#18130e" stroke="#294873" stroke-width="1.8" />
-            <circle cx="${midX}" cy="${midY + 3}" r="3" fill="#c5a059" />
+            <g class="tree-marriage-link tree-marriage-standard" onclick="app.openMarriageInspectionModal('${c.id}', '${spId}')" style="cursor:pointer;" title="Aliança Matrimonial: Clique para Inspecionar, Desfazer ou Divorciar">
+              <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
+                    fill="none" stroke="#294873" stroke-width="3.2" filter="url(#shadowMedieval)" />
+              <circle cx="${midX}" cy="${midY + 3}" r="8" fill="#18130e" stroke="#294873" stroke-width="2" />
+              <circle cx="${midX}" cy="${midY + 3}" r="3.5" fill="#c5a059" />
+              <text x="${midX}" y="${midY - 6}" fill="#c5a059" font-size="11" text-anchor="middle">💍</text>
+            </g>
           `;
         }
       });
@@ -903,8 +916,12 @@ class FantasyGenealogyApp {
         const archY = Math.min(topA, topB) - 16;
 
         svgHtml += `
-          <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
-                fill="none" stroke="#c81e32" stroke-width="1.4" opacity="0.45" />
+          <g class="tree-sibling-bond" data-pair="${sibKey}">
+            <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
+                  fill="none" stroke="#dc2626" stroke-width="2.6" opacity="0.92"
+                  stroke-linecap="round" filter="url(#shadowMedieval)" />
+            <circle cx="${midX}" cy="${archY + 11}" r="3.2" fill="#dc2626" />
+          </g>
         `;
       });
     });
@@ -979,7 +996,10 @@ class FantasyGenealogyApp {
             <!-- Ações Rápidas Nobiliárquicas no Hover -->
             <div class="sphere-quick-actions">
               <button class="quick-dot-btn" title="Adicionar Parentesco (Pai, Padrasto, Irmão, Filho, Tio...)" onclick="app.openAddRelationshipModal('${c.id}')">+Parentesco</button>
-              <button class="quick-dot-btn" title="Celebrar Casamento" onclick="app.openMarriageModal('${c.id}')">Casar</button>
+              ${c.spouseIds && c.spouseIds.length > 0
+                ? `<button class="quick-dot-btn danger" style="background:#701a22; color:#fff;" title="Inspecionar, Desfazer Casamento ou Lavrar Divórcio" onclick="app.openMarriageInspectionModal('${c.id}', '${c.spouseIds[0]}')">💔 Casamento</button>`
+                : `<button class="quick-dot-btn" title="Celebrar Casamento" onclick="app.openMarriageModal('${c.id}')">Casar</button>`
+              }
               <button class="quick-dot-btn" title="Editar Registro" onclick="app.openCharacterModal('${c.id}')">Editar</button>
               <button class="quick-dot-btn danger" title="Verificação de Exclusão" onclick="app.openDeleteVerificationModal('${c.id}')">&times;</button>
             </div>
@@ -1630,9 +1650,13 @@ class FantasyGenealogyApp {
       ${subTabContentHtml}
     `;
 
+    const hasSpouses = Array.isArray(c.spouseIds) && c.spouseIds.length > 0;
     const footerHtml = `
       <button class="btn btn-sm btn-gold" onclick="app.openAddRelationshipModal('${c.id}')">+ Adicionar Parentesco</button>
-      <button class="btn btn-sm btn-gold" onclick="app.openMarriageModal('${c.id}')">Casar</button>
+      ${hasSpouses
+        ? `<button class="btn btn-sm btn-danger" onclick="app.openMarriageInspectionModal('${c.id}', '${c.spouseIds[0]}')">💔 Gerenciar Casamento</button>`
+        : `<button class="btn btn-sm btn-gold" onclick="app.openMarriageModal('${c.id}')">Casar</button>`
+      }
       <button class="btn btn-sm btn-medieval" onclick="app.openCharacterModal('${c.id}')">Editar</button>
       <button class="btn btn-sm btn-danger" onclick="app.openDeleteVerificationModal('${c.id}')">Excluir</button>
       <button class="btn btn-sm btn-medieval" onclick="app.closeModal()">Fechar</button>
@@ -1922,6 +1946,10 @@ class FantasyGenealogyApp {
     } else if (relType === "irmao") {
       relative.fatherId = baseChar.fatherId;
       relative.motherId = baseChar.motherId;
+      baseChar.siblingIds = Array.isArray(baseChar.siblingIds) ? baseChar.siblingIds : [];
+      if (!baseChar.siblingIds.includes(relative.id)) baseChar.siblingIds.push(relative.id);
+      relative.siblingIds = Array.isArray(relative.siblingIds) ? relative.siblingIds : [];
+      if (!relative.siblingIds.includes(baseChar.id)) relative.siblingIds.push(baseChar.id);
     } else if (relType === "meio_irmao") {
       if (baseChar.fatherId) relative.fatherId = baseChar.fatherId;
       else if (baseChar.motherId) relative.motherId = baseChar.motherId;
@@ -2167,7 +2195,7 @@ class FantasyGenealogyApp {
             <span style="font-family:var(--font-display); font-size:0.78rem; color:var(--gold-leaf); text-transform:uppercase; font-weight:700;">
               Parentescos deste Personagem:
             </span>
-            <div style="font-size:0.82rem; color:var(--ink-secondary);">Adicione novos pais, filhos, irmãos ou casamento diretamente</div>
+            <div style="font-size:0.82rem; color:var(--ink-secondary);">Adicione novos pais, filhos, irmãos ou gerencie casamentos</div>
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
             <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'pai')">+ Pai</button>
@@ -2175,6 +2203,9 @@ class FantasyGenealogyApp {
             <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'filho')">+ Filho(a)</button>
             <button type="button" class="btn btn-xs btn-gold" onclick="app.closeModal(); app.openAddRelationshipModal('${editCharId}', 'irmao')">+ Irmão(ã)</button>
             <button type="button" class="btn btn-xs btn-medieval" onclick="app.closeModal(); app.openMarriageModal('${editCharId}')">+ Casar</button>
+            ${c.spouseIds && c.spouseIds.length > 0 ? `
+              <button type="button" class="btn btn-xs btn-danger" onclick="app.closeModal(); app.openMarriageInspectionModal('${editCharId}', '${c.spouseIds[0]}')">💔 Gerenciar Casamento</button>
+            ` : ""}
           </div>
         </div>
       ` : ""}
@@ -2923,6 +2954,26 @@ class FantasyGenealogyApp {
     const avuncular = this.engine.isAvuncularRelationship(aId, bId);
     let html = "";
 
+    const alreadyMarried = Array.isArray(a.spouseIds) && a.spouseIds.includes(b.id);
+    if (alreadyMarried) {
+      html += `
+        <div class="alert-banner alert-warning" style="margin-bottom:12px; border:1px solid #dc2626;">
+          <div style="font-weight:700; color:#fca5a5; margin-bottom:4px;">⚠️ Estes personagens já estão casados no códice!</div>
+          <div style="font-size:0.84rem; margin-bottom:8px;">
+            Deseja desfazer este vínculo matrimonial por engano ou oficializar uma separação/divórcio?
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-xs btn-danger" onclick="app.closeModal(); app.undoMarriageError('${a.id}', '${b.id}')">
+              ❌ Desfazer Casamento (Erro)
+            </button>
+            <button type="button" class="btn btn-xs btn-medieval" style="color:#fdba74;" onclick="app.closeModal(); app.openDivorceModal('${a.id}', '${b.id}')">
+              💔 Lavrar Divórcio Formal
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     if (avuncular) {
       html += `
         <div class="alert-banner alert-warning" style="margin-bottom:10px;">
@@ -3032,6 +3083,70 @@ class FantasyGenealogyApp {
     this.closeModal();
     this.syncHeaderAndBadges();
     this.renderTree();
+  }
+
+  // --------------------------------------------------------------------------
+  // INSPEÇÃO E GERENCIAMENTO DE CASAMENTO (DESFAZER OU DIVORCIAR)
+  // --------------------------------------------------------------------------
+  openMarriageInspectionModal(charAId, charBId) {
+    const a = this.engine.getCharacter(charAId);
+    const b = this.engine.getCharacter(charBId);
+    if (!a || !b) return;
+
+    const mDetail = (a.marriageDetails && a.marriageDetails[b.id]) || (b.marriageDetails && b.marriageDetails[a.id]) || {};
+    const isAvuncular = this.engine.isAvuncularRelationship(charAId, charBId) || mDetail.isAvuncular;
+    const isDivorced = Boolean(mDetail.divorced);
+
+    const bodyHtml = `
+      <div style="background:rgba(20,15,10,0.85); border:1px solid var(--border-gold-subtle); padding:14px; border-radius:4px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-around; align-items:center; text-align:center; margin-bottom:12px;">
+          <div>
+            <div style="font-size:1.1rem; font-weight:700; color:var(--gold-leaf);">${this.escapeHtml(a.name)}</div>
+            <div style="font-size:0.8rem; color:var(--ink-secondary);">${this.escapeHtml(a.socialRank || "Nobreza")}</div>
+          </div>
+          <div style="font-size:1.6rem; color:#dfba73;">💍</div>
+          <div>
+            <div style="font-size:1.1rem; font-weight:700; color:var(--gold-leaf);">${this.escapeHtml(b.name)}</div>
+            <div style="font-size:0.8rem; color:var(--ink-secondary);">${this.escapeHtml(b.socialRank || "Nobreza")}</div>
+          </div>
+        </div>
+
+        <div style="background:#16110c; padding:10px 12px; border-radius:3px; font-size:0.85rem; line-height:1.5;">
+          <div><strong>Ano da União:</strong> ${mDetail.year || "Não informado"}</div>
+          <div><strong>Modalidade:</strong> ${isAvuncular ? "Tradição Avuncular (Tio & Sobrinha)" : "Aliança Matrimonial Padrão"}</div>
+          <div><strong>Estado Civil Vigente:</strong> ${isDivorced ? `<span style="color:#f87171;">💔 Divorciados (Ano ${mDetail.divorceYear || "N/A"})</span>` : `<span style="color:#4ade80;">💍 Casados Oficialmente</span>`}</div>
+          ${mDetail.exceptions && mDetail.exceptions.length > 0 ? `<div><strong>Exceções Heráldicas:</strong> ${mDetail.exceptions.join(", ")}</div>` : ""}
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="background:#1f1812; border:1px solid rgba(220,38,38,0.4); padding:10px 12px; border-radius:4px;">
+          <div style="font-weight:700; color:#fca5a5; margin-bottom:4px;">❌ Desfazer Casamento (Erro de Cadastro)</div>
+          <p style="font-size:0.82rem; color:var(--ink-secondary); margin:0 0 8px 0;">
+            Use esta opção se o casamento foi adicionado por engano. Isso <strong>remove completamente o vínculo de casamento</strong> sem gerar divórcio e sem poluir a cronologia.
+          </p>
+          <button class="btn btn-sm btn-danger" onclick="app.closeModal(); app.undoMarriageError('${a.id}', '${b.id}')">
+            ❌ Desfazer Casamento (Correção Limpa)
+          </button>
+        </div>
+
+        <div style="background:#1f1812; border:1px solid rgba(200,100,50,0.4); padding:10px 12px; border-radius:4px;">
+          <div style="font-weight:700; color:#fdba74; margin-bottom:4px;">💔 Lavrar Divórcio Formal (Histórico Canônico)</div>
+          <p style="font-size:0.82rem; color:var(--ink-secondary); margin:0 0 8px 0;">
+            Use esta opção se os personagens realmente se separaram na história. Isso registra o divórcio nos anais, na cronologia e na cartografia do mundo.
+          </p>
+          <button class="btn btn-sm btn-medieval" style="color:#fdba74;" onclick="app.closeModal(); app.openDivorceModal('${a.id}', '${b.id}')">
+            💔 Lavrar Divórcio Formal
+          </button>
+        </div>
+      </div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Fechar</button>
+    `;
+
+    this.showModal(`Gerenciar Matrimônio: ${a.name} & ${b.name}`, bodyHtml, footerHtml);
   }
 
   // --------------------------------------------------------------------------
@@ -4563,8 +4678,11 @@ class FantasyGenealogyApp {
       viewport.scrollLeft = scrollLeft - walk;
     });
 
-    // Zoom suave e otimizado com o scroll do mouse sobre o ponto da linha do tempo
-    let wheelRaf = null;
+    // Zoom suave e otimizado com debounce acumulativo
+    let wheelTimer = null;
+    let pendingYearUnderCursor = null;
+    let pendingMouseX = null;
+
     viewport.addEventListener("wheel", e => {
       e.preventDefault();
 
@@ -4576,9 +4694,13 @@ class FantasyGenealogyApp {
       const paddingX = 240;
       const startYear = this.timelineStartYear || 1200;
       const trackXOld = currentScrollLeft + mouseViewportX;
-      const yearUnderCursor = startYear + (trackXOld - paddingX) / pixelsPerYearOld;
 
-      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      if (pendingYearUnderCursor === null) {
+        pendingYearUnderCursor = startYear + (trackXOld - paddingX) / pixelsPerYearOld;
+        pendingMouseX = mouseViewportX;
+      }
+
+      const zoomFactor = e.deltaY < 0 ? 1.14 : 0.88;
       let newZoom = Number((this.timelineZoom * zoomFactor).toFixed(2));
       newZoom = Math.max(0.04, Math.min(6.5, newZoom));
 
@@ -4586,14 +4708,19 @@ class FantasyGenealogyApp {
         this.timelineZoom = newZoom;
         this.updateTimelineZoomModeFromZoom();
 
-        if (wheelRaf) cancelAnimationFrame(wheelRaf);
-        wheelRaf = requestAnimationFrame(() => {
+        if (wheelTimer) clearTimeout(wheelTimer);
+        wheelTimer = setTimeout(() => {
+          const anchorYear = pendingYearUnderCursor !== null ? pendingYearUnderCursor : startYear;
+          const anchorMouseX = pendingMouseX !== null ? pendingMouseX : mouseViewportX;
+          pendingYearUnderCursor = null;
+          pendingMouseX = null;
+
           this.renderTimeline();
           const pixelsPerYearNew = this.getTimelinePixelsPerYear();
-          const trackXNew = paddingX + (yearUnderCursor - startYear) * pixelsPerYearNew;
-          viewport.scrollLeft = Math.max(0, trackXNew - mouseViewportX);
-          wheelRaf = null;
-        });
+          const trackXNew = paddingX + (anchorYear - startYear) * pixelsPerYearNew;
+          viewport.scrollLeft = Math.max(0, trackXNew - anchorMouseX);
+          wheelTimer = null;
+        }, 40);
       }
     }, { passive: false });
   }
@@ -7117,7 +7244,7 @@ class FantasyGenealogyApp {
     const gridStep = 120;
     const gStartX = Math.floor(minWX / gridStep) * gridStep;
     const gStartY = Math.floor(minWY / gridStep) * gridStep;
-    ctx.strokeStyle = "rgba(120, 180, 230, 0.04)";
+    ctx.strokeStyle = "rgba(223, 186, 115, 0.035)";
     ctx.lineWidth = 1 / this.mapZoom;
     for (let gx = gStartX; gx <= maxWX; gx += gridStep) {
       ctx.beginPath();
@@ -7261,6 +7388,13 @@ class FantasyGenealogyApp {
         ctx.stroke();
         ctx.restore();
       } else if (s.type === "draw_river") {
+        // Ignora micro-traços acidentais de clique (menos de 3 pontos ou comprimento menor que 22px)
+        let riverLength = 0;
+        for (let r = 1; r < s.points.length; r++) {
+          riverLength += Math.hypot(s.points[r].x - s.points[r - 1].x, s.points[r].y - s.points[r - 1].y);
+        }
+        if (s.points.length < 3 || riverLength < 22) return;
+
         // Linha de água / Rio: traço fluido multicamada sem serrilhado nem tremidos
         ctx.save();
         // 1. Leito profundo da água (halo sutil)
