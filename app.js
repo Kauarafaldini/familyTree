@@ -5955,6 +5955,21 @@ class FantasyGenealogyApp {
     return inside;
   }
 
+  // Verifica se um ponto geográfico está dentro de qualquer continente/território existente
+  isPointInsideAnyTerritory(pt) {
+    if (!pt || typeof pt.x !== "number" || typeof pt.y !== "number") return false;
+    const territories = this.engine.data.territories || [];
+    for (let i = 0; i < territories.length; i++) {
+      const t = territories[i];
+      if (t && Array.isArray(t.points) && t.points.length >= 3) {
+        if (this.isPointInPolygon(pt, t.points)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   findHitVertex(pt) {
     if (!this.isMapEditMode || this.mapEditScope === "interior") return null;
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
@@ -6402,6 +6417,25 @@ class FantasyGenealogyApp {
     const canvas = document.getElementById("fantasyMapCanvas");
     if (!canvas) return;
 
+    // Sincroniza dinamicamente a resolução e desenho do mapa quando a janela mudar de tamanho ou entrar em tela cheia
+    if (!this._hasMapResizeListener) {
+      this._hasMapResizeListener = true;
+      window.addEventListener("resize", () => {
+        if (this.activeTab === "tab-map") {
+          this.drawMapCanvas();
+        }
+      });
+      const container = document.getElementById("mapCanvasContainer");
+      if (container && window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+          if (this.activeTab === "tab-map") {
+            this.drawMapCanvas();
+          }
+        });
+        ro.observe(container);
+      }
+    }
+
     // Zoom infinito através da roda do mouse (centrado na posição do cursor)
     canvas.addEventListener(
       "wheel",
@@ -6519,6 +6553,12 @@ class FantasyGenealogyApp {
 
       // 0.5. CARIMBOS DE CONSTRUÇÕES: Colocar Castelo ou Casas onde clicar no mapa
       if (this.mapTool === "stamp_castle" || this.mapTool === "stamp_house") {
+        if (!this.isPointInsideAnyTerritory(pt)) {
+          if (typeof this.showToast === "function") {
+            this.showToast("⚠️ Construções e castelos só podem ser erguidos sobre terra firme (dentro de um continente).");
+          }
+          return;
+        }
         this.pushMapUndoState();
         this.engine.data.mapStrokes = this.engine.data.mapStrokes || [];
         const newStamp = {
@@ -6539,6 +6579,12 @@ class FantasyGenealogyApp {
 
       // Adicionar Capital Real ou Cidade/Vila no mapa no ponto clicado
       if (this.mapTool === "add_capital" || this.mapTool === "add_city") {
+        if (!this.isPointInsideAnyTerritory(pt)) {
+          if (typeof this.showToast === "function") {
+            this.showToast("⚠️ Cidades e capitais só podem ser fundadas dentro de um continente.");
+          }
+          return;
+        }
         const defaultType = this.mapTool === "add_capital" ? "capital" : "city";
         this.openSettlementModal(pt.x, pt.y, defaultType);
         return;
@@ -7632,8 +7678,11 @@ class FantasyGenealogyApp {
     // Sincroniza o tamanho do canvas com o container para eliminar desvios e linhas azuis
     const container = canvas.parentElement;
     if (container && container.clientWidth > 100) {
-      if (canvas.width !== container.clientWidth) canvas.width = container.clientWidth;
-      if (canvas.height !== container.clientHeight && container.clientHeight > 100) canvas.height = container.clientHeight;
+      const rect = container.getBoundingClientRect();
+      const targetW = Math.round(rect.width || container.clientWidth);
+      const targetH = Math.round(rect.height || container.clientHeight || 560);
+      if (targetW > 100 && canvas.width !== targetW) canvas.width = targetW;
+      if (targetH > 100 && canvas.height !== targetH) canvas.height = targetH;
     }
 
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
@@ -7645,13 +7694,14 @@ class FantasyGenealogyApp {
     ctx.fillStyle = "#07121d";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    const waterRadius = Math.max(canvas.width, canvas.height);
     const waterGrad = ctx.createRadialGradient(
       canvas.width / 2,
       canvas.height / 2,
       50,
       canvas.width / 2,
       canvas.height / 2,
-      Math.max(canvas.width, canvas.height)
+      waterRadius
     );
     waterGrad.addColorStop(0, "#152c42");
     waterGrad.addColorStop(0.65, "#0e1f30");
@@ -7761,8 +7811,26 @@ class FantasyGenealogyApp {
     (this.engine.data.mapStrokes || []).forEach((s, sIdx) => {
       // 3.1. Carimbos Individuais posicionados no mapa (x, y)
       if (s.x !== undefined && s.y !== undefined) {
+        // Ícones terrestres (montanhas, pinheiros, casas, castelos) ficam delimitados à terra firme
+        const isLandIcon = ["stamp_castle", "stamp_house", "stamp_mountain", "stamp_tree"].includes(s.type);
+        if (isLandIcon && !this.isPointInsideAnyTerritory({ x: s.x, y: s.y })) {
+          // Se foi posicionado no oceano aberto, não renderiza sobre a água
+          return;
+        }
+
         const isSelected = this.selectedMapItemId === s.id;
         const iconSize = s.size || this.mapIconSize || 24;
+
+        ctx.save();
+        if (isLandIcon && territories.length > 0) {
+          ctx.beginPath();
+          territories.forEach(t => {
+            if (Array.isArray(t.points) && t.points.length >= 3) {
+              this.traceTerritoryPolygonPath(ctx, t.points);
+            }
+          });
+          ctx.clip();
+        }
 
         if (s.type === "stamp_castle") {
           this.drawCastleIcon(ctx, s.x, s.y, iconSize, isSelected, s.name || "");
@@ -7773,7 +7841,9 @@ class FantasyGenealogyApp {
         } else if (s.type === "stamp_tree") {
           this.drawPineTreeIcon(ctx, s.x, s.y, iconSize, sIdx * 5);
         }
+        ctx.restore();
 
+        // Caixa de seleção desenhada fora do clip para visualização completa dos manipuladores
         if (isSelected) {
           this.drawStampSelectionBox(ctx, s.x, s.y, iconSize);
         }
@@ -7785,24 +7855,54 @@ class FantasyGenealogyApp {
       const strokeSize = s.size || this.mapIconSize || 20;
 
       // Traçado de Montanhas: adiciona ícones de montanha redimensionáveis ao longo da linha traçada
+      // Estritamente delimitados dentro do continente (sem vazar para o mar)
       if (s.type === "draw_mountain") {
         const step = Math.max(14, Math.round(strokeSize * 1.15));
         const pts = this.getEquidistantPointsAlongPath(s.points, step);
-        const sorted = pts.slice().sort((a, b) => a.y - b.y);
+        const insidePts = pts.filter(p => this.isPointInsideAnyTerritory(p));
+        if (insidePts.length === 0) return;
+        const sorted = insidePts.sort((a, b) => a.y - b.y);
+
+        ctx.save();
+        if (territories.length > 0) {
+          ctx.beginPath();
+          territories.forEach(t => {
+            if (Array.isArray(t.points) && t.points.length >= 3) {
+              this.traceTerritoryPolygonPath(ctx, t.points);
+            }
+          });
+          ctx.clip();
+        }
         sorted.forEach((p, pIdx) => {
           this.drawMountainIcon(ctx, p.x, p.y, strokeSize, (sIdx + 1) * 7 + pIdx);
         });
+        ctx.restore();
         return;
       }
 
       // Traçado de Pinheiros: adiciona ícones de pinheiros redimensionáveis ao longo da linha
+      // Estritamente delimitados dentro do continente (sem vazar para o mar)
       if (s.type === "draw_tree") {
         const step = Math.max(12, Math.round(strokeSize * 1.05));
         const pts = this.getEquidistantPointsAlongPath(s.points, step);
-        const sorted = pts.slice().sort((a, b) => a.y - b.y);
+        const insidePts = pts.filter(p => this.isPointInsideAnyTerritory(p));
+        if (insidePts.length === 0) return;
+        const sorted = insidePts.sort((a, b) => a.y - b.y);
+
+        ctx.save();
+        if (territories.length > 0) {
+          ctx.beginPath();
+          territories.forEach(t => {
+            if (Array.isArray(t.points) && t.points.length >= 3) {
+              this.traceTerritoryPolygonPath(ctx, t.points);
+            }
+          });
+          ctx.clip();
+        }
         sorted.forEach((p, pIdx) => {
           this.drawPineTreeIcon(ctx, p.x, p.y, strokeSize, (sIdx + 1) * 5 + pIdx);
         });
+        ctx.restore();
         return;
       }
 

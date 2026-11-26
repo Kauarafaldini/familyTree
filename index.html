@@ -13,7 +13,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2.2.0" />
+  <link rel="stylesheet" href="styles.css?v=2.3.0" />
 </head>
 
 <body class="auth-locked">
@@ -441,7 +441,8 @@
             title="Editar apenas o tamanho e contorno do continente: exibe as bolinhas de ajuste nas bordas para modelar">
             🌍 Tamanho / Bordas
           </button>
-          <button class="btn btn-sm btn-gold active-tool" id="btnScopeInterior" onclick="app.setMapEditScope('interior')"
+          <button class="btn btn-sm btn-gold active-tool" id="btnScopeInterior"
+            onclick="app.setMapEditScope('interior')"
             title="Editar o que tem dentro do continente: esconde as bolinhas para você desenhar montanhas, árvores, rios e fundar cidades sem atrapalhar">
             🏰 Interior (Dentro)
           </button>
@@ -581,9 +582,13 @@
         <div class="toolbar-section">
           <span class="toolbar-section-label">Tamanho do Ícone:</span>
           <div class="icon-size-section">
-            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(-4)" title="Diminuir tamanho dos ícones">-</button>
-            <input type="range" id="mapIconSizeSlider" min="12" max="64" step="2" value="24" oninput="app.setMapIconSize(this.value)" title="Ajuste o tamanho de castelos, casas, montanhas e pinheiros" />
-            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(+4)" title="Aumentar tamanho dos ícones">+</button>
+            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(-4)"
+              title="Diminuir tamanho dos ícones">-</button>
+            <input type="range" id="mapIconSizeSlider" min="12" max="64" step="2" value="24"
+              oninput="app.setMapIconSize(this.value)"
+              title="Ajuste o tamanho de castelos, casas, montanhas e pinheiros" />
+            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(+4)"
+              title="Aumentar tamanho dos ícones">+</button>
             <span id="mapIconSizeDisplay">24px</span>
           </div>
         </div>
@@ -621,17 +626,21 @@
     </div>
 
     <div class="map-helper-bar" id="mapHelperBar" style="display: none;">
-      <span id="mapHelperBarContent"><strong>Modo de Edição Ativo:</strong> Use <strong>🌍 Tamanho / Bordas</strong> para ajustar as bolinhas da costa, ou <strong>🏰 Interior</strong> para desenhar relevo e fundar cidades sem as bolinhas atrapalharem. Você também pode clicar no <strong>🔒 Cadeado</strong> para travar o continente!</span>
+      <span id="mapHelperBarContent"><strong>Modo de Edição Ativo:</strong> Use <strong>🌍 Tamanho / Bordas</strong>
+        para ajustar as bolinhas da costa, ou <strong>🏰 Interior</strong> para desenhar relevo e fundar cidades sem as
+        bolinhas atrapalharem. Você também pode clicar no <strong>🔒 Cadeado</strong> para travar o continente!</span>
     </div>
 
     <div class="map-studio-layout">
       <!-- Pergaminho Cartográfico -->
       <div class="map-canvas-container" id="mapCanvasContainer">
         <!-- Mini-Mapa (Radar Cartográfico & Navegação Rápida) -->
-        <div class="map-minimap-container" id="mapMiniMapContainer" title="Mini-Mapa: Visão Geral do Mundo e Navegação Rápida">
+        <div class="map-minimap-container" id="mapMiniMapContainer"
+          title="Mini-Mapa: Visão Geral do Mundo e Navegação Rápida">
           <div class="map-minimap-header">
             <span>🧭 Radar do Mundo</span>
-            <button type="button" class="minimap-toggle-btn" id="miniMapToggleBtn" onclick="app.toggleMiniMap()" title="Ocultar ou Exibir Mini-Mapa">&minus;</button>
+            <button type="button" class="minimap-toggle-btn" id="miniMapToggleBtn" onclick="app.toggleMiniMap()"
+              title="Ocultar ou Exibir Mini-Mapa">&minus;</button>
           </div>
           <div class="map-minimap-body" id="mapMiniMapBody">
             <canvas id="mapMiniMapCanvas" width="180" height="110"></canvas>
@@ -732,9 +741,10 @@
       </div>
       <div class="modal-body cropper-modal-body">
         <p class="sub-desc" style="margin-bottom: 12px;">
-          Arraste a foto com o mouse para centralizar o rosto/personagem no medalhão e use a barra de zoom para enquadrar perfeitamente a exibição circular.
+          Arraste a foto com o mouse para centralizar o rosto/personagem no medalhão e use a barra de zoom para
+          enquadrar perfeitamente a exibição circular.
         </p>
-        
+
         <div class="cropper-stage-layout">
           <!-- Área de corte interativo -->
           <div class="cropper-viewport-container">
@@ -760,14 +770,17 @@
               <label>Aproximação / Zoom:</label>
               <div style="display:flex; align-items:center; gap: 8px;">
                 <button type="button" class="btn btn-xs btn-medieval" onclick="app.adjustCropZoom(-0.15)">-</button>
-                <input type="range" id="cropperZoomSlider" min="0.3" max="4.0" step="0.02" value="1.0" oninput="app.onCropZoomSlider(this.value)" style="flex:1;" />
+                <input type="range" id="cropperZoomSlider" min="0.3" max="4.0" step="0.02" value="1.0"
+                  oninput="app.onCropZoomSlider(this.value)" style="flex:1;" />
                 <button type="button" class="btn btn-xs btn-medieval" onclick="app.adjustCropZoom(+0.15)">+</button>
               </div>
             </div>
 
             <div style="display: flex; gap: 6px; width: 100%;">
-              <button type="button" class="btn btn-xs btn-medieval" style="flex:1;" onclick="app.centerCropImage()">Centralizar</button>
-              <button type="button" class="btn btn-xs btn-medieval" style="flex:1;" onclick="app.fitCropImage()">Ajustar ao Círculo</button>
+              <button type="button" class="btn btn-xs btn-medieval" style="flex:1;"
+                onclick="app.centerCropImage()">Centralizar</button>
+              <button type="button" class="btn btn-xs btn-medieval" style="flex:1;" onclick="app.fitCropImage()">Ajustar
+                ao Círculo</button>
             </div>
           </div>
         </div>
@@ -812,14 +825,18 @@
       <form class="auth-form" id="authFormLogin" onsubmit="app.submitLogin(event)">
         <div class="form-group">
           <label for="login_email">E-mail de Acesso:</label>
-          <input type="email" id="login_email" class="input-medieval" placeholder="seu@email.com" autocomplete="email" required />
+          <input type="email" id="login_email" class="input-medieval" placeholder="seu@email.com" autocomplete="email"
+            required />
         </div>
 
         <div class="form-group">
           <label for="login_password">Senha:</label>
           <div class="auth-password-wrap">
-            <input type="password" id="login_password" class="input-medieval" placeholder="Digite sua senha..." autocomplete="current-password" required />
-            <button type="button" class="auth-eye-btn" onclick="app.toggleAuthPasswordVisibility('login_password', this)" title="Mostrar ou ocultar senha">👁️</button>
+            <input type="password" id="login_password" class="input-medieval" placeholder="Digite sua senha..."
+              autocomplete="current-password" required />
+            <button type="button" class="auth-eye-btn"
+              onclick="app.toggleAuthPasswordVisibility('login_password', this)"
+              title="Mostrar ou ocultar senha">👁️</button>
           </div>
         </div>
 
@@ -829,7 +846,8 @@
 
         <div class="auth-switch-hint">
           Ainda não possui seu próprio acesso?
-          <button type="button" class="auth-link-btn" onclick="app.switchAuthView('register')">Cadastre-se gratuitamente</button>
+          <button type="button" class="auth-link-btn" onclick="app.switchAuthView('register')">Cadastre-se
+            gratuitamente</button>
         </div>
       </form>
 
@@ -837,27 +855,34 @@
       <form class="auth-form" id="authFormRegister" onsubmit="app.submitRegister(event)" style="display:none;">
         <div class="form-group">
           <label for="reg_name">Seu Nome / Nome de Autora:</label>
-          <input type="text" id="reg_name" class="input-medieval" placeholder="Ex: Maria Zafalon" autocomplete="name" minlength="2" required />
+          <input type="text" id="reg_name" class="input-medieval" placeholder="Digite seu nome" autocomplete="name"
+            minlength="2" required />
         </div>
 
         <div class="form-group">
           <label for="reg_email">E-mail:</label>
-          <input type="email" id="reg_email" class="input-medieval" placeholder="seu@email.com" autocomplete="email" required />
+          <input type="email" id="reg_email" class="input-medieval" placeholder="seu@email.com" autocomplete="email"
+            required />
         </div>
 
         <div class="form-group">
           <label for="reg_password">Crie uma Senha (mínimo 6 caracteres):</label>
           <div class="auth-password-wrap">
-            <input type="password" id="reg_password" class="input-medieval" placeholder="Mínimo de 6 caracteres..." autocomplete="new-password" minlength="6" required />
-            <button type="button" class="auth-eye-btn" onclick="app.toggleAuthPasswordVisibility('reg_password', this)" title="Mostrar ou ocultar senha">👁️</button>
+            <input type="password" id="reg_password" class="input-medieval" placeholder="Mínimo de 6 caracteres..."
+              autocomplete="new-password" minlength="6" required />
+            <button type="button" class="auth-eye-btn" onclick="app.toggleAuthPasswordVisibility('reg_password', this)"
+              title="Mostrar ou ocultar senha">👁️</button>
           </div>
         </div>
 
         <div class="form-group">
           <label for="reg_password_confirm">Confirme sua Senha:</label>
           <div class="auth-password-wrap">
-            <input type="password" id="reg_password_confirm" class="input-medieval" placeholder="Repita a senha criada..." autocomplete="new-password" minlength="6" required />
-            <button type="button" class="auth-eye-btn" onclick="app.toggleAuthPasswordVisibility('reg_password_confirm', this)" title="Mostrar ou ocultar senha">👁️</button>
+            <input type="password" id="reg_password_confirm" class="input-medieval"
+              placeholder="Repita a senha criada..." autocomplete="new-password" minlength="6" required />
+            <button type="button" class="auth-eye-btn"
+              onclick="app.toggleAuthPasswordVisibility('reg_password_confirm', this)"
+              title="Mostrar ou ocultar senha">👁️</button>
           </div>
         </div>
 
@@ -872,27 +897,35 @@
       </form>
 
       <!-- TELA 3: TROCA OBRIGATÓRIA DE SENHA NO PRIMEIRO LOGIN -->
-      <form class="auth-form" id="authFormFirstPassword" onsubmit="app.submitFirstPasswordChange(event)" style="display:none;">
+      <form class="auth-form" id="authFormFirstPassword" onsubmit="app.submitFirstPasswordChange(event)"
+        style="display:none;">
         <div class="auth-first-access-box">
           <div class="auth-first-access-badge">🔐 Primeiro Acesso Detectado</div>
           <p id="firstAccessWelcomeText">
-            Bem-vinda! Como você acessou utilizando uma senha provisória inicial, defina abaixo sua nova senha pessoal para proteger e abrir suas histórias.
+            Bem-vinda! Como você acessou utilizando uma senha provisória inicial, defina abaixo sua nova senha pessoal
+            para proteger e abrir suas histórias.
           </p>
         </div>
 
         <div class="form-group">
           <label for="first_new_password">Nova Senha Pessoal (mínimo 6 caracteres):</label>
           <div class="auth-password-wrap">
-            <input type="password" id="first_new_password" class="input-medieval" placeholder="Crie sua nova senha definitiva..." autocomplete="new-password" minlength="6" required />
-            <button type="button" class="auth-eye-btn" onclick="app.toggleAuthPasswordVisibility('first_new_password', this)" title="Mostrar ou ocultar senha">👁️</button>
+            <input type="password" id="first_new_password" class="input-medieval"
+              placeholder="Crie sua nova senha definitiva..." autocomplete="new-password" minlength="6" required />
+            <button type="button" class="auth-eye-btn"
+              onclick="app.toggleAuthPasswordVisibility('first_new_password', this)"
+              title="Mostrar ou ocultar senha">👁️</button>
           </div>
         </div>
 
         <div class="form-group">
           <label for="first_new_password_confirm">Confirme a Nova Senha:</label>
           <div class="auth-password-wrap">
-            <input type="password" id="first_new_password_confirm" class="input-medieval" placeholder="Repita sua nova senha..." autocomplete="new-password" minlength="6" required />
-            <button type="button" class="auth-eye-btn" onclick="app.toggleAuthPasswordVisibility('first_new_password_confirm', this)" title="Mostrar ou ocultar senha">👁️</button>
+            <input type="password" id="first_new_password_confirm" class="input-medieval"
+              placeholder="Repita sua nova senha..." autocomplete="new-password" minlength="6" required />
+            <button type="button" class="auth-eye-btn"
+              onclick="app.toggleAuthPasswordVisibility('first_new_password_confirm', this)"
+              title="Mostrar ou ocultar senha">👁️</button>
           </div>
         </div>
 
@@ -909,9 +942,9 @@
   </div>
 
   <!-- Scripts do Códice -->
-  <script src="data.js?v=2.2.0"></script>
-  <script src="engine.js?v=2.2.0"></script>
-  <script src="app.js?v=2.2.0"></script>
+  <script src="data.js?v=2.3.0"></script>
+  <script src="engine.js?v=2.3.0"></script>
+  <script src="app.js?v=2.3.0"></script>
 </body>
 
 </html>
