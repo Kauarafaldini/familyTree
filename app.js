@@ -76,6 +76,7 @@ class FantasyGenealogyApp {
     this.timelineIncludeCharLifeEvents = true;
     this.timelineSortOrder = "asc"; // "asc" ou "desc"
     this.selectedMilestoneId = null;
+    this.miniMapMinimized = false;
 
     this.initCropperState();
     this.init();
@@ -89,6 +90,7 @@ class FantasyGenealogyApp {
     this.renderTimeline();
     this.renderGrimoire();
     this.initMapCanvasEvents();
+    this.initMiniMapEvents();
     this.initTimelineEvents();
     this.renderMapStudio();
     this.renderAuditHistory();
@@ -563,8 +565,24 @@ class FantasyGenealogyApp {
       });
     }
 
-    // Agrupa por Cacho / Casa Feudal Principal
+    // Identifica se um personagem possui qualquer laço de sangue, casamento ou descendência
+    const hasFamilyBond = c => {
+      if (c.fatherId && charIds.has(c.fatherId)) return true;
+      if (c.motherId && charIds.has(c.motherId)) return true;
+      if (c.twinOfId && charIds.has(c.twinOfId)) return true;
+      if (Array.isArray(c.spouseIds) && c.spouseIds.some(spId => charIds.has(spId))) return true;
+      const hasChild = chars.some(other => (other.fatherId === c.id || other.motherId === c.id));
+      if (hasChild) return true;
+      const hasSibling = chars.some(other => other.id !== c.id && ((c.fatherId && other.fatherId === c.fatherId) || (c.motherId && other.motherId === c.motherId)));
+      return hasSibling;
+    };
+
+    // Agrupa por Cacho / Casa Feudal Principal ou joga personagens isolados para "o outro lado"
+    const UNCONNECTED_CLUSTER_ID = "__unconnected_seats__";
     const getClusterHouseId = c => {
+      if (!hasFamilyBond(c)) {
+        return UNCONNECTED_CLUSTER_ID;
+      }
       if (matchingHouseIds !== null) {
         if (c.birthHouseId && matchingHouseIds.has(c.birthHouseId)) return c.birthHouseId;
         if (c.officialHouseId && matchingHouseIds.has(c.officialHouseId)) return c.officialHouseId;
@@ -598,9 +616,17 @@ class FantasyGenealogyApp {
     const GEN_SPACING_Y = 220;
     const TOP_MARGIN_Y = 105;
 
-    Object.keys(clustersByHouse).forEach(houseId => {
+    // Garante que o cluster sem vínculos fique sempre "do outro lado" (último na direita)
+    const sortedHouseIds = Object.keys(clustersByHouse).sort((a, b) => {
+      if (a === UNCONNECTED_CLUSTER_ID) return 1;
+      if (b === UNCONNECTED_CLUSTER_ID) return -1;
+      return 0;
+    });
+
+    sortedHouseIds.forEach(houseId => {
       const clusterChars = clustersByHouse[houseId];
-      const houseObj = this.engine.getHouse(houseId);
+      const isUnconnected = houseId === UNCONNECTED_CLUSTER_ID;
+      const houseObj = isUnconnected ? null : this.engine.getHouse(houseId);
 
       const rows = {};
       clusterChars.forEach(c => {
@@ -615,20 +641,46 @@ class FantasyGenealogyApp {
         const ordered = [];
         const placed = new Set();
 
-        rowList
-          .sort((a, b) => (a.birthYear || 9999) - (b.birthYear || 9999))
-          .forEach(person => {
-            if (placed.has(person.id)) return;
-            ordered.push(person);
-            placed.add(person.id);
-            (person.spouseIds || []).forEach(spId => {
-              const sp = rowList.find(x => x.id === spId);
-              if (sp && !placed.has(sp.id)) {
-                ordered.push(sp);
-                placed.add(sp.id);
-              }
-            });
+        // Agrupamento familiar inteligente: pessoas conectadas (cônjuges, irmãos) ficam juntas e próximas
+        // Não misturar aleatoriamente por ano de nascimento
+        const placePersonAndTies = person => {
+          if (!person || placed.has(person.id)) return;
+          ordered.push(person);
+          placed.add(person.id);
+
+          // 1. Cônjuge(s) na mesma geração ficam colados lado a lado
+          (person.spouseIds || []).forEach(spId => {
+            const sp = rowList.find(x => x.id === spId);
+            if (sp && !placed.has(sp.id)) {
+              ordered.push(sp);
+              placed.add(sp.id);
+            }
           });
+
+          // 2. Irmão gêmeo direto na mesma geração fica adjacente
+          if (person.twinOfId) {
+            const twin = rowList.find(x => x.id === person.twinOfId);
+            if (twin && !placed.has(twin.id)) {
+              placePersonAndTies(twin);
+            }
+          }
+
+          // 3. Irmãos que compartilham o mesmo pai ou mãe ficam em seguida
+          rowList.forEach(other => {
+            if (placed.has(other.id)) return;
+            const sameFather = person.fatherId && other.fatherId && person.fatherId === other.fatherId;
+            const sameMother = person.motherId && other.motherId && person.motherId === other.motherId;
+            if (sameFather || sameMother) {
+              placePersonAndTies(other);
+            }
+          });
+        };
+
+        rowList.forEach(person => {
+          if (!placed.has(person.id)) {
+            placePersonAndTies(person);
+          }
+        });
 
         rows[gKey] = ordered;
         if (ordered.length > maxRowCount) maxRowCount = ordered.length;
@@ -639,9 +691,9 @@ class FantasyGenealogyApp {
 
       clusterHeaders.push({
         houseId,
-        name: houseObj ? houseObj.name : "Linhagem",
-        motto: houseObj ? houseObj.motto : "",
-        color: houseObj ? houseObj.color : "#c5a059",
+        name: isUnconnected ? "Sem Vínculo / Outros Registros" : (houseObj ? houseObj.name : "Linhagem"),
+        motto: isUnconnected ? "Personagens sem laços genealógicos ou alianças matrimoniais declarados" : (houseObj ? houseObj.motto : ""),
+        color: isUnconnected ? "#8a9ba8" : (houseObj ? houseObj.color : "#c5a059"),
         allowAvuncular: houseObj ? houseObj.allowAvuncularMarriage : false,
         x: clusterCenterX,
         y: 26
@@ -1477,7 +1529,22 @@ class FantasyGenealogyApp {
               ${twin ? `<strong>Irmão(ã) Gêmeo(a):</strong> <a href="javascript:void(0)" style="color:#dfba73;" onclick="app.openProfileModal('${twin.id}')">${this.escapeHtml(twin.name)}</a><br/>` : ""}
               <strong>Cônjuge(s):</strong> ${
                 spouses.length > 0
-                  ? spouses.map(s => `<a href="javascript:void(0)" style="color:#7899c4;" onclick="app.openProfileModal('${s.id}')">${this.escapeHtml(s.name)}</a>`).join(", ")
+                  ? `<div style="display:flex; flex-direction:column; gap:4px; margin-top:3px; margin-bottom:4px;">` +
+                    spouses.map(s => {
+                      const mDetail = (c.marriageDetails && c.marriageDetails[s.id]) || {};
+                      const isDivorced = Boolean(mDetail.divorced);
+                      return `
+                        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; background:rgba(0,0,0,0.25); padding:2px 6px; border-radius:3px;">
+                          <a href="javascript:void(0)" style="color:#7899c4; font-weight:600;" onclick="app.openProfileModal('${s.id}')">${this.escapeHtml(s.name)}</a>
+                          ${isDivorced
+                            ? `<span class="badge-pill" style="background:#5c1d24; color:#fca5a5; font-size:0.68rem; padding:1px 5px;">💔 Divórcio (${mDetail.divorceYear || "Registrado"})</span>`
+                            : `<button class="btn btn-xs btn-medieval" onclick="app.openDivorceModal('${c.id}', '${s.id}')" style="padding:1px 6px; font-size:0.68rem; color:#fca5a5;" title="Registrar divórcio oficial (registra na cronologia e cartografia)">💔 Divórcio</button>`
+                          }
+                          <button class="btn btn-xs btn-danger" onclick="app.undoMarriageError('${c.id}', '${s.id}')" style="padding:1px 6px; font-size:0.68rem;" title="Desfazer casamento inserido por engano (remove o vínculo limpo sem registrar histórico de divórcio)">❌ Desfazer Erro</button>
+                        </div>
+                      `;
+                    }).join("") +
+                    `</div>`
                   : `<span style="color:var(--ink-dim);">Sem aliança</span>`
               } <button class="btn btn-xs btn-gold" onclick="app.openMarriageModal('${c.id}')" style="padding:1px 7px; font-size:0.72rem; margin-left:6px;">+ Casar</button><br/>
               <strong>Descendência (${children.length}):</strong> ${
@@ -2968,6 +3035,202 @@ class FantasyGenealogyApp {
   }
 
   // --------------------------------------------------------------------------
+  // DESFAZER CASAMENTO (CORREÇÃO DE ERRO DE CADASTRO)
+  // --------------------------------------------------------------------------
+  undoMarriageError(charAId, charBId) {
+    const a = this.engine.getCharacter(charAId);
+    const b = this.engine.getCharacter(charBId);
+    if (!a || !b) return;
+
+    if (!confirm(`Deseja realmente desfazer o casamento cadastrado por erro entre "${a.name}" e "${b.name}"?\n\nEsta ação desfaz o vínculo matrimonial sem registrar divórcio e sem poluir a cronologia histórica.`)) {
+      return;
+    }
+
+    const snapshot = this.engine.createSnapshot();
+
+    // 1. Remove das listas de cônjuges
+    a.spouseIds = (a.spouseIds || []).filter(id => id !== b.id);
+    b.spouseIds = (b.spouseIds || []).filter(id => id !== a.id);
+
+    // 2. Remove os detalhes do casamento
+    if (a.marriageDetails) delete a.marriageDetails[b.id];
+    if (b.marriageDetails) delete b.marriageDetails[a.id];
+
+    // 3. Se foi assimilação nobre e a esposa herdou a casa do esposo, restaura para a casa natal
+    if (a.birthHouseId && a.officialHouseId !== a.birthHouseId && (!a.spouseIds || a.spouseIds.length === 0)) {
+      a.officialHouseId = a.birthHouseId;
+    }
+    if (b.birthHouseId && b.officialHouseId !== b.birthHouseId && (!b.spouseIds || b.spouseIds.length === 0)) {
+      b.officialHouseId = b.birthHouseId;
+    }
+
+    // 4. Remove marcos de casamento inseridos por engano na timelineMilestones
+    if (Array.isArray(this.engine.data.timelineMilestones)) {
+      this.engine.data.timelineMilestones = this.engine.data.timelineMilestones.filter(m => {
+        const matchesPair = (m.characterId === a.id && m.title && m.title.includes(b.name)) ||
+                            (m.characterId === b.id && m.title && m.title.includes(a.name)) ||
+                            (m.title && m.title.includes(a.name) && m.title.includes(b.name));
+        return !matchesPair;
+      });
+    }
+
+    this.engine.recordAuditLog(
+      "LINHAGEM",
+      "Desfazer Casamento (Erro de Cadastro)",
+      `Casamento cancelado entre ${a.name} e ${b.name}`,
+      "O vínculo matrimonial foi anulado e removido limpo do códice dinástico sem gerar histórico de divórcio.",
+      snapshot
+    );
+
+    this.engine.saveToStorage();
+    this.syncHeaderAndBadges();
+    this.renderTree();
+    this.openProfileModal(a.id);
+  }
+
+  // --------------------------------------------------------------------------
+  // DIVÓRCIO FORMAL (HISTÓRICO NA CRONOLOGIA E CARTOGRAFIA)
+  // --------------------------------------------------------------------------
+  openDivorceModal(charAId, charBId) {
+    const a = this.engine.getCharacter(charAId);
+    const b = this.engine.getCharacter(charBId);
+    if (!a || !b) return;
+
+    const mDetailA = (a.marriageDetails && a.marriageDetails[b.id]) || {};
+    const defaultYear = (mDetailA.year ? mDetailA.year + 7 : null) || this.engine.data.meta.currentYear || 1240;
+
+    const bodyHtml = `
+      <div class="alert-banner alert-warning" style="margin-bottom:12px;">
+        <strong>Lavratura de Divórcio Real & Dissolução Matrimonial:</strong><br/>
+        Você está formalizando o divórcio entre <strong>${this.escapeHtml(a.name)}</strong> e <strong>${this.escapeHtml(b.name)}</strong>.<br/>
+        Ao confirmar, este fato histórico <strong>será gravado na cronologia dinástica e na cartografia/memórias do feudo</strong>.
+      </div>
+
+      <input type="hidden" id="divorce_charA" value="${a.id}" />
+      <input type="hidden" id="divorce_charB" value="${b.id}" />
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ano do Divórcio:</label>
+          <input type="number" id="divorce_year" value="${defaultYear}" />
+        </div>
+        <div class="form-group">
+          <label>Impacto Feudal / Território:</label>
+          <input type="text" id="divorce_territory_note" placeholder="Ex: Retorno à fortaleza de nascimento..." />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Motivo ou Causa Soberana do Divórcio:</label>
+        <textarea id="divorce_reason" rows="2" placeholder="Ex: Decreto real irrevogável, quebra de tratado feudal ou afastamento de cortes..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="divorce_record_timeline" checked />
+          <span>Gravar como marco oficial na Cronologia Real (Linha do Tempo) e Anais do Reino</span>
+        </label>
+      </div>
+    `;
+
+    const footerHtml = `
+      <button class="btn btn-medieval" onclick="app.closeModal()">Cancelar</button>
+      <button class="btn btn-danger" onclick="app.confirmDivorceFromModal()">💔 Confirmar Divórcio Formal</button>
+    `;
+
+    this.showModal(`Divórcio Real &bull; ${this.escapeHtml(a.name)} & ${this.escapeHtml(b.name)}`, bodyHtml, footerHtml);
+  }
+
+  confirmDivorceFromModal() {
+    const aId = document.getElementById("divorce_charA")?.value;
+    const bId = document.getElementById("divorce_charB")?.value;
+    const year = Number(document.getElementById("divorce_year")?.value) || this.engine.data.meta.currentYear || 1240;
+    const reason = document.getElementById("divorce_reason")?.value?.trim() || "Dissolução matrimonial por mútuo acordo ou édito soberano.";
+    const territoryNote = document.getElementById("divorce_territory_note")?.value?.trim() || "";
+    const recordTimeline = document.getElementById("divorce_record_timeline")?.checked ?? true;
+
+    const a = this.engine.getCharacter(aId);
+    const b = this.engine.getCharacter(bId);
+    if (!a || !b) return;
+
+    const snapshot = this.engine.createSnapshot();
+
+    a.marriageDetails = a.marriageDetails || {};
+    b.marriageDetails = b.marriageDetails || {};
+
+    a.marriageDetails[b.id] = {
+      ...(a.marriageDetails[b.id] || {}),
+      divorced: true,
+      divorceYear: year,
+      divorceReason: reason,
+      divorceTerritoryNote: territoryNote
+    };
+
+    b.marriageDetails[a.id] = {
+      ...(b.marriageDetails[a.id] || {}),
+      divorced: true,
+      divorceYear: year,
+      divorceReason: reason,
+      divorceTerritoryNote: territoryNote
+    };
+
+    // Histórico de trajetória nos perfis
+    const divorceTextA = `Ano ${year}: Divórcio formal de ${b.name}. ${reason}`;
+    a.customTrajectoryEvents = Array.from(new Set([...(a.customTrajectoryEvents || []), divorceTextA]));
+    const divorceTextB = `Ano ${year}: Divórcio formal de ${a.name}. ${reason}`;
+    b.customTrajectoryEvents = Array.from(new Set([...(b.customTrajectoryEvents || []), divorceTextB]));
+
+    // Se solicitado, registra marco na Cronologia
+    if (recordTimeline) {
+      if (!Array.isArray(this.engine.data.timelineMilestones)) {
+        this.engine.data.timelineMilestones = [];
+      }
+      this.engine.data.timelineMilestones.push({
+        id: "divorce_" + Date.now(),
+        title: `💔 Divórcio Real: ${a.name} & ${b.name}`,
+        category: "wedding",
+        year: year,
+        month: 6,
+        day: 15,
+        characterId: a.id,
+        houseId: a.officialHouseId || a.birthHouseId,
+        territoryId: a.territoryId || a.livedInTerritoryId,
+        importance: "notable",
+        description: `Dissolução formal da aliança conjugal entre ${a.name} e ${b.name}. Motivo: ${reason}${territoryNote ? " (" + territoryNote + ")" : ""}.`,
+        imageUrl: a.photoUrl || b.photoUrl || ""
+      });
+    }
+
+    // Se houver território associado, registra nos anais/crônicas cartográficas
+    const terrId = a.territoryId || a.livedInTerritoryId || b.territoryId || b.livedInTerritoryId;
+    if (terrId) {
+      const terr = this.engine.getTerritory(terrId);
+      if (terr) {
+        if (!Array.isArray(terr.chronicles)) terr.chronicles = [];
+        terr.chronicles.push({
+          year,
+          title: `Divórcio de ${a.name} e ${b.name}`,
+          description: reason + (territoryNote ? ` (${territoryNote})` : "")
+        });
+      }
+    }
+
+    this.engine.recordAuditLog(
+      "LINHAGEM",
+      "Divórcio Formal Lavrado",
+      `Divórcio: ${a.name} & ${b.name} (${year})`,
+      `Motivo: ${reason}. Gravado na cronologia e anais cartográficos.`,
+      snapshot
+    );
+
+    this.engine.saveToStorage();
+    this.closeModal();
+    this.syncHeaderAndBadges();
+    this.renderTree();
+    this.openProfileModal(a.id);
+  }
+
+  // --------------------------------------------------------------------------
   // VERIFICAÇÃO DE EXCLUSÃO DE PERSONAGEM & LINHAGEM
   // --------------------------------------------------------------------------
   openDeleteVerificationModal(charId) {
@@ -3579,28 +3842,16 @@ class FantasyGenealogyApp {
     // 1. Linha do Eixo Central Horizontal
     html += `<div class="timeline-main-axis" style="left:${paddingX - 40}px; right:${paddingX - 40}px;"></div>`;
 
-    // 2. Marcas do tempo (Ticks dinâmicos por nível de zoom para evitar sobreposição)
-    if (this.timelineZoomMode === "year") {
-      let tickStep = 1;
-      let labelStep = 5;
-      if (pixelsPerYear < 6) {
-        tickStep = 25;
-        labelStep = 50;
-      } else if (pixelsPerYear < 14) {
-        tickStep = 10;
-        labelStep = 25;
-      } else if (pixelsPerYear < 35) {
-        tickStep = 5;
-        labelStep = 10;
-      } else if (pixelsPerYear < 80) {
-        tickStep = 2;
-        labelStep = 5;
-      } else {
-        tickStep = 1;
-        labelStep = 5;
-      }
+    // 2. Marcas do tempo (Ticks dinâmicos e ultra-otimizados para evitar travamentos)
+    // Limita estritamente o número total de marcas geradas para manter a interface rápida e fluida
+    const maxTicks = 75;
+    const calculatedStep = Math.max(1, Math.ceil(totalYears / maxTicks));
+    const niceSteps = [1, 2, 5, 10, 20, 25, 50, 100, 250, 500];
+    const yearTickStep = niceSteps.find(s => s >= calculatedStep) || calculatedStep;
+    const labelStep = yearTickStep === 1 ? 5 : (yearTickStep <= 5 ? 10 : yearTickStep * 2);
 
-      for (let yr = startYear; yr <= endYear; yr += tickStep) {
+    if (this.timelineZoomMode === "year") {
+      for (let yr = startYear; yr <= endYear; yr += yearTickStep) {
         const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
         const isMajor = yr % labelStep === 0;
         const isDecade = yr % 10 === 0;
@@ -3621,7 +3872,11 @@ class FantasyGenealogyApp {
         }
       }
     } else if (this.timelineZoomMode === "month") {
-      for (let yr = startYear; yr <= endYear; yr++) {
+      // Exibe meses apenas se houver espaço suficiente por ano (>= 70px)
+      const showMonths = pixelsPerYear >= 70;
+      const yrStep = showMonths ? Math.max(1, Math.ceil(totalYears / 30)) : yearTickStep;
+
+      for (let yr = startYear; yr <= endYear; yr += yrStep) {
         const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
         html += `
           <div class="timeline-axis-tick" style="left:${yrLeft}px;">
@@ -3629,19 +3884,26 @@ class FantasyGenealogyApp {
             <div class="axis-tick-label-year">${yr}</div>
           </div>
         `;
-        for (let m = 1; m <= 12; m++) {
-          const mLeft = yrLeft + (m / 12) * pixelsPerYear;
-          const mInfo = FANTASY_MONTHS[m - 1];
-          html += `
-            <div class="timeline-axis-tick" style="left:${mLeft}px;">
-              <div class="axis-tick-mark-month"></div>
-              <div class="axis-tick-label-month" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
-            </div>
-          `;
+        if (showMonths) {
+          const mStep = pixelsPerYear >= 160 ? 1 : (pixelsPerYear >= 100 ? 2 : 3);
+          for (let m = 1; m <= 12; m += mStep) {
+            const mLeft = yrLeft + ((m - 0.5) / 12) * pixelsPerYear;
+            const mInfo = FANTASY_MONTHS[m - 1];
+            html += `
+              <div class="timeline-axis-tick" style="left:${mLeft}px;">
+                <div class="axis-tick-mark-month"></div>
+                <div class="axis-tick-label-month" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
+              </div>
+            `;
+          }
         }
       }
     } else if (this.timelineZoomMode === "day") {
-      for (let yr = startYear; yr <= endYear; yr++) {
+      // Exibe dias apenas se aproximado o suficiente (>= 220px por ano)
+      const showDays = pixelsPerYear >= 220;
+      const yrStep = showDays ? 1 : yearTickStep;
+
+      for (let yr = startYear; yr <= endYear; yr += yrStep) {
         const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
         html += `
           <div class="timeline-axis-tick" style="left:${yrLeft}px;">
@@ -3649,23 +3911,28 @@ class FantasyGenealogyApp {
             <div class="axis-tick-label-year">${yr}</div>
           </div>
         `;
-        for (let m = 1; m <= 12; m++) {
-          const mStart = yrLeft + ((m - 1) / 12) * pixelsPerYear;
-          const mInfo = FANTASY_MONTHS[m - 1];
-          html += `
-            <div class="timeline-axis-tick" style="left:${mStart}px;">
-              <div class="axis-tick-mark-month"></div>
-              <div class="axis-tick-label-month">${mInfo.name}</div>
-            </div>
-          `;
-          for (let d = 5; d <= 30; d += 5) {
-            const dLeft = mStart + (d / 30) * (pixelsPerYear / 12);
+        if (showDays) {
+          const mStep = pixelsPerYear >= 400 ? 1 : 2;
+          for (let m = 1; m <= 12; m += mStep) {
+            const mStart = yrLeft + ((m - 1) / 12) * pixelsPerYear;
+            const mInfo = FANTASY_MONTHS[m - 1];
             html += `
-              <div class="timeline-axis-tick" style="left:${dLeft}px;">
-                <div class="axis-tick-mark-day"></div>
-                <div class="axis-tick-label-day">d${d}</div>
+              <div class="timeline-axis-tick" style="left:${mStart}px;">
+                <div class="axis-tick-mark-month"></div>
+                <div class="axis-tick-label-month">${mInfo.name.split(" ")[0]}</div>
               </div>
             `;
+            if (pixelsPerYear >= 650) {
+              for (let d = 10; d <= 30; d += 10) {
+                const dLeft = mStart + (d / 30) * (pixelsPerYear / 12);
+                html += `
+                  <div class="timeline-axis-tick" style="left:${dLeft}px;">
+                    <div class="axis-tick-mark-day"></div>
+                    <div class="axis-tick-label-day">d${d}</div>
+                  </div>
+                `;
+              }
+            }
           }
         }
       }
@@ -4296,7 +4563,8 @@ class FantasyGenealogyApp {
       viewport.scrollLeft = scrollLeft - walk;
     });
 
-    // Zoom direto com o scroll do mouse sobre determinado ponto da linha do tempo!
+    // Zoom suave e otimizado com o scroll do mouse sobre o ponto da linha do tempo
+    let wheelRaf = null;
     viewport.addEventListener("wheel", e => {
       e.preventDefault();
 
@@ -4307,25 +4575,25 @@ class FantasyGenealogyApp {
       const pixelsPerYearOld = this.getTimelinePixelsPerYear();
       const paddingX = 240;
       const startYear = this.timelineStartYear || 1200;
-
-      // Ano histórico exato sob o cursor no momento do scroll
       const trackXOld = currentScrollLeft + mouseViewportX;
       const yearUnderCursor = startYear + (trackXOld - paddingX) / pixelsPerYearOld;
 
-      // Fator de aproximação / afastamento
-      const zoomFactor = e.deltaY < 0 ? 1.2 : 0.833;
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
       let newZoom = Number((this.timelineZoom * zoomFactor).toFixed(2));
       newZoom = Math.max(0.04, Math.min(6.5, newZoom));
 
       if (newZoom !== this.timelineZoom) {
         this.timelineZoom = newZoom;
         this.updateTimelineZoomModeFromZoom();
-        this.renderTimeline();
 
-        // Reposiciona o scroll horizontal para manter o ponto do ano sob o cursor!
-        const pixelsPerYearNew = this.getTimelinePixelsPerYear();
-        const trackXNew = paddingX + (yearUnderCursor - startYear) * pixelsPerYearNew;
-        viewport.scrollLeft = Math.max(0, trackXNew - mouseViewportX);
+        if (wheelRaf) cancelAnimationFrame(wheelRaf);
+        wheelRaf = requestAnimationFrame(() => {
+          this.renderTimeline();
+          const pixelsPerYearNew = this.getTimelinePixelsPerYear();
+          const trackXNew = paddingX + (yearUnderCursor - startYear) * pixelsPerYearNew;
+          viewport.scrollLeft = Math.max(0, trackXNew - mouseViewportX);
+          wheelRaf = null;
+        });
       }
     }, { passive: false });
   }
@@ -6804,12 +7072,22 @@ class FantasyGenealogyApp {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
+    // Sincroniza o tamanho do canvas com o container para eliminar desvios e linhas azuis
+    const container = canvas.parentElement;
+    if (container && container.clientWidth > 100) {
+      if (canvas.width !== container.clientWidth) canvas.width = container.clientWidth;
+      if (canvas.height !== container.clientHeight && container.clientHeight > 100) canvas.height = container.clientHeight;
+    }
+
     this.engine.ensureTerritoryPolygons(this.engine.data.territories);
 
     // ------------------------------------------------------------------------
     // 1. CAMADA BASE DE ÁGUA (OCEANO INFINITO COM MINI ONDAS DINÂMICAS)
-    // Onde não houver elemento território (terra), é automaticamente Água!
+    // Fundo limpo, profundo e consistente sem linhas azuis residuais
     // ------------------------------------------------------------------------
+    ctx.fillStyle = "#07121d";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     const waterGrad = ctx.createRadialGradient(
       canvas.width / 2,
       canvas.height / 2,
@@ -6835,11 +7113,11 @@ class FantasyGenealogyApp {
     const minWY = Math.floor(-this.mapPanY / this.mapZoom) - 100;
     const maxWY = Math.ceil((canvas.height - this.mapPanY) / this.mapZoom) + 100;
 
-    // Linhas de rumo náuticas e meridianos sobre as águas infinitas
-    const gridStep = 80;
+    // Linhas de rumo náuticas e meridianos sobre as águas infinitas (mais espaçadas e fluidas)
+    const gridStep = 120;
     const gStartX = Math.floor(minWX / gridStep) * gridStep;
     const gStartY = Math.floor(minWY / gridStep) * gridStep;
-    ctx.strokeStyle = "rgba(120, 180, 230, 0.05)";
+    ctx.strokeStyle = "rgba(120, 180, 230, 0.04)";
     ctx.lineWidth = 1 / this.mapZoom;
     for (let gx = gStartX; gx <= maxWX; gx += gridStep) {
       ctx.beginPath();
@@ -6854,22 +7132,24 @@ class FantasyGenealogyApp {
       ctx.stroke();
     }
 
-    // Preenchimento de todo o Oceano visível com Ícones de Mini Ondas
-    const stepX = 46;
-    const stepY = 28;
-    const startX = Math.floor(minWX / stepX) * stepX;
-    const startY = Math.floor(minWY / stepY) * stepY;
-    for (let wy = startY; wy <= maxWY; wy += stepY) {
-      const row = Math.round(wy / stepY);
-      const offsetX = row % 2 === 0 ? 0 : stepX / 2;
-      for (let wx = startX + offsetX; wx <= maxWX; wx += stepX) {
-        this.drawMiniWaveIcon(ctx, wx, wy);
+    // Preenchimento de Ondas Otimizado (apenas se zoom >= 0.65 para evitar sobrecarga de GPU)
+    if (this.mapZoom >= 0.65) {
+      const stepX = 72;
+      const stepY = 44;
+      const startX = Math.floor(minWX / stepX) * stepX;
+      const startY = Math.floor(minWY / stepY) * stepY;
+      for (let wy = startY; wy <= maxWY; wy += stepY) {
+        const row = Math.round(wy / stepY);
+        const offsetX = row % 2 === 0 ? 0 : stepX / 2;
+        for (let wx = startX + offsetX; wx <= maxWX; wx += stepX) {
+          this.drawMiniWaveIcon(ctx, wx, wy);
+        }
       }
     }
 
     // ------------------------------------------------------------------------
     // 2. CAMADA DE ELEMENTOS TERRITÓRIO (TERRA / CONTINENTES MODELÁVEIS)
-    // Cobre a água onde o território está posicionado e modelado
+    // Exibe a cor real escolhida pela autora, sem tom amarelado e sem linhas de hachura
     // ------------------------------------------------------------------------
     const territories = this.engine.data.territories || [];
     if (!this.selectedTerritoryId && territories.length > 0) {
@@ -6884,45 +7164,35 @@ class FantasyGenealogyApp {
       this.traceTerritoryPolygonPath(ctx, t.points);
 
       // Espuma e rebentação costeira ao redor do continente
-      ctx.strokeStyle = "rgba(110, 192, 242, 0.18)";
+      ctx.strokeStyle = "rgba(110, 192, 242, 0.20)";
       ctx.lineWidth = 12 / this.mapZoom;
       ctx.stroke();
 
-      ctx.strokeStyle = "rgba(170, 224, 252, 0.30)";
+      ctx.strokeStyle = "rgba(170, 224, 252, 0.32)";
       ctx.lineWidth = 5 / this.mapZoom;
       ctx.stroke();
 
-      // Preenchimento opaco de Terra (esconde as mini ondas de água abaixo)
-      const landGrad = ctx.createRadialGradient(t.x, t.y, 10, t.x, t.y, 380);
-      landGrad.addColorStop(0, "#3b2e20");
-      landGrad.addColorStop(0.7, "#2e2318");
-      landGrad.addColorStop(1, "#241b12");
-      ctx.fillStyle = landGrad;
+      // Preenchimento com a cor real do território escolhida pela autora
+      const baseTerritoryColor = t.color || "#2d5a3f";
+      ctx.fillStyle = baseTerritoryColor;
+      ctx.globalAlpha = isSelected ? 0.92 : 0.82;
       ctx.fill();
 
-      // Matiz sutil da cor heráldica do território sobre a terra
+      // Sutil iluminação de relevo com a própria tonalidade para dar profundidade sem amarelar
       ctx.save();
       ctx.clip();
-      ctx.fillStyle = t.color || "#c5a059";
-      ctx.globalAlpha = isSelected ? 0.16 : 0.10;
-      ctx.fillRect(minWX, minWY, maxWX - minWX, maxWY - minWY);
-
-      // Textura cartográfica de solo
-      ctx.globalAlpha = 0.08;
-      ctx.strokeStyle = "#dfba73";
-      ctx.lineWidth = 1 / this.mapZoom;
-      const hatchStart = Math.floor(minWY / 16) * 16;
-      for (let ty = hatchStart; ty <= maxWY; ty += 16) {
-        ctx.beginPath();
-        ctx.moveTo(minWX, ty);
-        ctx.lineTo(maxWX, ty);
-        ctx.stroke();
-      }
+      const terrGrad = ctx.createRadialGradient(t.x, t.y, 10, t.x, t.y, 450);
+      terrGrad.addColorStop(0, "rgba(255, 255, 255, 0.16)");
+      terrGrad.addColorStop(0.7, "rgba(0, 0, 0, 0.0)");
+      terrGrad.addColorStop(1, "rgba(0, 0, 0, 0.25)");
+      ctx.fillStyle = terrGrad;
+      ctx.globalAlpha = 1.0;
+      ctx.fill();
       ctx.restore();
 
       // Contorno costeiro a nanquim
       this.traceTerritoryPolygonPath(ctx, t.points);
-      ctx.strokeStyle = isSelected && this.isMapEditMode ? t.color || "#dfba73" : "#9c7c44";
+      ctx.strokeStyle = isSelected && this.isMapEditMode ? t.color || "#dfba73" : "#7c6439";
       ctx.lineWidth = (isSelected && this.isMapEditMode ? 2.8 : 2.0) / this.mapZoom;
       ctx.stroke();
       ctx.restore();
@@ -7243,6 +7513,146 @@ class FantasyGenealogyApp {
     ctx.font = "500 10px Cinzel, serif";
     const scaleLeagues = Math.round(70 / this.mapZoom);
     ctx.fillText(`${scaleLeagues} léguas`, 24, canvas.height - 24);
+
+    // Renderiza o Mini-Mapa (Radar Cartográfico & Navegação Rápida)
+    this.drawMiniMap();
+  }
+
+  // --------------------------------------------------------------------------
+  // MINI-MAPA (RADAR DO MUNDO E NAVEGAÇÃO RÁPIDA)
+  // --------------------------------------------------------------------------
+  toggleMiniMap() {
+    this.miniMapMinimized = !this.miniMapMinimized;
+    const body = document.getElementById("mapMiniMapBody");
+    const btn = document.getElementById("miniMapToggleBtn");
+    if (body) body.classList.toggle("minimized", this.miniMapMinimized);
+    if (btn) btn.innerHTML = this.miniMapMinimized ? "+" : "&minus;";
+    if (!this.miniMapMinimized) this.drawMiniMap();
+  }
+
+  drawMiniMap() {
+    const miniCanvas = document.getElementById("mapMiniMapCanvas");
+    const mainCanvas = document.getElementById("fantasyMapCanvas");
+    if (!miniCanvas || !mainCanvas || this.miniMapMinimized) return;
+    const mctx = miniCanvas.getContext("2d");
+
+    // Limpa fundo mini do oceano
+    mctx.fillStyle = "#07121d";
+    mctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+
+    // Determina o escopo geral do mundo infinito
+    const territories = this.engine.data.territories || [];
+    const settlements = this.engine.data.settlements || [];
+
+    let minX = -800, maxX = 1800, minY = -600, maxY = 1400;
+    territories.forEach(t => {
+      if (Array.isArray(t.points)) {
+        t.points.forEach(p => {
+          if (p.x < minX) minX = p.x - 180;
+          if (p.x > maxX) maxX = p.x + 180;
+          if (p.y < minY) minY = p.y - 180;
+          if (p.y > maxY) maxY = p.y + 180;
+        });
+      }
+    });
+
+    // Inclui a janela da câmera para o radar nunca perder o viewport de vista
+    const viewLeft = -this.mapPanX / this.mapZoom;
+    const viewTop = -this.mapPanY / this.mapZoom;
+    const viewRight = (mainCanvas.width - this.mapPanX) / this.mapZoom;
+    const viewBottom = (mainCanvas.height - this.mapPanY) / this.mapZoom;
+
+    minX = Math.min(minX, viewLeft - 100);
+    maxX = Math.max(maxX, viewRight + 100);
+    minY = Math.min(minY, viewTop - 100);
+    maxY = Math.max(maxY, viewBottom + 100);
+
+    const worldW = maxX - minX || 1;
+    const worldH = maxY - minY || 1;
+    const scaleX = miniCanvas.width / worldW;
+    const scaleY = miniCanvas.height / worldH;
+    const scale = Math.min(scaleX, scaleY);
+
+    const offsetX = (miniCanvas.width - worldW * scale) / 2 - minX * scale;
+    const offsetY = (miniCanvas.height - worldH * scale) / 2 - minY * scale;
+
+    this.miniMapBounds = { minX, minY, maxX, maxY, scale, offsetX, offsetY };
+
+    // Desenha miniaturas dos territórios/continentes com suas cores reais
+    territories.forEach(t => {
+      if (!Array.isArray(t.points) || t.points.length < 3) return;
+      mctx.beginPath();
+      t.points.forEach((p, idx) => {
+        const mx = p.x * scale + offsetX;
+        const my = p.y * scale + offsetY;
+        if (idx === 0) mctx.moveTo(mx, my);
+        else mctx.lineTo(mx, my);
+      });
+      mctx.closePath();
+      mctx.fillStyle = t.color || "#3d6b52";
+      mctx.fill();
+      mctx.strokeStyle = "rgba(223, 186, 115, 0.45)";
+      mctx.lineWidth = 1;
+      mctx.stroke();
+    });
+
+    // Desenha miniaturas das cidades e capitais
+    settlements.forEach(s => {
+      const mx = s.x * scale + offsetX;
+      const my = s.y * scale + offsetY;
+      mctx.beginPath();
+      mctx.arc(mx, my, s.type === "capital" ? 2.5 : 1.8, 0, Math.PI * 2);
+      mctx.fillStyle = s.type === "capital" ? "#ef4444" : "#fbbf24";
+      mctx.fill();
+    });
+
+    // Desenha retângulo da câmera (Viewport visível atual da autora)
+    const camX = viewLeft * scale + offsetX;
+    const camY = viewTop * scale + offsetY;
+    const camW = (viewRight - viewLeft) * scale;
+    const camH = (viewBottom - viewTop) * scale;
+
+    mctx.strokeStyle = "#f59e0b";
+    mctx.lineWidth = 1.6;
+    mctx.strokeRect(camX, camY, camW, camH);
+    mctx.fillStyle = "rgba(245, 158, 11, 0.14)";
+    mctx.fillRect(camX, camY, camW, camH);
+  }
+
+  initMiniMapEvents() {
+    const miniCanvas = document.getElementById("mapMiniMapCanvas");
+    if (!miniCanvas) return;
+
+    const navigateToMiniPos = e => {
+      if (!this.miniMapBounds) return;
+      const rect = miniCanvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      const { scale, offsetX, offsetY } = this.miniMapBounds;
+      const targetWorldX = (clickX - offsetX) / scale;
+      const targetWorldY = (clickY - offsetY) / scale;
+
+      const mainCanvas = document.getElementById("fantasyMapCanvas");
+      const cw = mainCanvas ? mainCanvas.width : 960;
+      const ch = mainCanvas ? mainCanvas.height : 560;
+
+      this.mapPanX = Math.round(cw / 2 - targetWorldX * this.mapZoom);
+      this.mapPanY = Math.round(ch / 2 - targetWorldY * this.mapZoom);
+      this.drawMapCanvas();
+    };
+
+    let isMiniDragging = false;
+    miniCanvas.addEventListener("mousedown", e => {
+      isMiniDragging = true;
+      navigateToMiniPos(e);
+    });
+    window.addEventListener("mousemove", e => {
+      if (isMiniDragging) navigateToMiniPos(e);
+    });
+    window.addEventListener("mouseup", () => {
+      isMiniDragging = false;
+    });
   }
 
   renderMapStudio() {
@@ -7684,8 +8094,8 @@ class FantasyGenealogyApp {
         const dy = newY - (existing.y || newY);
         if ((dx !== 0 || dy !== 0) && Array.isArray(existing.points)) {
           existing.points.forEach(p => {
-            p.x = Math.max(8, Math.min(952, p.x + dx));
-            p.y = Math.max(8, Math.min(552, p.y + dy));
+            p.x = p.x + dx;
+            p.y = p.y + dy;
           });
         }
         Object.assign(existing, { name, type, houseId, color, x: newX, y: newY, description });

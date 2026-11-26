@@ -618,6 +618,18 @@
     <div class="map-studio-layout">
       <!-- Pergaminho Cartográfico -->
       <div class="map-canvas-container" id="mapCanvasContainer">
+        <!-- Mini-Mapa (Radar Cartográfico & Navegação Rápida) -->
+        <div class="map-minimap-container" id="mapMiniMapContainer" title="Mini-Mapa: Visão Geral do Mundo e Navegação Rápida">
+          <div class="map-minimap-header">
+            <span>🧭 Radar do Mundo</span>
+            <button type="button" class="minimap-toggle-btn" id="miniMapToggleBtn" onclick="app.toggleMiniMap()" title="Ocultar ou Exibir Mini-Mapa">&minus;</button>
+          </div>
+          <div class="map-minimap-body" id="mapMiniMapBody">
+            <canvas id="mapMiniMapCanvas" width="180" height="110"></canvas>
+            <div class="map-minimap-hint">Clique para navegar</div>
+          </div>
+        </div>
+
         <canvas id="fantasyMapCanvas" width="960" height="560"></canvas>
         <div class="map-pins-layer" id="mapPinsLayer"></div>
       </div>

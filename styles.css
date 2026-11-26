@@ -1145,7 +1145,7 @@ body {
 
 .map-canvas-container {
   position: relative;
-  background: #0d1d2d;
+  background: #07121d;
   border: 2px solid var(--border-gold-bright);
   border-radius: 3px;
   overflow: hidden;
@@ -1157,8 +1157,80 @@ body {
   display: block;
   width: 100%;
   height: 560px;
+  background: #07121d;
   cursor: default;
   user-select: none;
+}
+
+/* Mini-Mapa (Radar Cartográfico & Navegação Rápida) */
+.map-minimap-container {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 25;
+  background: rgba(10, 18, 28, 0.94);
+  border: 1px solid var(--border-gold-subtle);
+  border-radius: 4px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  user-select: none;
+  transition: opacity 0.2s ease;
+}
+
+.map-minimap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(22, 33, 48, 0.9);
+  border-bottom: 1px solid rgba(223, 186, 115, 0.25);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--gold-leaf);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.minimap-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.minimap-toggle-btn:hover {
+  color: var(--gold-leaf);
+}
+
+.map-minimap-body {
+  position: relative;
+  display: block;
+  padding: 3px;
+}
+
+.map-minimap-body.minimized {
+  display: none;
+}
+
+#mapMiniMapCanvas {
+  display: block;
+  width: 180px;
+  height: 110px;
+  background: #060e17;
+  cursor: crosshair;
+  border-radius: 2px;
+}
+
+.map-minimap-hint {
+  font-size: 0.62rem;
+  color: var(--ink-dim);
+  text-align: center;
+  padding: 3px 0 1px;
+  font-family: var(--font-serif);
 }
 
 .map-pins-layer {

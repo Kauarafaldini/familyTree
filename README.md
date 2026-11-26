@@ -25,11 +25,6 @@ Todos os dados são persistidos diretamente no **MongoDB Atlas** através de uma
   - `package.json`: Dependências leves (`express`, `mongodb`, `cors`, `dotenv`).
   - `.env`: Configuração das variáveis de ambiente (`MONGODB_URI` e `PORT`).
 
----
-
-## ☁️ Como Subir no Render (Passo a Passo Completo)
-
-O projeto está configurado via [render.yaml](file:///c:/projetos/familyTree/render.yaml) e [Dockerfile](file:///c:/projetos/familyTree/Dockerfile) com runtime **Node.js**, consumindo menos de 50MB de RAM (nunca atinge o limite de 512MB do plano gratuito).
 
 ### Passo 1: Enviar as alterações para o GitHub
 No terminal do seu projeto:

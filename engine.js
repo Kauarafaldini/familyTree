@@ -147,15 +147,15 @@ class WorldEngine {
   }
 
   // Gera um anel cheio de pontos de controle na borda para modelar um território/continente
-  generateContinentPoints(cx, cy, rx = 86, ry = 66, count = 24, seed = 1) {
+  generateContinentPoints(cx, cy, rx = 96, ry = 74, count = 24, seed = 1) {
     const pts = [];
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count;
-      const wave1 = Math.sin(angle * 3 + seed * 1.3) * 0.11;
-      const wave2 = Math.cos(angle * 5 - seed * 1.9) * 0.07;
+      const wave1 = Math.sin(angle * 3 + seed * 1.3) * 0.12;
+      const wave2 = Math.cos(angle * 5 - seed * 1.9) * 0.08;
       const factor = 1 + wave1 + wave2;
-      const px = Math.round(Math.max(14, Math.min(946, cx + Math.cos(angle) * rx * factor)));
-      const py = Math.round(Math.max(14, Math.min(546, cy + Math.sin(angle) * ry * factor)));
+      const px = Math.round(cx + Math.cos(angle) * rx * factor);
+      const py = Math.round(cy + Math.sin(angle) * ry * factor);
       pts.push({ x: px, y: py });
     }
     return pts;
