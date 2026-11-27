@@ -777,13 +777,25 @@ class WorldEngine {
       }
 
       this._saveInFlight = true;
+      let abortTimer = null;
       try {
         this.setDbStatus("syncing", "Salvando no MongoDB...");
+        // Timeout de 8 segundos para nunca travar a aplicação quando a internet estiver lenta/instável
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        if (controller) {
+          abortTimer = setTimeout(() => {
+            try { controller.abort(); } catch (_) {}
+          }, 8000);
+        }
+
         const res = await fetch(`${this.apiUrl}?action=save&world_id=${encodeURIComponent(worldId)}`, {
           method: "POST",
           headers: this.getAuthHeaders({ "Content-Type": "application/json" }),
-          body
+          body,
+          signal: controller ? controller.signal : undefined
         });
+        if (abortTimer) clearTimeout(abortTimer);
+
         if (res.status === 401) {
           this.logout(true);
           return { success: false, error: "Sessão expirada" };
@@ -799,14 +811,15 @@ class WorldEngine {
           throw new Error(json.message || "Erro retornado ao salvar");
         }
       } catch (err) {
-        console.warn("Aviso ao salvar no MongoDB via Node.js API:", err.message);
-        this.setDbStatus("offline", "Salvo localmente (Node/Mongo offline)");
+        if (abortTimer) clearTimeout(abortTimer);
+        console.warn("Aviso ao salvar no MongoDB via Node.js API (modo local preservado):", err.message);
+        this.setDbStatus("offline", "Salvo localmente (offline/latência)");
         return { success: false, error: err.message };
       } finally {
         this._saveInFlight = false;
         if (this._savePending) {
           this._savePending = false;
-          this.saveDebounceTimer = setTimeout(doSave, 1500);
+          this.saveDebounceTimer = setTimeout(doSave, 2500);
         }
       }
     };
@@ -816,6 +829,26 @@ class WorldEngine {
     } else {
       this.saveDebounceTimer = setTimeout(doSave, 2000);
     }
+  }
+
+  saveToLocalStorageOnly() {
+    if (!this.isAuthenticated() || this.mustChangePasswordNow()) return;
+    try {
+      this.ensureCustomPresets();
+      this.pruneAuditLogSnapshots(3);
+      localStorage.setItem(this.getStorageKey(), JSON.stringify(this.data));
+    } catch (e) {
+      console.warn("Aviso ao salvar no localStorage:", e);
+    }
+  }
+
+  scheduleCloudSaveDebounced(delay = 3500) {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+    }
+    this.saveDebounceTimer = setTimeout(() => {
+      this.saveToDatabase(false);
+    }, delay);
   }
 
   async pushToDatabaseNow() {
@@ -1077,7 +1110,12 @@ class WorldEngine {
       const sameMother = char.motherId && c.motherId && c.motherId === char.motherId;
       const directSibling = (Array.isArray(char.siblingIds) && char.siblingIds.includes(c.id)) ||
                             (Array.isArray(c.siblingIds) && c.siblingIds.includes(char.id));
-      return Boolean(sameFather || sameMother || directSibling);
+      const isTwin = Boolean(
+        (char.twinOfId && char.twinOfId === c.id) ||
+        (c.twinOfId && c.twinOfId === char.id) ||
+        ((char.twinOfId && c.twinOfId) && char.twinOfId === c.twinOfId)
+      );
+      return Boolean(sameFather || sameMother || directSibling || isTwin);
     });
   }
 

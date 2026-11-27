@@ -1357,8 +1357,7 @@ class FantasyGenealogyApp {
     });
 
     const drawnMarriages = new Set();
-    const drawnTwinPairs = new Set();
-    const drawnSibPairs = new Set();
+    const drawnFraternalPairs = new Set();
 
     // A) Linhas de Aliança Matrimonial (Azul Real limpo, sem anéis e sem bolhas na interseção)
     chars.forEach(c => {
@@ -1446,45 +1445,43 @@ class FantasyGenealogyApp {
         `;
       }
 
-      // Traço Púrpura/Roxo de Gêmeos (Somente a linha roxa sóbria, sem efeito neon e sem linha vermelha entre si)
-      chars.forEach(other => {
-        if (!this.areCharactersTwins(child, other)) return;
-        const tPos = positions[other.id];
-        if (!tPos) return;
-        const twinPairKey = [child.id, other.id].sort().join("__");
-        if (!drawnTwinPairs.has(twinPairKey)) {
-          drawnTwinPairs.add(twinPairKey);
-          const midX = (childPos.x + tPos.x) / 2;
-          const topY = Math.min(childPos.y, tPos.y) + 12;
-          svgHtml += `
-            <path d="M ${childPos.x} ${childPos.y + 16} Q ${midX} ${topY - 26} ${tPos.x} ${tPos.y + 16}"
-                  fill="none" stroke="#7e22ce" stroke-width="2.6" filter="url(#shadowMedieval)" />
-          `;
-        }
-      });
-
-      // Conexão Fraterna entre Irmãos Não-Gêmeos (Irmãos gêmeos têm SOMENTE a linha roxa entre si, nunca a vermelha)
+      // Conexão Fraterna Única entre Irmãos:
+      // Se for apenas irmão: linha conectando vermelha (#dc2626).
+      // Se for irmão gêmeo: a linha vermelha fica roxa (#7e22ce).
+      // Condição estrita: NUNCA desenha as duas linhas entre o mesmo par!
       const siblings = this.engine.getSiblings(child);
       siblings.forEach(sib => {
-        const pairKey = [child.id, sib.id].sort().join("__");
-        if (drawnTwinPairs.has(pairKey) || this.areCharactersTwins(child, sib)) return;
         const sibPos = positions[sib.id];
         if (!sibPos) return;
-        if (drawnSibPairs.has(pairKey)) return;
-        drawnSibPairs.add(pairKey);
+        const pairKey = [child.id, sib.id].sort().join("__");
+        if (drawnFraternalPairs.has(pairKey)) return;
+        drawnFraternalPairs.add(pairKey);
 
-        const topA = childPos.y + 6;
-        const topB = sibPos.y + 6;
+        const isTwin = this.areCharactersTwins(child, sib);
+        const topA = childPos.y + 12;
+        const topB = sibPos.y + 12;
         const midX = (childPos.x + sibPos.x) / 2;
-        const archY = Math.min(topA, topB) - 16;
+        const archY = Math.min(topA, topB) - 20;
 
-        svgHtml += `
-          <g class="tree-sibling-bond" data-pair="${pairKey}">
-            <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
-                  fill="none" stroke="#dc2626" stroke-width="2.4" opacity="0.9"
-                  stroke-linecap="round" filter="url(#shadowMedieval)" />
-          </g>
-        `;
+        if (isTwin) {
+          // Irmãos GÊMEOS: apenas a linha roxa nobre, sem neon e sem nenhuma linha vermelha
+          svgHtml += `
+            <g class="tree-fraternal-bond tree-twin-bond" data-pair="${pairKey}">
+              <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
+                    fill="none" stroke="#7e22ce" stroke-width="2.8"
+                    stroke-linecap="round" filter="url(#shadowMedieval)" />
+            </g>
+          `;
+        } else {
+          // Apenas IRMÃOS: linha vermelha conectando
+          svgHtml += `
+            <g class="tree-fraternal-bond tree-sibling-bond" data-pair="${pairKey}">
+              <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
+                    fill="none" stroke="#dc2626" stroke-width="2.4" opacity="0.9"
+                    stroke-linecap="round" filter="url(#shadowMedieval)" />
+            </g>
+          `;
+        }
       });
     });
 
@@ -7399,10 +7396,13 @@ class FantasyGenealogyApp {
       this.engine.data.mapStrokes = prev.mapStrokes || [];
       this.selectedMapItemId = null;
       this.selectedSettlementId = null;
-      this.engine.saveToStorage();
+      // Salva localmente de forma instantânea (0ms) e debouça o envio à nuvem para não travar em conexões lentas
+      this.engine.saveToLocalStorageOnly();
+      this.engine.scheduleCloudSaveDebounced(3500);
       this.updateUndoRedoButtonsState();
       this.drawMapCanvas();
-      this.renderMapStudio();
+      if (this._mapStudioRaf) cancelAnimationFrame(this._mapStudioRaf);
+      this._mapStudioRaf = requestAnimationFrame(() => this.renderMapStudio());
     } catch (err) {
       console.error("Erro ao desfazer ação no mapa:", err);
     }
@@ -7425,10 +7425,13 @@ class FantasyGenealogyApp {
       this.engine.data.mapStrokes = next.mapStrokes || [];
       this.selectedMapItemId = null;
       this.selectedSettlementId = null;
-      this.engine.saveToStorage();
+      // Salva localmente de forma instantânea (0ms) e debouça o envio à nuvem para não travar em conexões lentas
+      this.engine.saveToLocalStorageOnly();
+      this.engine.scheduleCloudSaveDebounced(3500);
       this.updateUndoRedoButtonsState();
       this.drawMapCanvas();
-      this.renderMapStudio();
+      if (this._mapStudioRaf) cancelAnimationFrame(this._mapStudioRaf);
+      this._mapStudioRaf = requestAnimationFrame(() => this.renderMapStudio());
     } catch (err) {
       console.error("Erro ao refazer ação no mapa:", err);
     }
