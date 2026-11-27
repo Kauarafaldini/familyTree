@@ -963,6 +963,23 @@ class FantasyGenealogyApp {
       },
       true
     );
+
+    // Navegação suave com a roda do mouse e suporte a zoom com Ctrl + Roda (igual ao mapa)
+    viewport.addEventListener(
+      "wheel",
+      e => {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey) {
+          const delta = e.deltaY < 0 ? 0.08 : -0.08;
+          this.adjustZoom(delta);
+        } else {
+          // Deslocamento bidirecional suave
+          viewport.scrollLeft += e.deltaX || (e.shiftKey ? e.deltaY : 0);
+          viewport.scrollTop += e.shiftKey ? 0 : e.deltaY;
+        }
+      },
+      { passive: false }
+    );
   }
 
   // Verifica bidirecionalmente se dois personagens são irmãos gêmeos entre si
@@ -970,7 +987,12 @@ class FantasyGenealogyApp {
     if (!charA || !charB || charA.id === charB.id) return false;
     return Boolean(
       (charA.twinOfId && charA.twinOfId === charB.id) ||
-      (charB.twinOfId && charB.twinOfId === charA.id)
+      (charB.twinOfId && charB.twinOfId === charA.id) ||
+      ((charA.twinOfId && charB.twinOfId) && charA.twinOfId === charB.twinOfId) ||
+      (charA.isTwin && charB.isTwin && charA.birthYear === charB.birthYear && (
+        (charA.fatherId && charA.fatherId === charB.fatherId) ||
+        (charA.motherId && charA.motherId === charB.motherId)
+      ))
     );
   }
 
@@ -1317,14 +1339,11 @@ class FantasyGenealogyApp {
     svg.setAttribute("width", totalWidth);
     svg.setAttribute("height", totalHeight);
 
-    // Linhas de Conexão no Pergaminho (Carmesim Nobre e Azul Real)
+    // Linhas de Conexão no Pergaminho (Carmesim Nobre, Púrpura de Gêmeos e Azul Real)
     let svgHtml = `
       <defs>
         <filter id="shadowMedieval" x="-10%" y="-10%" width="120%" height="120%">
           <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
-        </filter>
-        <filter id="glowPurple" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#a855f7" flood-opacity="0.85"/>
         </filter>
       </defs>
     `;
@@ -1338,9 +1357,10 @@ class FantasyGenealogyApp {
     });
 
     const drawnMarriages = new Set();
-    const drawnTwins = new Set();
+    const drawnTwinPairs = new Set();
+    const drawnSibPairs = new Set();
 
-    // A) Linhas de Aliança Matrimonial (Azul Real)
+    // A) Linhas de Aliança Matrimonial (Azul Real limpo, sem anéis e sem bolhas na interseção)
     chars.forEach(c => {
       const posA = positions[c.id];
       if (!posA) return;
@@ -1362,36 +1382,32 @@ class FantasyGenealogyApp {
         const isAvuncular = Boolean(avuncular || mDetail.isAvuncular);
 
         if (isAvuncular) {
-          // Trança de União Avuncular (Azul-Real e Ouro Envelhecido) - Clicável para Desfazer/Inspecionar
+          // Trança de União Avuncular (Azul-Real e Ouro Envelhecido) - Clicável na linha para Inspecionar/Desfazer
           svgHtml += `
-            <g class="tree-marriage-link tree-marriage-avuncular" onclick="app.openMarriageInspectionModal('${c.id}', '${spId}')" style="cursor:pointer;" title="Matrimônio Avuncular: Clique para Inspecionar, Desfazer ou Divorciar">
+            <g class="tree-marriage-link tree-marriage-avuncular" onclick="app.openMarriageInspectionModal('${c.id}', '${spId}')" style="cursor:pointer;" title="Matrimônio Avuncular: Clique na linha para Inspecionar, Desfazer ou Divorciar">
               <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
-                    fill="none" stroke="#294873" stroke-width="3.8" filter="url(#shadowMedieval)" />
+                    fill="none" stroke="transparent" stroke-width="16" />
               <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
-                    fill="none" stroke="#c5a059" stroke-width="2.2" stroke-dasharray="6 5" />
-              <rect x="${midX - 74}" y="${midY - 12}" width="148" height="22" rx="3"
-                    fill="#1c1611" stroke="#c5a059" stroke-width="1.3" />
-              <text x="${midX}" y="${midY + 3}" fill="#dfba73" font-family="Cinzel, serif" font-size="9" font-weight="600" text-anchor="middle" letter-spacing="0.5">
-                💍 Matrimônio Avuncular (${mDetail.year || "Linhagem"})
-              </text>
+                    fill="none" stroke="#294873" stroke-width="3.4" filter="url(#shadowMedieval)" />
+              <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
+                    fill="none" stroke="#c5a059" stroke-width="2.0" stroke-dasharray="6 5" />
             </g>
           `;
         } else {
-          // Casamento Nobre Padrão (Linha Azul-Real com Selo Central Clicável)
+          // Casamento Nobre Padrão (Linha Azul-Real limpa, direta, sem anel e sem bolhas)
           svgHtml += `
-            <g class="tree-marriage-link tree-marriage-standard" onclick="app.openMarriageInspectionModal('${c.id}', '${spId}')" style="cursor:pointer;" title="Aliança Matrimonial: Clique para Inspecionar, Desfazer ou Divorciar">
+            <g class="tree-marriage-link tree-marriage-standard" onclick="app.openMarriageInspectionModal('${c.id}', '${spId}')" style="cursor:pointer;" title="Aliança Matrimonial: Clique na linha para Inspecionar, Desfazer ou Divorciar">
+              <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
+                    fill="none" stroke="transparent" stroke-width="16" />
               <path d="M ${posA.x} ${yA} Q ${midX} ${midY} ${posB.x} ${yB}"
                     fill="none" stroke="#294873" stroke-width="3.2" filter="url(#shadowMedieval)" />
-              <circle cx="${midX}" cy="${midY + 3}" r="8" fill="#18130e" stroke="#294873" stroke-width="2" />
-              <circle cx="${midX}" cy="${midY + 3}" r="3.5" fill="#c5a059" />
-              <text x="${midX}" y="${midY - 6}" fill="#c5a059" font-size="11" text-anchor="middle">💍</text>
             </g>
           `;
         }
       });
     });
 
-    // B) Linhas de Sangue (Carmesim Heráldico: Pais -> Filhos e Irmãos)
+    // B) Linhas de Sangue (Carmesim Heráldico: Pais -> Filhos conectados diretamente, sem anéis e sem bolhas)
     chars.forEach(child => {
       const childPos = positions[child.id];
       if (!childPos) return;
@@ -1401,8 +1417,12 @@ class FantasyGenealogyApp {
       const childTopY = childPos.y;
 
       if (fatherPos && motherPos) {
+        // Conexão direta partindo exatamente do centro da curva matrimonial entre os pais
         const originX = (fatherPos.x + motherPos.x) / 2;
-        const originY = (fatherPos.y + motherPos.y) / 2 + 53;
+        const yF = fatherPos.y + 53;
+        const yM = motherPos.y + 53;
+        const marriageMidY = (yF + yM) / 2 - 14;
+        const originY = Math.round((yF + 2 * marriageMidY + yM) / 4);
         const ctrlY1 = originY + (childTopY - originY) * 0.45;
         const ctrlY2 = originY + (childTopY - originY) * 0.65;
 
@@ -1426,19 +1446,19 @@ class FantasyGenealogyApp {
         `;
       }
 
-      // Traço Púrpura/Roxo de Gêmeos (Somente linha roxa entre irmãos gêmeos, verificação bidirecional)
+      // Traço Púrpura/Roxo de Gêmeos (Somente a linha roxa sóbria, sem efeito neon e sem linha vermelha entre si)
       chars.forEach(other => {
         if (!this.areCharactersTwins(child, other)) return;
         const tPos = positions[other.id];
         if (!tPos) return;
-        const twinKey = ["twin", ...[child.id, other.id].sort()].join("__");
-        if (!drawnTwins.has(twinKey)) {
-          drawnTwins.add(twinKey);
+        const twinPairKey = [child.id, other.id].sort().join("__");
+        if (!drawnTwinPairs.has(twinPairKey)) {
+          drawnTwinPairs.add(twinPairKey);
           const midX = (childPos.x + tPos.x) / 2;
           const topY = Math.min(childPos.y, tPos.y) + 12;
           svgHtml += `
             <path d="M ${childPos.x} ${childPos.y + 16} Q ${midX} ${topY - 26} ${tPos.x} ${tPos.y + 16}"
-                  fill="none" stroke="#a855f7" stroke-width="3.2" filter="url(#glowPurple)" />
+                  fill="none" stroke="#7e22ce" stroke-width="2.6" filter="url(#shadowMedieval)" />
           `;
         }
       });
@@ -1446,12 +1466,12 @@ class FantasyGenealogyApp {
       // Conexão Fraterna entre Irmãos Não-Gêmeos (Irmãos gêmeos têm SOMENTE a linha roxa entre si, nunca a vermelha)
       const siblings = this.engine.getSiblings(child);
       siblings.forEach(sib => {
-        if (this.areCharactersTwins(child, sib)) return;
+        const pairKey = [child.id, sib.id].sort().join("__");
+        if (drawnTwinPairs.has(pairKey) || this.areCharactersTwins(child, sib)) return;
         const sibPos = positions[sib.id];
         if (!sibPos) return;
-        const sibKey = ["sib", ...[child.id, sib.id].sort()].join("__");
-        if (drawnTwins.has(sibKey)) return;
-        drawnTwins.add(sibKey);
+        if (drawnSibPairs.has(pairKey)) return;
+        drawnSibPairs.add(pairKey);
 
         const topA = childPos.y + 6;
         const topB = sibPos.y + 6;
@@ -1459,11 +1479,10 @@ class FantasyGenealogyApp {
         const archY = Math.min(topA, topB) - 16;
 
         svgHtml += `
-          <g class="tree-sibling-bond" data-pair="${sibKey}">
+          <g class="tree-sibling-bond" data-pair="${pairKey}">
             <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
-                  fill="none" stroke="#dc2626" stroke-width="2.6" opacity="0.92"
+                  fill="none" stroke="#dc2626" stroke-width="2.4" opacity="0.9"
                   stroke-linecap="round" filter="url(#shadowMedieval)" />
-            <circle cx="${midX}" cy="${archY + 11}" r="3.2" fill="#dc2626" />
           </g>
         `;
       });
@@ -2254,7 +2273,8 @@ class FantasyGenealogyApp {
           <option value="pai" ${defaultType === "pai" ? "selected" : ""}>Pai (Genitor)</option>
           <option value="mae" ${defaultType === "mae" ? "selected" : ""}>Mãe (Genitora)</option>
           <option value="filho" ${defaultType === "filho" ? "selected" : ""}>Filho(a) Descendente</option>
-          <option value="irmao" ${defaultType === "irmao" ? "selected" : ""}>Irmão / Irmã</option>
+          <option value="gemeo" ${defaultType === "gemeo" ? "selected" : ""}>Irmão(ã) Gêmeo(a)</option>
+          <option value="irmao" ${defaultType === "irmao" ? "selected" : ""}>Irmão / Irmã (Não-Gêmeo)</option>
           <option value="meio_irmao" ${defaultType === "meio_irmao" ? "selected" : ""}>Meio-Irmão / Meia-Irmã</option>
           <option value="padrasto" ${defaultType === "padrasto" ? "selected" : ""}>Padrasto (Casado com a Mãe)</option>
           <option value="madrasta" ${defaultType === "madrasta" ? "selected" : ""}>Madrasta (Casada com o Pai)</option>
@@ -2447,6 +2467,7 @@ class FantasyGenealogyApp {
       padrasto: "Padrasto",
       madrasta: "Madrasta",
       filho: "Filho(a)",
+      gemeo: "Irmão(ã) Gêmeo(a)",
       irmao: "Irmão(ã)",
       meio_irmao: "Meio-Irmão(ã)",
       tio: "Tio(a)",
@@ -2466,6 +2487,12 @@ class FantasyGenealogyApp {
         relative.fatherId = baseChar.id;
         if (baseChar.spouseIds && baseChar.spouseIds[0]) relative.motherId = baseChar.spouseIds[0];
       }
+    } else if (relType === "gemeo") {
+      relative.fatherId = baseChar.fatherId;
+      relative.motherId = baseChar.motherId;
+      relative.birthYear = baseChar.birthYear;
+      baseChar.twinOfId = relative.id;
+      relative.twinOfId = baseChar.id;
     } else if (relType === "padrasto") {
       if (baseChar.motherId) {
         const mother = this.engine.getCharacter(baseChar.motherId);
