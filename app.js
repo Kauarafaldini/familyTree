@@ -1445,43 +1445,104 @@ class FantasyGenealogyApp {
         `;
       }
 
-      // Conexão Fraterna Única entre Irmãos:
-      // Se for apenas irmão: linha conectando vermelha (#dc2626).
-      // Se for irmão gêmeo: a linha vermelha fica roxa (#7e22ce).
-      // Condição estrita: NUNCA desenha as duas linhas entre o mesmo par!
-      const siblings = this.engine.getSiblings(child);
-      siblings.forEach(sib => {
-        const sibPos = positions[sib.id];
-        if (!sibPos) return;
-        const pairKey = [child.id, sib.id].sort().join("__");
+      // Conexão Fraterna Única entre Irmãos em Cadeia Horizontal:
+      // Agrupa irmãos da mesma família e geração em ordem horizontal no pergaminho.
+      // Conecta somente irmãos adjacentes imediatos, impedindo que linhas saltem sobre outros irmãos
+      // e gerem conexões duplas.
+      // - Se o par adjacente for de GÊMEOS: desenha EXCLUSIVAMENTE a linha nobre roxa (#7e22ce).
+      // - Se for apenas irmão: desenha a linha carmesim heráldica (#dc2626).
+      // - NUNCA desenha ambas as linhas entre o mesmo par, nem salta por cima de irmãos intermediários!
+    });
+
+    const processedSiblingGroups = new Set();
+    chars.forEach(child => {
+      const childPos = positions[child.id];
+      if (!childPos) return;
+
+      const sibs = this.engine.getSiblings(child).filter(s => Boolean(positions[s.id]));
+      if (sibs.length === 0) return;
+
+      const fullGroup = [child, ...sibs];
+      const groupKey = fullGroup.map(c => c.id).sort().join("__");
+      if (processedSiblingGroups.has(groupKey)) return;
+      processedSiblingGroups.add(groupKey);
+
+      // Agrupa irmãos por geração para encadear na mesma fileira
+      const uniqueGroup = Array.from(new Map(fullGroup.map(c => [c.id, c])).values());
+      const byGen = {};
+      uniqueGroup.forEach(c => {
+        const g = positions[c.id].generation ?? 0;
+        if (!byGen[g]) byGen[g] = [];
+        byGen[g].push(c);
+      });
+
+      Object.values(byGen).forEach(genSiblings => {
+        // Ordena pela posição horizontal x na tela (da esquerda para a direita)
+        genSiblings.sort((a, b) => positions[a.id].x - positions[b.id].x);
+
+        // Conecta apenas irmãos adjacentes imediatos na fileira!
+        for (let i = 0; i < genSiblings.length - 1; i++) {
+          const charA = genSiblings[i];
+          const charB = genSiblings[i + 1];
+          const pairKey = [charA.id, charB.id].sort().join("__");
+          if (drawnFraternalPairs.has(pairKey)) continue;
+          drawnFraternalPairs.add(pairKey);
+
+          const posA = positions[charA.id];
+          const posB = positions[charB.id];
+          const isTwin = this.areCharactersTwins(charA, charB);
+          const topA = posA.y + 12;
+          const topB = posB.y + 12;
+          const midX = (posA.x + posB.x) / 2;
+          const archY = Math.min(topA, topB) - 20;
+
+          if (isTwin) {
+            // Irmãos GÊMEOS: apenas a linha roxa nobre, sem neon e sem nenhuma linha vermelha
+            svgHtml += `
+              <g class="tree-fraternal-bond tree-twin-bond" data-pair="${pairKey}">
+                <path d="M ${posA.x} ${topA} Q ${midX} ${archY} ${posB.x} ${topB}"
+                      fill="none" stroke="#7e22ce" stroke-width="2.8"
+                      stroke-linecap="round" filter="url(#shadowMedieval)" />
+              </g>
+            `;
+          } else {
+            // Apenas IRMÃOS: linha vermelha conectando
+            svgHtml += `
+              <g class="tree-fraternal-bond tree-sibling-bond" data-pair="${pairKey}">
+                <path d="M ${posA.x} ${topA} Q ${midX} ${archY} ${posB.x} ${topB}"
+                      fill="none" stroke="#dc2626" stroke-width="2.4" opacity="0.9"
+                      stroke-linecap="round" filter="url(#shadowMedieval)" />
+              </g>
+            `;
+          }
+        }
+      });
+    });
+
+    // Garantia estrita para quaisquer gêmeos declarados que porventura não tenham sido conectados ainda:
+    chars.forEach(child => {
+      const posA = positions[child.id];
+      if (!posA) return;
+      chars.forEach(other => {
+        if (child.id >= other.id) return;
+        const posB = positions[other.id];
+        if (!posB) return;
+        if (!this.areCharactersTwins(child, other)) return;
+        const pairKey = [child.id, other.id].sort().join("__");
         if (drawnFraternalPairs.has(pairKey)) return;
         drawnFraternalPairs.add(pairKey);
 
-        const isTwin = this.areCharactersTwins(child, sib);
-        const topA = childPos.y + 12;
-        const topB = sibPos.y + 12;
-        const midX = (childPos.x + sibPos.x) / 2;
+        const topA = posA.y + 12;
+        const topB = posB.y + 12;
+        const midX = (posA.x + posB.x) / 2;
         const archY = Math.min(topA, topB) - 20;
-
-        if (isTwin) {
-          // Irmãos GÊMEOS: apenas a linha roxa nobre, sem neon e sem nenhuma linha vermelha
-          svgHtml += `
-            <g class="tree-fraternal-bond tree-twin-bond" data-pair="${pairKey}">
-              <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
-                    fill="none" stroke="#7e22ce" stroke-width="2.8"
-                    stroke-linecap="round" filter="url(#shadowMedieval)" />
-            </g>
-          `;
-        } else {
-          // Apenas IRMÃOS: linha vermelha conectando
-          svgHtml += `
-            <g class="tree-fraternal-bond tree-sibling-bond" data-pair="${pairKey}">
-              <path d="M ${childPos.x} ${topA} Q ${midX} ${archY} ${sibPos.x} ${topB}"
-                    fill="none" stroke="#dc2626" stroke-width="2.4" opacity="0.9"
-                    stroke-linecap="round" filter="url(#shadowMedieval)" />
-            </g>
-          `;
-        }
+        svgHtml += `
+          <g class="tree-fraternal-bond tree-twin-bond" data-pair="${pairKey}">
+            <path d="M ${posA.x} ${topA} Q ${midX} ${archY} ${posB.x} ${topB}"
+                  fill="none" stroke="#7e22ce" stroke-width="2.8"
+                  stroke-linecap="round" filter="url(#shadowMedieval)" />
+          </g>
+        `;
       });
     });
 
