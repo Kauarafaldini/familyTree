@@ -13,7 +13,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2.3.0" />
+  <link rel="stylesheet" href="styles.css?v=2.4.0" />
 </head>
 
 <body class="auth-locked">
@@ -431,204 +431,10 @@
           <span id="toggleContinentNamesText">Ocultar Nomes</span>
         </button>
       </div>
-
-      <!-- Controles de Edição (Apenas visíveis quando o usuário clica no lápis) -->
-      <div class="map-edit-controls" id="mapEditControls" style="display: none;">
-        <!-- Seção: Alvo de Edição (Bordas vs Interior) + Cadeado -->
-        <div class="toolbar-section map-scope-section">
-          <span class="toolbar-section-label">Alvo de Edição:</span>
-          <button class="btn btn-sm btn-medieval" id="btnScopeBorder" onclick="app.setMapEditScope('border')"
-            title="Editar apenas o tamanho e contorno do continente: exibe as bolinhas de ajuste nas bordas para modelar">
-            🌍 Tamanho / Bordas
-          </button>
-          <button class="btn btn-sm btn-gold active-tool" id="btnScopeInterior"
-            onclick="app.setMapEditScope('interior')"
-            title="Editar o que tem dentro do continente: esconde as bolinhas para você desenhar montanhas, árvores, rios e fundar cidades sem atrapalhar">
-            🏰 Interior (Dentro)
-          </button>
-          <button class="btn btn-sm btn-medieval" id="btnToggleLock" onclick="app.toggleCurrentTerritoryLock()"
-            title="Travar ou destravar o continente selecionado com cadeado contra edições acidentais de tamanho">
-            <span id="lockBtnIcon">🔒</span> <span id="lockBtnText">Travar Borda</span>
-          </button>
-        </div>
-
-        <div class="toolbar-section">
-          <span class="toolbar-section-label">Territórios &amp; Continentes:</span>
-          <button class="btn btn-sm btn-gold map-continent-btn" id="mapToolAddContinent"
-            onclick="app.addContinentOnMap()"
-            title="Adicionar um novo elemento Território (Terra / Continente) cheio de pontos nas bordas para você modelar do jeito e tamanho que quiser">
-            <svg class="continent-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path
-                d="M4.5 9.5C4.5 6.5 7.5 4 11 4.5C13.5 4.8 15.5 3.5 18 5C20.5 6.5 21 9.5 19.5 12C18 14.5 19.5 17 17.5 19C15.5 21 12 19.5 9.5 20C7 20.5 4.5 18.5 4 16C3.5 13.5 6 12.5 4.5 9.5Z"
-                fill="rgba(223, 186, 115, 0.3)" />
-              <path
-                d="M19.2 19.2C20 18.9 21.2 19.5 21.2 20.5C21.2 21.3 19.8 21.8 19 21.2C18.4 20.7 18.5 19.5 19.2 19.2Z"
-                fill="rgba(223, 186, 115, 0.3)" />
-              <circle cx="11" cy="4.5" r="1.3" fill="currentColor" />
-              <circle cx="18" cy="5" r="1.3" fill="currentColor" />
-              <circle cx="19.5" cy="12" r="1.3" fill="currentColor" />
-              <circle cx="17.5" cy="19" r="1.3" fill="currentColor" />
-              <circle cx="9.5" cy="20" r="1.3" fill="currentColor" />
-              <circle cx="4" cy="16" r="1.3" fill="currentColor" />
-              <circle cx="4.5" cy="9.5" r="1.3" fill="currentColor" />
-            </svg>
-            <span>+ Novo Território (Continente)</span>
-          </button>
-          <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')"
-            title="Arraste os pontos nas bordas para modelar o território ou arraste o centro para movê-lo">Modelar
-            Bordas / Mover</button>
-          <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()"
-            title="Adicionar mais pontos de controle na borda do território selecionado">+ Pontos na Borda</button>
-          <button class="btn btn-sm btn-medieval" onclick="app.reduceSelectedTerritoryPoints()"
-            title="Remover pontos excedentes da borda do território selecionado">- Pontos na Borda</button>
-          <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.2)"
-            title="Aumentar tamanho do território selecionado">Aumentar (+)</button>
-          <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.83)"
-            title="Diminuir tamanho do território selecionado">Diminuir (-)</button>
-          <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()"
-            title="Suavizar curvas da costa do território selecionado">Suavizar Costa</button>
-        </div>
-
-        <div class="toolbar-section">
-          <span class="toolbar-section-label">Assentamentos (Pontos):</span>
-          <!-- Botão Capital como Ponto envolto em Círculo -->
-          <button class="btn btn-sm btn-medieval" id="mapToolCapital" onclick="app.setMapTool('add_capital')"
-            title="Fundar uma Capital Real no mapa (ponto envolto em círculo)">
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" stroke="var(--gold-leaf)" />
-              <circle cx="12" cy="12" r="4" fill="#dc2626" stroke="#fff" stroke-width="1.2" />
-            </svg>
-            <span>Capital (Ponto)</span>
-          </button>
-
-          <!-- Botão Cidade como Ponto envolto em Círculo -->
-          <button class="btn btn-sm btn-medieval" id="mapToolCity" onclick="app.setMapTool('add_city')"
-            title="Fundar uma Cidade ou Vila no mapa (ponto envolto em círculo)">
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="7.5" stroke="#dfba73" />
-              <circle cx="12" cy="12" r="3" fill="#1b1510" stroke="#dfba73" stroke-width="1" />
-            </svg>
-            <span>Cidade (Ponto)</span>
-          </button>
-        </div>
-
-        <div class="toolbar-section">
-          <span class="toolbar-section-label">Construções &amp; Ícones:</span>
-          <!-- Botão Castelo (Ícone no Mapa) -->
-          <button class="btn btn-sm btn-medieval" id="mapToolCastle" onclick="app.setMapTool('stamp_castle')"
-            title="Colocar Castelo: clique em qualquer lugar do mapa para colocar um castelo medieval com o tamanho escolhido">
-            <span style="font-size:1.05rem; vertical-align:middle;">🏰</span>
-            <span>Castelo</span>
-          </button>
-
-          <!-- Botão Casas / Vila (Ícone no Mapa) -->
-          <button class="btn btn-sm btn-medieval" id="mapToolHouse" onclick="app.setMapTool('stamp_house')"
-            title="Colocar Casas: clique em qualquer lugar do mapa para colocar casas/vila medieval com o tamanho escolhido">
-            <span style="font-size:1.05rem; vertical-align:middle;">🏡</span>
-            <span>Casas</span>
-          </button>
-
-          <!-- Botão Montanhas -->
-          <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')"
-            title="Traçar ou estampar montanhas sobre o mapa">
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m2 20 7-12 5 7 3-5 5 10H2z" />
-              <path d="m7 11.5 2 3.5 4-1" />
-            </svg>
-            <span>Montanhas</span>
-          </button>
-
-          <!-- Botão Pinheiros -->
-          <button class="btn btn-sm btn-medieval" id="mapToolTree" onclick="app.setMapTool('draw_tree')"
-            title="Traçar ou estampar pinheiros e bosques sobre o mapa">
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 22v-4" />
-              <path d="M12 2 7 9h3l-4 6h4l-4 5h12l-4-5h4l-4-6h3z" />
-            </svg>
-            <span>Pinheiros</span>
-          </button>
-
-          <!-- Botão Estrada -->
-          <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')"
-            title="Traçar estradas pontilhadas entre cidades e províncias">
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M4 19 8 5h8l4 14H4z" />
-              <path d="M12 6v3" />
-              <path d="M12 12v3" />
-              <path d="M12 18v2" />
-            </svg>
-            <span>Estrada</span>
-          </button>
-
-          <!-- Botão Rio -->
-          <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')"
-            title="Traçar rios e cursos d'água fluídos">
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 6c3 0 4 3 7 3s4-3 7-3 4 3 4 3" />
-              <path d="M3 12c3 0 4 3 7 3s4-3 7-3 4 3 4 3" />
-              <path d="M3 18c3 0 4 3 7 3s4-3 7-3 4 3 4 3" />
-            </svg>
-            <span>Rio</span>
-          </button>
-        </div>
-
-        <div class="toolbar-section">
-          <span class="toolbar-section-label">Tamanho do Ícone:</span>
-          <div class="icon-size-section">
-            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(-4)"
-              title="Diminuir tamanho dos ícones">-</button>
-            <input type="range" id="mapIconSizeSlider" min="12" max="64" step="2" value="24"
-              oninput="app.setMapIconSize(this.value)"
-              title="Ajuste o tamanho de castelos, casas, montanhas e pinheiros" />
-            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(+4)"
-              title="Aumentar tamanho dos ícones">+</button>
-            <span id="mapIconSizeDisplay">24px</span>
-          </div>
-        </div>
-
-        <div class="toolbar-section">
-          <span class="toolbar-section-label">Edição &amp; Histórico:</span>
-          <!-- Botão Borracha -->
-          <button class="btn btn-sm btn-medieval" id="mapToolEraser" onclick="app.setMapTool('eraser')"
-            title="Borracha: clique em qualquer casa, castelo, montanha, árvore, assentamento ou traço para apagá-lo">
-            <span>🧹 Borracha</span>
-          </button>
-
-          <!-- Botão Excluir Selecionado -->
-          <button class="btn btn-sm btn-danger" onclick="app.deleteSelectedMapItem()"
-            title="Excluir o elemento atualmente selecionado no mapa (Tecla Del)">
-            <span>🗑️ Excluir Selecionado</span>
-          </button>
-
-          <!-- Botões Desfazer (Ctrl+Z) e Refazer (Ctrl+Y) -->
-          <button class="btn btn-sm btn-gold" id="btnMapUndo" onclick="app.undoMapAction()"
-            title="Desfazer última alteração no mapa (Ctrl+Z)">
-            <span>↩ Desfazer</span>
-          </button>
-          <button class="btn btn-sm btn-medieval" id="btnMapRedo" onclick="app.redoMapAction()"
-            title="Refazer alteração (Ctrl+Y)">
-            <span>↪ Refazer</span>
-          </button>
-
-          <button class="btn btn-sm btn-medieval" onclick="app.smoothLastMapStroke()"
-            title="Suavizar curvas do último traço desenhado">Suavizar</button>
-          <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()"
-            title="Limpar todos os desenhos e ícones do mapa">Limpar Tudo</button>
-        </div>
-      </div>
     </div>
 
     <div class="map-helper-bar" id="mapHelperBar" style="display: none;">
-      <span id="mapHelperBarContent"><strong>Modo de Edição Ativo:</strong> Use <strong>🌍 Tamanho / Bordas</strong>
-        para ajustar as bolinhas da costa, ou <strong>🏰 Interior</strong> para desenhar relevo e fundar cidades sem as
-        bolinhas atrapalharem. Você também pode clicar no <strong>🔒 Cadeado</strong> para travar o continente!</span>
+      <span id="mapHelperBarContent"><strong>Modo de Edição Ativo:</strong> Use o painel à direita para escolher as ferramentas. Para criar um <strong>+ Novo Território (Continente)</strong>, selecione a ferramenta e <strong>clique no mapa</strong> exatamente onde deseja posicioná-lo!</span>
     </div>
 
     <div class="map-studio-layout">
@@ -652,7 +458,226 @@
         <div class="map-pins-layer" id="mapPinsLayer"></div>
       </div>
 
-      <!-- Placa de Registro do Feudo Selecionado -->
+      <!-- Painel Lateral Direito: Botões de Edição (Visível SOMENTE durante o Modo de Edição) -->
+      <div class="card-box map-edit-controls map-right-edit-panel" id="mapEditControls" style="display: none;">
+        <!-- Cabeçalho compacto do Continente Selecionado (Permite editar nome/cor sem exibir cidades e habitantes) -->
+        <div id="mapEditSelectedTerrHeader" class="map-edit-terr-header"></div>
+
+        <!-- Seção: Alvo de Edição (Bordas vs Interior) + Cadeado -->
+        <div class="toolbar-section map-scope-section">
+          <span class="toolbar-section-label">Alvo de Edição:</span>
+          <div class="map-right-btn-grid">
+            <button class="btn btn-sm btn-medieval" id="btnScopeBorder" onclick="app.setMapEditScope('border')"
+              title="Editar apenas o tamanho e contorno do continente: exibe as bolinhas de ajuste nas bordas para modelar">
+              🌍 Tamanho / Bordas
+            </button>
+            <button class="btn btn-sm btn-gold active-tool" id="btnScopeInterior"
+              onclick="app.setMapEditScope('interior')"
+              title="Editar o que tem dentro do continente: esconde as bolinhas para você desenhar montanhas, árvores, rios e fundar cidades sem atrapalhar">
+              🏰 Interior (Dentro)
+            </button>
+            <button class="btn btn-sm btn-medieval" id="btnToggleLock" onclick="app.toggleCurrentTerritoryLock()"
+              title="Travar ou destravar o continente selecionado com cadeado contra edições acidentais de tamanho">
+              <span id="lockBtnIcon">🔒</span> <span id="lockBtnText">Travar Borda</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Territórios &amp; Continentes:</span>
+          <div class="map-right-btn-grid">
+            <button class="btn btn-sm btn-gold map-continent-btn" id="mapToolAddContinent"
+              onclick="app.setMapTool('add_continent')"
+              title="Ativar criação de continente: clique neste botão e depois clique no mapa exatamente onde deseja criar o novo continente">
+              <svg class="continent-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path
+                  d="M4.5 9.5C4.5 6.5 7.5 4 11 4.5C13.5 4.8 15.5 3.5 18 5C20.5 6.5 21 9.5 19.5 12C18 14.5 19.5 17 17.5 19C15.5 21 12 19.5 9.5 20C7 20.5 4.5 18.5 4 16C3.5 13.5 6 12.5 4.5 9.5Z"
+                  fill="rgba(223, 186, 115, 0.3)" />
+                <path
+                  d="M19.2 19.2C20 18.9 21.2 19.5 21.2 20.5C21.2 21.3 19.8 21.8 19 21.2C18.4 20.7 18.5 19.5 19.2 19.2Z"
+                  fill="rgba(223, 186, 115, 0.3)" />
+                <circle cx="11" cy="4.5" r="1.3" fill="currentColor" />
+                <circle cx="18" cy="5" r="1.3" fill="currentColor" />
+                <circle cx="19.5" cy="12" r="1.3" fill="currentColor" />
+                <circle cx="17.5" cy="19" r="1.3" fill="currentColor" />
+                <circle cx="9.5" cy="20" r="1.3" fill="currentColor" />
+                <circle cx="4" cy="16" r="1.3" fill="currentColor" />
+                <circle cx="4.5" cy="9.5" r="1.3" fill="currentColor" />
+              </svg>
+              <span>+ Novo Continente (Clicar no Mapa)</span>
+            </button>
+            <button class="btn btn-sm btn-medieval active-tool" id="mapToolSelect" onclick="app.setMapTool('select')"
+              title="Arraste os pontos nas bordas para modelar o território ou arraste o centro para movê-lo">Modelar
+              Bordas / Mover</button>
+            <button class="btn btn-sm btn-medieval" onclick="app.subdivideSelectedTerritoryPoints()"
+              title="Adicionar mais pontos de controle na borda do território selecionado">+ Pontos na Borda</button>
+            <button class="btn btn-sm btn-medieval" onclick="app.reduceSelectedTerritoryPoints()"
+              title="Remover pontos excedentes da borda do território selecionado">- Pontos na Borda</button>
+            <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(1.2)"
+              title="Aumentar tamanho do território selecionado">Aumentar (+)</button>
+            <button class="btn btn-sm btn-medieval" onclick="app.scaleSelectedTerritory(0.83)"
+              title="Diminuir tamanho do território selecionado">Diminuir (-)</button>
+            <button class="btn btn-sm btn-medieval" onclick="app.smoothSelectedTerritoryPoints()"
+              title="Suavizar curvas da costa do território selecionado">Suavizar Costa</button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Assentamentos (Pontos &amp; Nomes):</span>
+          <div class="map-right-btn-grid">
+            <!-- Botão Capital como Ponto envolto em Círculo -->
+            <button class="btn btn-sm btn-medieval" id="mapToolCapital" onclick="app.setMapTool('add_capital')"
+              title="Fundar uma Capital Real no mapa (ponto envolto em círculo)">
+              <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="var(--gold-leaf)" />
+                <circle cx="12" cy="12" r="4" fill="#dc2626" stroke="#fff" stroke-width="1.2" />
+              </svg>
+              <span>Capital (Ponto)</span>
+            </button>
+
+            <!-- Botão Cidade como Ponto envolto em Círculo -->
+            <button class="btn btn-sm btn-medieval" id="mapToolCity" onclick="app.setMapTool('add_city')"
+              title="Fundar uma Cidade ou Vila no mapa (ponto envolto em círculo)">
+              <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="7.5" stroke="#dfba73" />
+                <circle cx="12" cy="12" r="3" fill="#1b1510" stroke="#dfba73" stroke-width="1" />
+              </svg>
+              <span>Cidade (Ponto)</span>
+            </button>
+          </div>
+
+          <div class="icon-size-section" style="margin-top:6px; width:100%; justify-content:space-between;">
+            <span style="font-size:0.74rem; color:var(--ink-secondary);">Tam. Ponto/Nome:</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button class="btn btn-xs btn-medieval" onclick="app.changeMapSettlementSize(-2)"
+                title="Diminuir tamanho do ponto e nome no mapa">-</button>
+              <input type="range" id="mapSettlementSizeSlider" min="10" max="48" step="2" value="20"
+                oninput="app.setMapSettlementSize(this.value)"
+                title="Aumentar ou diminuir o tamanho dos pontos e nomes no mapa" />
+              <button class="btn btn-xs btn-medieval" onclick="app.changeMapSettlementSize(+2)"
+                title="Aumentar tamanho do ponto e nome no mapa">+</button>
+              <span id="mapSettlementSizeDisplay">20px</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Construções &amp; Ícones:</span>
+          <div class="map-right-btn-grid">
+            <!-- Botão Castelo (Ícone no Mapa) -->
+            <button class="btn btn-sm btn-medieval" id="mapToolCastle" onclick="app.setMapTool('stamp_castle')"
+              title="Colocar Castelo: clique em qualquer lugar do continente para colocar um castelo medieval">
+              <span style="font-size:1.05rem; vertical-align:middle;">🏰</span>
+              <span>Castelo</span>
+            </button>
+
+            <!-- Botão Casas / Vila (Ícone no Mapa) -->
+            <button class="btn btn-sm btn-medieval" id="mapToolHouse" onclick="app.setMapTool('stamp_house')"
+              title="Colocar Casas: clique em qualquer lugar do continente para colocar casas/vila medieval">
+              <span style="font-size:1.05rem; vertical-align:middle;">🏡</span>
+              <span>Casas</span>
+            </button>
+
+            <!-- Botão Montanhas -->
+            <button class="btn btn-sm btn-medieval" id="mapToolMountain" onclick="app.setMapTool('draw_mountain')"
+              title="Traçar ou estampar montanhas sobre o continente">
+              <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m2 20 7-12 5 7 3-5 5 10H2z" />
+                <path d="m7 11.5 2 3.5 4-1" />
+              </svg>
+              <span>Montanhas</span>
+            </button>
+
+            <!-- Botão Pinheiros -->
+            <button class="btn btn-sm btn-medieval" id="mapToolTree" onclick="app.setMapTool('draw_tree')"
+              title="Traçar ou estampar pinheiros e bosques sobre o continente">
+              <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22v-4" />
+                <path d="M12 2 7 9h3l-4 6h4l-4 5h12l-4-5h4l-4-6h3z" />
+              </svg>
+              <span>Pinheiros</span>
+            </button>
+
+            <!-- Botão Estrada -->
+            <button class="btn btn-sm btn-medieval" id="mapToolRoad" onclick="app.setMapTool('draw_road')"
+              title="Traçar estradas pontilhadas entre cidades e províncias">
+              <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 19 8 5h8l4 14H4z" />
+                <path d="M12 6v3" />
+                <path d="M12 12v3" />
+                <path d="M12 18v2" />
+              </svg>
+              <span>Estrada</span>
+            </button>
+
+            <!-- Botão Rio -->
+            <button class="btn btn-sm btn-medieval" id="mapToolRiver" onclick="app.setMapTool('draw_river')"
+              title="Traçar rios e cursos d'água fluídos">
+              <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6c3 0 4 3 7 3s4-3 7-3 4 3 4 3" />
+                <path d="M3 12c3 0 4 3 7 3s4-3 7-3 4 3 4 3" />
+                <path d="M3 18c3 0 4 3 7 3s4-3 7-3 4 3 4 3" />
+              </svg>
+              <span>Rio</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Tamanho do Ícone / Elemento:</span>
+          <div class="icon-size-section" style="width:100%; justify-content:space-between;">
+            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(-4)"
+              title="Diminuir tamanho dos ícones e pontos">-</button>
+            <input type="range" id="mapIconSizeSlider" min="10" max="64" step="2" value="24"
+              oninput="app.setMapIconSize(this.value)"
+              title="Ajuste o tamanho de castelos, casas, montanhas, pinheiros e pontos" />
+            <button class="btn btn-xs btn-medieval" onclick="app.changeMapIconSize(+4)"
+              title="Aumentar tamanho dos ícones e pontos">+</button>
+            <span id="mapIconSizeDisplay">24px</span>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <span class="toolbar-section-label">Edição &amp; Histórico:</span>
+          <div class="map-right-btn-grid">
+            <!-- Botão Borracha -->
+            <button class="btn btn-sm btn-medieval" id="mapToolEraser" onclick="app.setMapTool('eraser')"
+              title="Borracha: clique em qualquer casa, castelo, montanha, árvore, assentamento ou traço para apagá-lo">
+              <span>🧹 Borracha</span>
+            </button>
+
+            <!-- Botão Excluir Selecionado -->
+            <button class="btn btn-sm btn-danger" onclick="app.deleteSelectedMapItem()"
+              title="Excluir o elemento atualmente selecionado no mapa (Tecla Del)">
+              <span>🗑️ Excluir Selecionado</span>
+            </button>
+
+            <!-- Botões Desfazer (Ctrl+Z) e Refazer (Ctrl+Y) -->
+            <button class="btn btn-sm btn-gold" id="btnMapUndo" onclick="app.undoMapAction()"
+              title="Desfazer última alteração no mapa (Ctrl+Z)">
+              <span>↩ Desfazer</span>
+            </button>
+            <button class="btn btn-sm btn-medieval" id="btnMapRedo" onclick="app.redoMapAction()"
+              title="Refazer alteração (Ctrl+Y)">
+              <span>↪ Refazer</span>
+            </button>
+
+            <button class="btn btn-sm btn-medieval" onclick="app.smoothLastMapStroke()"
+              title="Suavizar curvas do último traço desenhado">Suavizar Traço</button>
+            <button class="btn btn-sm btn-danger" onclick="app.clearMapStrokes()"
+              title="Limpar todos os desenhos e ícones do mapa">Limpar Tudo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Placa de Registro do Feudo Selecionado (Visível SOMENTE no Modo de Exibição) -->
       <div class="card-box" id="mapTerritoryDetailPanel"></div>
     </div>
   </section>
@@ -942,9 +967,9 @@
   </div>
 
   <!-- Scripts do Códice -->
-  <script src="data.js?v=2.3.0"></script>
-  <script src="engine.js?v=2.3.0"></script>
-  <script src="app.js?v=2.3.0"></script>
+  <script src="data.js?v=2.4.0"></script>
+  <script src="engine.js?v=2.4.0"></script>
+  <script src="app.js?v=2.4.0"></script>
 </body>
 
 </html>

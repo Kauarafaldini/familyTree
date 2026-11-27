@@ -77,6 +77,7 @@ class FantasyGenealogyApp {
     this.timelineSortOrder = "asc"; // "asc" ou "desc"
     this.selectedMilestoneId = null;
     this.miniMapMinimized = false;
+    this.mapSettlementSize = 20;
 
     this.initCropperState();
     this.init();
@@ -92,6 +93,7 @@ class FantasyGenealogyApp {
       this.renderHousesAndSuccessionTab();
       this.renderTimeline();
       this.renderGrimoire();
+      this.initTreeViewportEvents();
       this.initMapCanvasEvents();
       this.initMiniMapEvents();
       this.initTimelineEvents();
@@ -99,6 +101,7 @@ class FantasyGenealogyApp {
       this.renderAuditHistory();
       this.initCropperEvents();
     } else {
+      this.initTreeViewportEvents();
       this.initMapCanvasEvents();
       this.initMiniMapEvents();
       this.initTimelineEvents();
@@ -898,6 +901,79 @@ class FantasyGenealogyApp {
     if (label) label.textContent = `${Math.round(this.zoomLevel * 100)}%`;
   }
 
+  // Permite passar para os lados (e verticalmente) arrastando com o mouse na Genealogia
+  initTreeViewportEvents() {
+    const viewport = document.getElementById("grapeTreeViewport");
+    if (!viewport || this._hasTreeViewportEvents) return;
+    this._hasTreeViewportEvents = true;
+
+    let isDown = false;
+    let hasDragged = false;
+    let startX = 0;
+    let startY = 0;
+    let scrollLeft = 0;
+    let scrollTop = 0;
+
+    viewport.addEventListener("mousedown", e => {
+      if (e.button !== 0 && e.button !== 1) return;
+      if (e.target.closest("button, input, select, textarea, a")) return;
+      isDown = true;
+      hasDragged = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      scrollLeft = viewport.scrollLeft;
+      scrollTop = viewport.scrollTop;
+    });
+
+    window.addEventListener("mousemove", e => {
+      if (!isDown) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!hasDragged && Math.hypot(dx, dy) > 5) {
+        hasDragged = true;
+        viewport.classList.add("is-dragging");
+      }
+      if (hasDragged) {
+        e.preventDefault();
+        viewport.scrollLeft = scrollLeft - dx;
+        viewport.scrollTop = scrollTop - dy;
+      }
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!isDown) return;
+      isDown = false;
+      viewport.classList.remove("is-dragging");
+      if (hasDragged) {
+        setTimeout(() => {
+          hasDragged = false;
+        }, 40);
+      }
+    });
+
+    // Impede que o clique final de um arraste abra acidentalmente o modal de personagem ou casamento
+    viewport.addEventListener(
+      "click",
+      e => {
+        if (hasDragged) {
+          e.stopPropagation();
+          e.preventDefault();
+          hasDragged = false;
+        }
+      },
+      true
+    );
+  }
+
+  // Verifica bidirecionalmente se dois personagens são irmãos gêmeos entre si
+  areCharactersTwins(charA, charB) {
+    if (!charA || !charB || charA.id === charB.id) return false;
+    return Boolean(
+      (charA.twinOfId && charA.twinOfId === charB.id) ||
+      (charB.twinOfId && charB.twinOfId === charA.id)
+    );
+  }
+
   // --------------------------------------------------------------------------
   // ABA 1: RENDERIZAÇÃO DA ÁRVORE GENEALÓGICA EM CACHOS DESCENDENTES
   // --------------------------------------------------------------------------
@@ -1000,6 +1076,7 @@ class FantasyGenealogyApp {
       if (c.fatherId && charIds.has(c.fatherId)) return true;
       if (c.motherId && charIds.has(c.motherId)) return true;
       if (c.twinOfId && charIds.has(c.twinOfId)) return true;
+      if (chars.some(other => this.areCharactersTwins(c, other))) return true;
       if (Array.isArray(c.spouseIds) && c.spouseIds.some(spId => charIds.has(spId))) return true;
       if (Array.isArray(c.siblingIds) && c.siblingIds.some(sibId => charIds.has(sibId))) return true;
       const hasChild = chars.some(other => (other.fatherId === c.id || other.motherId === c.id));
@@ -1012,6 +1089,8 @@ class FantasyGenealogyApp {
       ));
       return hasSibling;
     };
+
+    const getNormRace = c => normalizeText((c && (c.race || c.creatureType)) || "humano");
 
     // Agrupa por Cacho / Casa Feudal Principal ou joga personagens isolados para "o outro lado"
     const UNCONNECTED_CLUSTER_ID = "__unconnected_seats__";
@@ -1045,6 +1124,23 @@ class FantasyGenealogyApp {
       clustersByHouse[hId].push(c);
     });
 
+    // Calcula a raça predominante de cada cluster para manter famílias da mesma raça próximas
+    const getClusterDominantRace = hId => {
+      const list = clustersByHouse[hId] || [];
+      const counts = {};
+      let bestRace = "humano";
+      let bestCount = 0;
+      list.forEach(c => {
+        const r = getNormRace(c);
+        counts[r] = (counts[r] || 0) + 1;
+        if (counts[r] > bestCount) {
+          bestCount = counts[r];
+          bestRace = r;
+        }
+      });
+      return bestRace;
+    };
+
     const positions = {};
     const clusterHeaders = [];
     let currentClusterOffsetX = 90;
@@ -1052,10 +1148,13 @@ class FantasyGenealogyApp {
     const GEN_SPACING_Y = 220;
     const TOP_MARGIN_Y = 105;
 
-    // Garante que o cluster sem vínculos fique sempre "do outro lado" (último na direita)
+    // Garante que famílias de mesma raça fiquem próximas umas das outras e o cluster sem vínculos fique "do outro lado"
     const sortedHouseIds = Object.keys(clustersByHouse).sort((a, b) => {
       if (a === UNCONNECTED_CLUSTER_ID) return 1;
       if (b === UNCONNECTED_CLUSTER_ID) return -1;
+      const raceA = getClusterDominantRace(a);
+      const raceB = getClusterDominantRace(b);
+      if (raceA !== raceB) return raceA.localeCompare(raceB);
       return 0;
     });
 
@@ -1073,12 +1172,18 @@ class FantasyGenealogyApp {
 
       let maxRowCount = 1;
       Object.keys(rows).forEach(gKey => {
-        const rowList = rows[gKey];
+        // Ordena inicialmente por raça para que personagens da mesma raça fiquem sempre próximos, mesmo se não forem da mesma família
+        const rowList = rows[gKey].slice().sort((a, b) => {
+          const rA = getNormRace(a);
+          const rB = getNormRace(b);
+          if (rA !== rB) return rA.localeCompare(rB);
+          return 0;
+        });
         const ordered = [];
         const placed = new Set();
 
-        // Agrupamento familiar inteligente: pessoas conectadas (cônjuges, irmãos) ficam juntas e próximas
-        // Não misturar aleatoriamente por ano de nascimento
+        // Agrupamento familiar e racial: pessoas conectadas (cônjuges, gêmeos, irmãos) ficam coladas,
+        // seguidas imediatamente por outros personagens da mesma raça
         const placePersonAndTies = person => {
           if (!person || placed.has(person.id)) return;
           ordered.push(person);
@@ -1093,13 +1198,12 @@ class FantasyGenealogyApp {
             }
           });
 
-          // 2. Irmão gêmeo direto na mesma geração fica adjacente
-          if (person.twinOfId) {
-            const twin = rowList.find(x => x.id === person.twinOfId);
-            if (twin && !placed.has(twin.id)) {
-              placePersonAndTies(twin);
+          // 2. Irmão gêmeo direto (bidirecional) na mesma geração fica adjacente
+          rowList.forEach(other => {
+            if (!placed.has(other.id) && this.areCharactersTwins(person, other)) {
+              placePersonAndTies(other);
             }
-          }
+          });
 
           // 3. Irmãos que compartilham o mesmo pai/mãe ou laço fraterno direto
           rowList.forEach(other => {
@@ -1108,7 +1212,7 @@ class FantasyGenealogyApp {
             const sameMother = person.motherId && other.motherId && person.motherId === other.motherId;
             const directSibling = (Array.isArray(person.siblingIds) && person.siblingIds.includes(other.id)) ||
                                   (Array.isArray(other.siblingIds) && other.siblingIds.includes(person.id));
-            if (sameFather || sameMother || directSibling) {
+            if (sameFather || sameMother || directSibling || this.areCharactersTwins(person, other)) {
               placePersonAndTies(other);
             }
           });
@@ -1116,7 +1220,14 @@ class FantasyGenealogyApp {
 
         rowList.forEach(person => {
           if (!placed.has(person.id)) {
+            const targetRace = getNormRace(person);
             placePersonAndTies(person);
+            // Puxa também outros personagens da mesma raça nesta fileira para ficarem próximos mesmo sem vínculo familiar
+            rowList.forEach(sameRaceOther => {
+              if (!placed.has(sameRaceOther.id) && getNormRace(sameRaceOther) === targetRace) {
+                placePersonAndTies(sameRaceOther);
+              }
+            });
           }
         });
 
@@ -1315,12 +1426,14 @@ class FantasyGenealogyApp {
         `;
       }
 
-      // Traço Púrpura/Roxo de Gêmeos (Fácil Visualização)
-      if (child.twinOfId && positions[child.twinOfId]) {
-        const twinKey = [child.id, child.twinOfId].sort().join("__");
+      // Traço Púrpura/Roxo de Gêmeos (Somente linha roxa entre irmãos gêmeos, verificação bidirecional)
+      chars.forEach(other => {
+        if (!this.areCharactersTwins(child, other)) return;
+        const tPos = positions[other.id];
+        if (!tPos) return;
+        const twinKey = ["twin", ...[child.id, other.id].sort()].join("__");
         if (!drawnTwins.has(twinKey)) {
           drawnTwins.add(twinKey);
-          const tPos = positions[child.twinOfId];
           const midX = (childPos.x + tPos.x) / 2;
           const topY = Math.min(childPos.y, tPos.y) + 12;
           svgHtml += `
@@ -1328,12 +1441,12 @@ class FantasyGenealogyApp {
                   fill="none" stroke="#a855f7" stroke-width="3.2" filter="url(#glowPurple)" />
           `;
         }
-      }
+      });
 
-      // Conexão Fraterna Sutil entre Irmãos
+      // Conexão Fraterna entre Irmãos Não-Gêmeos (Irmãos gêmeos têm SOMENTE a linha roxa entre si, nunca a vermelha)
       const siblings = this.engine.getSiblings(child);
       siblings.forEach(sib => {
-        if (child.twinOfId === sib.id) return;
+        if (this.areCharactersTwins(child, sib)) return;
         const sibPos = positions[sib.id];
         if (!sibPos) return;
         const sibKey = ["sib", ...[child.id, sib.id].sort()].join("__");
@@ -4332,11 +4445,232 @@ class FantasyGenealogyApp {
     this.renderHorizontalTimeline(filteredEvents);
   }
 
+  // Gera apenas as marcas de tempo (ticks) visíveis na janela para manter o zoom a 60 FPS sem travar
+  buildTimelineTicksHtml(startYear, endYear, pixelsPerYear, paddingX) {
+    const totalYears = Math.max(10, endYear - startYear);
+    const maxTicks = 65;
+    const calculatedStep = Math.max(1, Math.ceil(totalYears / maxTicks));
+    const niceSteps = [1, 2, 5, 10, 20, 25, 50, 100, 250, 500];
+    const yearTickStep = niceSteps.find(s => s >= calculatedStep) || calculatedStep;
+    const labelStep = yearTickStep === 1 ? 5 : (yearTickStep <= 5 ? 10 : yearTickStep * 2);
+
+    // Calcula janela visível no viewport para virtualizar meses e dias (evita gerar milhares de elementos fora da tela)
+    const viewport = document.getElementById("timelineHorizontalViewport");
+    const vScroll = viewport ? viewport.scrollLeft : 0;
+    const vWidth = viewport && viewport.clientWidth > 100 ? viewport.clientWidth : 1280;
+    const minVisX = Math.max(0, vScroll - vWidth);
+    const maxVisX = vScroll + vWidth * 2;
+    const visStartYear = Math.max(startYear, Math.floor(startYear + (minVisX - paddingX) / pixelsPerYear) - 1);
+    const visEndYear = Math.min(endYear, Math.ceil(startYear + (maxVisX - paddingX) / pixelsPerYear) + 1);
+
+    let ticksHtml = "";
+
+    if (this.timelineZoomMode === "year") {
+      for (let yr = startYear; yr <= endYear; yr += yearTickStep) {
+        const yrLeft = Math.round(paddingX + (yr - startYear) * pixelsPerYear);
+        const isMajor = yr % labelStep === 0;
+        const isDecade = yr % 10 === 0;
+
+        if (isMajor) {
+          ticksHtml += `
+            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+              <div class="${isDecade ? "axis-tick-mark-major" : "axis-tick-mark-minor"}"></div>
+              <div class="axis-tick-label-year">${yr}</div>
+            </div>
+          `;
+        } else {
+          ticksHtml += `
+            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+              <div class="axis-tick-mark-day"></div>
+            </div>
+          `;
+        }
+      }
+    } else if (this.timelineZoomMode === "month") {
+      const showMonths = pixelsPerYear >= 70;
+      // Desenha marcas gerais de anos ao longo do eixo inteiro
+      for (let yr = startYear; yr <= endYear; yr += yearTickStep) {
+        if (showMonths && yr >= visStartYear && yr <= visEndYear) continue;
+        const yrLeft = Math.round(paddingX + (yr - startYear) * pixelsPerYear);
+        ticksHtml += `
+          <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+            <div class="axis-tick-mark-major"></div>
+            <div class="axis-tick-label-year">${yr}</div>
+          </div>
+        `;
+      }
+      // Desenha meses APENAS nos anos visíveis na tela (máximo de ~25 anos visíveis)
+      if (showMonths) {
+        const visSpan = Math.max(1, visEndYear - visStartYear);
+        const localYrStep = Math.max(1, Math.ceil(visSpan / 18));
+        const mStep = pixelsPerYear >= 160 ? 1 : (pixelsPerYear >= 100 ? 2 : 3);
+        for (let yr = visStartYear; yr <= visEndYear; yr += localYrStep) {
+          const yrLeft = Math.round(paddingX + (yr - startYear) * pixelsPerYear);
+          ticksHtml += `
+            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+              <div class="axis-tick-mark-major"></div>
+              <div class="axis-tick-label-year">${yr}</div>
+            </div>
+          `;
+          for (let m = 1; m <= 12; m += mStep) {
+            const mLeft = Math.round(yrLeft + ((m - 0.5) / 12) * pixelsPerYear);
+            const mInfo = FANTASY_MONTHS[m - 1];
+            ticksHtml += `
+              <div class="timeline-axis-tick" style="left:${mLeft}px;">
+                <div class="axis-tick-mark-month"></div>
+                <div class="axis-tick-label-month" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
+              </div>
+            `;
+          }
+        }
+      }
+    } else if (this.timelineZoomMode === "day") {
+      const showDays = pixelsPerYear >= 220;
+      for (let yr = startYear; yr <= endYear; yr += yearTickStep) {
+        if (showDays && yr >= visStartYear && yr <= visEndYear) continue;
+        const yrLeft = Math.round(paddingX + (yr - startYear) * pixelsPerYear);
+        ticksHtml += `
+          <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+            <div class="axis-tick-mark-major"></div>
+            <div class="axis-tick-label-year">${yr}</div>
+          </div>
+        `;
+      }
+      // Desenha meses e dias APENAS para a janela visível na tela (máximo de ~10 anos visíveis)
+      if (showDays) {
+        const visSpan = Math.max(1, visEndYear - visStartYear);
+        const localYrStep = Math.max(1, Math.ceil(visSpan / 8));
+        const mStep = pixelsPerYear >= 400 ? 1 : 2;
+        for (let yr = visStartYear; yr <= visEndYear; yr += localYrStep) {
+          const yrLeft = Math.round(paddingX + (yr - startYear) * pixelsPerYear);
+          ticksHtml += `
+            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
+              <div class="axis-tick-mark-major"></div>
+              <div class="axis-tick-label-year">${yr}</div>
+            </div>
+          `;
+          for (let m = 1; m <= 12; m += mStep) {
+            const mStart = Math.round(yrLeft + ((m - 1) / 12) * pixelsPerYear);
+            const mInfo = FANTASY_MONTHS[m - 1];
+            ticksHtml += `
+              <div class="timeline-axis-tick" style="left:${mStart}px;">
+                <div class="axis-tick-mark-month"></div>
+                <div class="axis-tick-label-month">${mInfo.name.split(" ")[0]}</div>
+              </div>
+            `;
+            if (pixelsPerYear >= 650) {
+              for (let d = 10; d <= 30; d += 10) {
+                const dLeft = Math.round(mStart + (d / 30) * (pixelsPerYear / 12));
+                ticksHtml += `
+                  <div class="timeline-axis-tick" style="left:${dLeft}px;">
+                    <div class="axis-tick-mark-day"></div>
+                    <div class="axis-tick-label-day">d${d}</div>
+                  </div>
+                `;
+              }
+            }
+          }
+        }
+      }
+    }
+    return ticksHtml;
+  }
+
+  // Atualiza rapidamente o zoom da cronologia reposicionando os nós existentes no DOM sem recriar HTML nem recarregar imagens
+  updateTimelineZoomFast() {
+    const track = document.getElementById("timelineHorizontalTrack");
+    const ticksLayer = document.getElementById("timelineTicksLayer");
+    if (!track || !ticksLayer || !Array.isArray(this._cachedTimelineNodes) || this._cachedTimelineNodes.length === 0) {
+      this.renderTimeline();
+      return;
+    }
+
+    ["year", "month", "day"].forEach(m => {
+      const btn = document.getElementById("btnZoom" + m.charAt(0).toUpperCase() + m.slice(1));
+      if (btn) btn.classList.toggle("active", this.timelineZoomMode === m);
+    });
+    const zoomLbl = document.getElementById("timelineZoomLabel");
+    if (zoomLbl) zoomLbl.textContent = Math.round(this.timelineZoom * 100) + "%";
+    const scaleBadge = document.getElementById("timelineScaleBadge");
+    if (scaleBadge) {
+      scaleBadge.textContent = this.timelineZoomMode === "day"
+        ? "Escala: Dias Exatos & Luas"
+        : this.timelineZoomMode === "month"
+        ? "Escala: Luas & Meses das Estações"
+        : "Escala: Anos & Décadas";
+    }
+
+    const startYear = this.timelineStartYear || 1200;
+    const endYear = this.timelineEndYear || 1250;
+    const totalYears = Math.max(10, endYear - startYear);
+    const pixelsPerYear = this.getTimelinePixelsPerYear();
+    const paddingX = 240;
+    let totalWidth = Math.max(1200, totalYears * pixelsPerYear + paddingX * 2);
+
+    const isZoomNear = this.timelineZoom >= 1.35;
+    track.classList.toggle("zoom-revealed", isZoomNear);
+
+    const minSealDistance = 38;
+    let lastPlacedSealX = -9999;
+    const tierLastX = [-9999, -9999, -9999];
+    const minLabelDist = 135;
+
+    this._cachedTimelineNodes.forEach(item => {
+      const rawX = paddingX + (item.yrFrac + item.mFrac + item.dFrac) * pixelsPerYear;
+      const nodeX = Math.round(Math.max(rawX, lastPlacedSealX + minSealDistance));
+      lastPlacedSealX = nodeX;
+
+      let chosenTier = 0;
+      if (nodeX - tierLastX[0] >= minLabelDist) {
+        chosenTier = 0;
+      } else if (nodeX - tierLastX[1] >= minLabelDist) {
+        chosenTier = 1;
+      } else if (nodeX - tierLastX[2] >= minLabelDist) {
+        chosenTier = 2;
+      } else {
+        let maxDist = -1;
+        let bestTier = 0;
+        for (let t = 0; t < 3; t++) {
+          const dist = nodeX - tierLastX[t];
+          if (dist > maxDist) {
+            maxDist = dist;
+            bestTier = t;
+          }
+        }
+        chosenTier = bestTier;
+      }
+      tierLastX[chosenTier] = nodeX;
+
+      const el = document.getElementById(`hnode-${item.id}`);
+      if (el) {
+        el.style.left = `${nodeX}px`;
+        if (item.lastTier !== chosenTier) {
+          item.lastTier = chosenTier;
+          const stemUp = el.querySelector(".timeline-stem-up");
+          const topLbl = el.querySelector(".timeline-node-top-label");
+          const stemDown = el.querySelector(".timeline-stem-down");
+          const card = el.querySelector(".timeline-node-summary-card");
+          if (stemUp) stemUp.style.height = `${22 + chosenTier * 46}px`;
+          if (topLbl) topLbl.style.bottom = `${38 + chosenTier * 46}px`;
+          if (stemDown) stemDown.style.height = `${22 + (chosenTier % 2) * 22}px`;
+          if (card) card.style.top = `${38 + (chosenTier % 2) * 22}px`;
+        }
+      }
+    });
+
+    if (lastPlacedSealX + paddingX > totalWidth) {
+      totalWidth = lastPlacedSealX + paddingX;
+    }
+    track.style.width = `${totalWidth}px`;
+    ticksLayer.innerHTML = this.buildTimelineTicksHtml(startYear, endYear, pixelsPerYear, paddingX);
+  }
+
   renderHorizontalTimeline(filteredEvents) {
     const track = document.getElementById("timelineHorizontalTrack");
     if (!track) return;
 
     if (filteredEvents.length === 0) {
+      this._cachedTimelineNodes = [];
       track.style.width = "100%";
       track.innerHTML = `
         <div style="text-align:center; padding:120px 20px; color:var(--ink-dim); font-style:italic;">
@@ -4382,106 +4716,7 @@ class FantasyGenealogyApp {
     const isZoomNear = this.timelineZoom >= 1.35;
     track.classList.toggle("zoom-revealed", isZoomNear);
 
-    let html = "";
-
-    // 1. Linha do Eixo Central Horizontal
-    html += `<div class="timeline-main-axis" style="left:${paddingX - 40}px; right:${paddingX - 40}px;"></div>`;
-
-    // 2. Marcas do tempo (Ticks dinâmicos e ultra-otimizados para evitar travamentos)
-    // Limita estritamente o número total de marcas geradas para manter a interface rápida e fluida
-    const maxTicks = 75;
-    const calculatedStep = Math.max(1, Math.ceil(totalYears / maxTicks));
-    const niceSteps = [1, 2, 5, 10, 20, 25, 50, 100, 250, 500];
-    const yearTickStep = niceSteps.find(s => s >= calculatedStep) || calculatedStep;
-    const labelStep = yearTickStep === 1 ? 5 : (yearTickStep <= 5 ? 10 : yearTickStep * 2);
-
-    if (this.timelineZoomMode === "year") {
-      for (let yr = startYear; yr <= endYear; yr += yearTickStep) {
-        const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
-        const isMajor = yr % labelStep === 0;
-        const isDecade = yr % 10 === 0;
-
-        if (isMajor) {
-          html += `
-            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
-              <div class="${isDecade ? "axis-tick-mark-major" : "axis-tick-mark-minor"}"></div>
-              <div class="axis-tick-label-year">${yr}</div>
-            </div>
-          `;
-        } else {
-          html += `
-            <div class="timeline-axis-tick" style="left:${yrLeft}px;">
-              <div class="axis-tick-mark-day"></div>
-            </div>
-          `;
-        }
-      }
-    } else if (this.timelineZoomMode === "month") {
-      // Exibe meses apenas se houver espaço suficiente por ano (>= 70px)
-      const showMonths = pixelsPerYear >= 70;
-      const yrStep = showMonths ? Math.max(1, Math.ceil(totalYears / 30)) : yearTickStep;
-
-      for (let yr = startYear; yr <= endYear; yr += yrStep) {
-        const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
-        html += `
-          <div class="timeline-axis-tick" style="left:${yrLeft}px;">
-            <div class="axis-tick-mark-major"></div>
-            <div class="axis-tick-label-year">${yr}</div>
-          </div>
-        `;
-        if (showMonths) {
-          const mStep = pixelsPerYear >= 160 ? 1 : (pixelsPerYear >= 100 ? 2 : 3);
-          for (let m = 1; m <= 12; m += mStep) {
-            const mLeft = yrLeft + ((m - 0.5) / 12) * pixelsPerYear;
-            const mInfo = FANTASY_MONTHS[m - 1];
-            html += `
-              <div class="timeline-axis-tick" style="left:${mLeft}px;">
-                <div class="axis-tick-mark-month"></div>
-                <div class="axis-tick-label-month" title="${mInfo.name}">${mInfo.name.split(" ")[0]}</div>
-              </div>
-            `;
-          }
-        }
-      }
-    } else if (this.timelineZoomMode === "day") {
-      // Exibe dias apenas se aproximado o suficiente (>= 220px por ano)
-      const showDays = pixelsPerYear >= 220;
-      const yrStep = showDays ? 1 : yearTickStep;
-
-      for (let yr = startYear; yr <= endYear; yr += yrStep) {
-        const yrLeft = paddingX + (yr - startYear) * pixelsPerYear;
-        html += `
-          <div class="timeline-axis-tick" style="left:${yrLeft}px;">
-            <div class="axis-tick-mark-major"></div>
-            <div class="axis-tick-label-year">${yr}</div>
-          </div>
-        `;
-        if (showDays) {
-          const mStep = pixelsPerYear >= 400 ? 1 : 2;
-          for (let m = 1; m <= 12; m += mStep) {
-            const mStart = yrLeft + ((m - 1) / 12) * pixelsPerYear;
-            const mInfo = FANTASY_MONTHS[m - 1];
-            html += `
-              <div class="timeline-axis-tick" style="left:${mStart}px;">
-                <div class="axis-tick-mark-month"></div>
-                <div class="axis-tick-label-month">${mInfo.name.split(" ")[0]}</div>
-              </div>
-            `;
-            if (pixelsPerYear >= 650) {
-              for (let d = 10; d <= 30; d += 10) {
-                const dLeft = mStart + (d / 30) * (pixelsPerYear / 12);
-                html += `
-                  <div class="timeline-axis-tick" style="left:${dLeft}px;">
-                    <div class="axis-tick-mark-day"></div>
-                    <div class="axis-tick-label-day">d${d}</div>
-                  </div>
-                `;
-              }
-            }
-          }
-        }
-      }
-    }
+    const ticksHtml = this.buildTimelineTicksHtml(startYear, endYear, pixelsPerYear, paddingX);
 
     // 3. Nós dos Acontecimentos na Linha Horizontal (Ordenados e Escalonados em Andares sem Sobreposição)
     const sortedEvents = filteredEvents.slice().sort((a, b) => {
@@ -4497,9 +4732,11 @@ class FantasyGenealogyApp {
       return (a.title || "").localeCompare(b.title || "");
     });
 
-    const minSealDistance = 38; // Distância mínima entre centros de selos heráldicos para que nunca se sobreponham
+    const minSealDistance = 38;
     let lastPlacedSealX = -9999;
-    const tierLastX = [-9999, -9999, -9999]; // Rastreamento de andares verticais (Tier 0, 1, 2)
+    const tierLastX = [-9999, -9999, -9999];
+    this._cachedTimelineNodes = [];
+    let nodesHtml = "";
 
     sortedEvents.forEach(ev => {
       const yr = Number(ev.year) || startYear;
@@ -4511,11 +4748,9 @@ class FantasyGenealogyApp {
       const dFrac = (d - 1) / (12 * 30);
       const rawX = paddingX + (yrFrac + mFrac + dFrac) * pixelsPerYear;
 
-      // Nudge suave se houver colisão de selos no mesmo ano/mês (afasta para a direita apenas o mínimo necessário)
-      const nodeX = Math.max(rawX, lastPlacedSealX + minSealDistance);
+      const nodeX = Math.round(Math.max(rawX, lastPlacedSealX + minSealDistance));
       lastPlacedSealX = nodeX;
 
-      // Atribuição de andar (Tier) para que nomes não colidam (rótulos têm ~170px de largura)
       let chosenTier = 0;
       const minLabelDist = 135;
       if (nodeX - tierLastX[0] >= minLabelDist) {
@@ -4537,6 +4772,7 @@ class FantasyGenealogyApp {
         chosenTier = bestTier;
       }
       tierLastX[chosenTier] = nodeX;
+      this._cachedTimelineNodes.push({ id: ev.id, yrFrac, mFrac, dFrac, lastTier: chosenTier });
 
       const stemUpHeight = 22 + chosenTier * 46;
       const labelBottom = 38 + chosenTier * 46;
@@ -4589,30 +4825,25 @@ class FantasyGenealogyApp {
         ? `<img class="timeline-node-img-thumb" src="${this.escapeHtml(ev.imageUrl)}" alt="${this.escapeHtml(ev.title)}" onerror="this.style.display='none'" />`
         : "";
 
-      html += `
+      nodesHtml += `
         <div class="timeline-h-node ${isEpic ? "node-epic" : ""} ${isSelected ? "selected" : ""}"
              id="hnode-${ev.id}"
              style="left:${nodeX}px;"
              onclick="app.selectTimelineNode('${ev.id}')">
           
-          <!-- Haste conectora superior escalonada -->
           <div class="timeline-stem-up" style="height:${stemUpHeight}px;"></div>
 
-          <!-- Rótulo Superior: Nome do Evento e Data em andar dinâmico -->
           <div class="timeline-node-top-label" style="bottom:${labelBottom}px;" title="${this.escapeHtml(ev.title)} (${dateText})">
             <div class="timeline-node-event-title">${this.escapeHtml(ev.title)}</div>
             <div class="timeline-node-event-date">${dateText}</div>
           </div>
 
-          <!-- Selo Heráldico sobre a Linha Horizontal -->
           <div class="timeline-node-seal" style="border-color:${meta.color}; color:${meta.color};" title="${this.escapeHtml(ev.title)} &bull; Clique para inspecionar">
             <span>${meta.icon}</span>
           </div>
 
-          <!-- Haste conectora inferior escalonada -->
           <div class="timeline-stem-down" style="height:${stemDownHeight}px;"></div>
 
-          <!-- Caixa Inferior: Resumo do Conto da Cronologia (Desdobra ao aproximar o zoom ou ao passar o mouse) -->
           <div class="timeline-node-summary-card" style="top:${cardTop}px;" onclick="event.stopPropagation()">
             <div class="timeline-card-badges">
               <span class="badge-pill ${meta.badgeClass}" style="border-color:${meta.color}; color:${meta.color}; font-size:0.7rem;">
@@ -4651,7 +4882,11 @@ class FantasyGenealogyApp {
       track.style.width = `${lastPlacedSealX + paddingX}px`;
     }
 
-    track.innerHTML = html;
+    track.innerHTML = `
+      <div class="timeline-main-axis" style="left:${paddingX - 40}px; right:${paddingX - 40}px;"></div>
+      <div id="timelineTicksLayer">${ticksHtml}</div>
+      <div id="timelineNodesLayer">${nodesHtml}</div>
+    `;
   }
 
   selectTimelineNode(milestoneId) {
@@ -4708,7 +4943,7 @@ class FantasyGenealogyApp {
     else if (mode === "month") this.timelineZoom = 1.8;
     else if (mode === "day") this.timelineZoom = 3.2;
     this.timelineZoomMode = mode;
-    this.renderTimeline();
+    this.updateTimelineZoomFast();
   }
 
   adjustTimelineZoom(delta) {
@@ -4720,14 +4955,14 @@ class FantasyGenealogyApp {
     if (newZoom !== this.timelineZoom) {
       this.timelineZoom = newZoom;
       this.updateTimelineZoomModeFromZoom();
-      this.renderTimeline();
+      this.updateTimelineZoomFast();
     }
   }
 
   resetTimelineZoom() {
     this.timelineZoom = 1.0;
     this.timelineZoomMode = "year";
-    this.renderTimeline();
+    this.updateTimelineZoomFast();
   }
 
   // Ajusta o zoom perfeitamente para ver o início e o fim da cronologia na tela sem scroll excessivo
@@ -5108,8 +5343,27 @@ class FantasyGenealogyApp {
       viewport.scrollLeft = scrollLeft - walk;
     });
 
-    // Zoom suave e otimizado com debounce acumulativo
-    let wheelTimer = null;
+    // Atualiza marcas de meses/dias virtualizadas durante o scroll horizontal
+    let scrollRaf = null;
+    viewport.addEventListener("scroll", () => {
+      if (this.timelineZoomMode === "year") return;
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = null;
+        const ticksLayer = document.getElementById("timelineTicksLayer");
+        if (ticksLayer) {
+          ticksLayer.innerHTML = this.buildTimelineTicksHtml(
+            this.timelineStartYear || 1200,
+            this.timelineEndYear || 1250,
+            this.getTimelinePixelsPerYear(),
+            240
+          );
+        }
+      });
+    }, { passive: true });
+
+    // Zoom ultra-fluido a 60 FPS com requestAnimationFrame sem destruir o DOM dos cards
+    let wheelRaf = null;
     let pendingYearUnderCursor = null;
     let pendingMouseX = null;
 
@@ -5130,7 +5384,7 @@ class FantasyGenealogyApp {
         pendingMouseX = mouseViewportX;
       }
 
-      const zoomFactor = e.deltaY < 0 ? 1.14 : 0.88;
+      const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
       let newZoom = Number((this.timelineZoom * zoomFactor).toFixed(2));
       newZoom = Math.max(0.04, Math.min(6.5, newZoom));
 
@@ -5138,19 +5392,20 @@ class FantasyGenealogyApp {
         this.timelineZoom = newZoom;
         this.updateTimelineZoomModeFromZoom();
 
-        if (wheelTimer) clearTimeout(wheelTimer);
-        wheelTimer = setTimeout(() => {
-          const anchorYear = pendingYearUnderCursor !== null ? pendingYearUnderCursor : startYear;
-          const anchorMouseX = pendingMouseX !== null ? pendingMouseX : mouseViewportX;
-          pendingYearUnderCursor = null;
-          pendingMouseX = null;
+        if (!wheelRaf) {
+          wheelRaf = requestAnimationFrame(() => {
+            wheelRaf = null;
+            const anchorYear = pendingYearUnderCursor !== null ? pendingYearUnderCursor : startYear;
+            const anchorMouseX = pendingMouseX !== null ? pendingMouseX : mouseViewportX;
+            pendingYearUnderCursor = null;
+            pendingMouseX = null;
 
-          this.renderTimeline();
-          const pixelsPerYearNew = this.getTimelinePixelsPerYear();
-          const trackXNew = paddingX + (anchorYear - startYear) * pixelsPerYearNew;
-          viewport.scrollLeft = Math.max(0, trackXNew - anchorMouseX);
-          wheelTimer = null;
-        }, 40);
+            this.updateTimelineZoomFast();
+            const pixelsPerYearNew = this.getTimelinePixelsPerYear();
+            const trackXNew = paddingX + (anchorYear - startYear) * pixelsPerYearNew;
+            viewport.scrollLeft = Math.max(0, trackXNew - anchorMouseX);
+          });
+        }
       }
     }, { passive: false });
   }
@@ -5599,6 +5854,7 @@ class FantasyGenealogyApp {
     const badgeTextEl = document.getElementById("mapModeBadgeText");
     const controls = document.getElementById("mapEditControls");
     const helperBar = document.getElementById("mapHelperBar");
+    const detailPanel = document.getElementById("mapTerritoryDetailPanel");
 
     if (this.isMapEditMode) {
       if (btn) {
@@ -5613,7 +5869,9 @@ class FantasyGenealogyApp {
         badgeEl.className = "map-mode-badge edit-mode";
       }
       if (badgeTextEl) badgeTextEl.textContent = "Modo de Edição";
+      // No modo de edição, exibe os botões do lado direito e oculta informações de cidades e afins do continente
       if (controls) controls.style.display = "flex";
+      if (detailPanel) detailPanel.style.display = "none";
       if (helperBar) helperBar.style.display = "flex";
       this.updateMapScopeUI();
     } else {
@@ -5629,7 +5887,9 @@ class FantasyGenealogyApp {
         badgeEl.className = "map-mode-badge view-mode";
       }
       if (badgeTextEl) badgeTextEl.textContent = "Modo de Exibição";
+      // No modo de exibição, oculta os botões de edição e exibe o painel de informações do continente do lado direito
       if (controls) controls.style.display = "none";
+      if (detailPanel) detailPanel.style.display = "block";
       if (helperBar) helperBar.style.display = "none";
     }
   }
@@ -5754,12 +6014,13 @@ class FantasyGenealogyApp {
     }
     // Se selecionou uma ferramenta de desenho interno ou carimbo, muda automaticamente para escopo "interior"
     // para que as bolinhas da borda do continente não atrapalhem o traço nem os cliques
-    if (tool !== "select" && this.mapEditScope === "border") {
+    if (tool !== "select" && tool !== "add_continent" && this.mapEditScope === "border") {
       this.mapEditScope = "interior";
       this.updateMapScopeUI();
     }
     this.mapTool = tool;
     const toolIds = [
+      "mapToolAddContinent",
       "mapToolSelect",
       "mapToolMountain",
       "mapToolTree",
@@ -5778,6 +6039,7 @@ class FantasyGenealogyApp {
       }
     });
     const mapIds = {
+      add_continent: "mapToolAddContinent",
       select: "mapToolSelect",
       draw_mountain: "mapToolMountain",
       draw_tree: "mapToolTree",
@@ -5792,6 +6054,10 @@ class FantasyGenealogyApp {
     const activeBtn = document.getElementById(mapIds[tool]);
     if (activeBtn) {
       activeBtn.classList.add("active-tool");
+    }
+
+    if (tool === "add_continent" && typeof this.showToast === "function") {
+      this.showToast("🌍 Clique no mapa exatamente onde deseja criar o novo continente!");
     }
 
     const container = document.getElementById("mapCanvasContainer");
@@ -6551,6 +6817,16 @@ class FantasyGenealogyApp {
         return;
       }
 
+      // 0.1. CRIAR NOVO CONTINENTE ONDE CLICAR COM O MOUSE
+      if (this.mapTool === "add_continent") {
+        this.pushMapUndoState();
+        this.addContinentOnMap(Math.round(pt.x), Math.round(pt.y));
+        if (typeof this.showToast === "function") {
+          this.showToast("🌍 Novo continente criado onde você clicou! Arraste as bolinhas para modelar as bordas.");
+        }
+        return;
+      }
+
       // 0.5. CARIMBOS DE CONSTRUÇÕES: Colocar Castelo ou Casas onde clicar no mapa
       if (this.mapTool === "stamp_castle" || this.mapTool === "stamp_house") {
         if (!this.isPointInsideAnyTerritory(pt)) {
@@ -6661,6 +6937,9 @@ class FantasyGenealogyApp {
       if (hitSettle) {
         this.selectedSettlementId = hitSettle.id;
         this.selectedMapItemId = null;
+        this.mapSettlementSize = hitSettle.size || this.mapSettlementSize || 20;
+        this.mapIconSize = hitSettle.size || this.mapIconSize || 20;
+        this.syncIconSizeUI();
         if (hitSettle.territoryId) {
           this.selectedTerritoryId = hitSettle.territoryId;
         }
@@ -6789,13 +7068,39 @@ class FantasyGenealogyApp {
         return;
       }
 
-      // 3. Arrastando o território inteiro pelo oceano infinito
+      // 3. Arrastando o território inteiro pelo oceano infinito (move junto todo o conteúdo interno do continente)
       if (this.draggingTerritory) {
         const terr = this.engine.getTerritory(this.draggingTerritory.terrId);
         if (terr && Array.isArray(terr.points)) {
           const dx = pt.x - this.draggingTerritory.lastX;
           const dy = pt.y - this.draggingTerritory.lastY;
           if (dx !== 0 || dy !== 0) {
+            // Identifica traços e carimbos que estavam dentro deste continente antes do deslocamento
+            const oldPoints = terr.points.map(p => ({ x: p.x, y: p.y }));
+            (this.engine.data.mapStrokes || []).forEach(s => {
+              if (s.x !== undefined && s.y !== undefined) {
+                if (this.isPointInPolygon({ x: s.x, y: s.y }, oldPoints)) {
+                  s.x += dx;
+                  s.y += dy;
+                }
+              } else if (Array.isArray(s.points) && s.points.length > 0) {
+                const isInsideThisTerr = s.points.some(p => this.isPointInPolygon(p, oldPoints));
+                if (isInsideThisTerr) {
+                  s.points.forEach(p => {
+                    p.x += dx;
+                    p.y += dy;
+                  });
+                }
+              }
+            });
+            // Move também as cidades/capitais pertencentes ou localizadas dentro deste continente
+            (this.engine.data.settlements || []).forEach(settle => {
+              if (settle.territoryId === terr.id || this.isPointInPolygon({ x: settle.x, y: settle.y }, oldPoints)) {
+                settle.x += dx;
+                settle.y += dy;
+              }
+            });
+
             terr.points.forEach(p => {
               p.x += dx;
               p.y += dy;
@@ -6846,6 +7151,11 @@ class FantasyGenealogyApp {
 
       if (this.mapTool && this.mapTool.startsWith("draw_")) {
         canvas.style.cursor = "crosshair";
+        return;
+      }
+
+      if (this.mapTool === "add_continent") {
+        canvas.style.cursor = "copy";
         return;
       }
 
@@ -7153,16 +7463,30 @@ class FantasyGenealogyApp {
   }
 
   setMapIconSize(val) {
-    const size = Math.max(12, Math.min(64, parseInt(val, 10) || 24));
+    const size = Math.max(10, Math.min(64, parseInt(val, 10) || 24));
     this.mapIconSize = size;
     this.syncIconSizeUI();
 
-    // Se houver um carimbo selecionado no mapa, redimensiona ele imediatamente!
+    // 1. Se houver um carimbo selecionado no mapa, redimensiona ele imediatamente!
     if (this.selectedMapItemId) {
       const stamp = (this.engine.data.mapStrokes || []).find(s => s.id === this.selectedMapItemId);
       if (stamp) {
         this.pushMapUndoState();
         stamp.size = size;
+        this.engine.saveToStorage();
+        this.drawMapCanvas();
+        return;
+      }
+    }
+
+    // 2. Se houver um ponto de nome (assentamento) selecionado no mapa, redimensiona o ponto e o nome imediatamente!
+    if (this.selectedSettlementId) {
+      const settle = (this.engine.data.settlements || []).find(s => s.id === this.selectedSettlementId);
+      if (settle) {
+        this.pushMapUndoState();
+        settle.size = size;
+        this.mapSettlementSize = size;
+        this.syncIconSizeUI();
         this.engine.saveToStorage();
         this.drawMapCanvas();
       }
@@ -7173,11 +7497,53 @@ class FantasyGenealogyApp {
     this.setMapIconSize((this.mapIconSize || 24) + delta);
   }
 
+  // Aumenta ou diminui o tamanho dos pontos e nomes no mapa (o selecionado ou todos os pontos do mapa)
+  setMapSettlementSize(val) {
+    const size = Math.max(10, Math.min(56, parseInt(val, 10) || 20));
+    this.mapSettlementSize = size;
+    this.syncIconSizeUI();
+
+    if (this.selectedSettlementId) {
+      const settle = (this.engine.data.settlements || []).find(s => s.id === this.selectedSettlementId);
+      if (settle) {
+        this.pushMapUndoState();
+        settle.size = size;
+        this.engine.saveToStorage();
+        this.drawMapCanvas();
+        return;
+      }
+    }
+
+    // Se nenhum ponto individual estiver selecionado, ajusta todos os pontos de nomes do mapa para facilitar
+    const allSettlements = this.engine.data.settlements || [];
+    if (allSettlements.length > 0) {
+      this.pushMapUndoState();
+      allSettlements.forEach(s => {
+        s.size = size;
+      });
+      this.engine.saveToStorage();
+      this.drawMapCanvas();
+    }
+  }
+
+  changeMapSettlementSize(delta) {
+    const current = this.selectedSettlementId
+      ? ((this.engine.data.settlements || []).find(s => s.id === this.selectedSettlementId)?.size || this.mapSettlementSize || 20)
+      : (this.mapSettlementSize || 20);
+    this.setMapSettlementSize(current + delta);
+  }
+
   syncIconSizeUI() {
     const slider = document.getElementById("mapIconSizeSlider");
     const display = document.getElementById("mapIconSizeDisplay");
     if (slider) slider.value = this.mapIconSize || 24;
     if (display) display.textContent = (this.mapIconSize || 24) + "px";
+
+    const sSlider = document.getElementById("mapSettlementSizeSlider");
+    const sDisplay = document.getElementById("mapSettlementSizeDisplay");
+    const sVal = this.mapSettlementSize || 20;
+    if (sSlider) sSlider.value = sVal;
+    if (sDisplay) sDisplay.textContent = sVal + "px";
   }
 
   // Aplica mini correções e suavização ponderada anti-tremor a uma linha de pontos
@@ -7266,10 +7632,12 @@ class FantasyGenealogyApp {
   }
 
   // Traça o caminho fechado suave passando exatamente por todos os pontos da borda do território
-  traceTerritoryPolygonPath(ctx, points) {
+  traceTerritoryPolygonPath(ctx, points, skipBeginPath = false) {
     if (!Array.isArray(points) || points.length < 3) return;
     const len = points.length;
-    ctx.beginPath();
+    if (!skipBeginPath) {
+      ctx.beginPath();
+    }
     ctx.moveTo(points[0].x, points[0].y);
 
     for (let i = 0; i < len; i++) {
@@ -7288,6 +7656,16 @@ class FantasyGenealogyApp {
       ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
     }
     ctx.closePath();
+  }
+
+  // Traça um único path composto por TODOS os continentes para ctx.clip() (impede que novos continentes apaguem o conteúdo dos anteriores!)
+  traceAllTerritoriesClipPath(ctx, territories) {
+    ctx.beginPath();
+    (territories || []).forEach(t => {
+      if (t && Array.isArray(t.points) && t.points.length >= 3) {
+        this.traceTerritoryPolygonPath(ctx, t.points, true);
+      }
+    });
   }
 
   // Desenha um ícone de mini ondas (duas cristas náuticas) na posição (wx, wy) da água
@@ -7316,9 +7694,10 @@ class FantasyGenealogyApp {
   // Identifica se um ponto no mundo do mapa colidiu com um assentamento (Capital ou Cidade)
   findHitSettlement(pt) {
     const settlements = this.engine.data.settlements || [];
-    const hitRadius = 22;
     for (let i = settlements.length - 1; i >= 0; i--) {
       const s = settlements[i];
+      const scale = (s.size || this.mapSettlementSize || 20) / 20;
+      const hitRadius = Math.max(18, 22 * scale);
       const d = Math.hypot(pt.x - s.x, pt.y - s.y);
       if (d <= hitRadius) {
         return s;
@@ -7407,12 +7786,13 @@ class FantasyGenealogyApp {
     return lines;
   }
 
-  // Renderiza o nome da cidade/capital sem caixa de fundo, com contorno suave (halo) e quebra de linha
-  drawSettlementLabel(ctx, text, yOffset, isCapital, isSelected) {
+  // Renderiza o nome da cidade/capital sem caixa de fundo, com contorno suave (halo) e quebra de linha, escalonável pelo tamanho
+  drawSettlementLabel(ctx, text, yOffset, isCapital, isSelected, scale = 1) {
     if (!text) return;
     const lines = this.splitSettlementNameLines(text, 14);
-    const fontSize = isCapital ? 10.5 : 9.5;
-    const lineHeight = fontSize + 3.5;
+    const baseFont = isCapital ? 10.5 : 9.5;
+    const fontSize = Math.max(7, Math.round(baseFont * scale * 10) / 10);
+    const lineHeight = fontSize + 3.5 * scale;
 
     ctx.save();
     ctx.font = `${isCapital ? "700" : "600"} ${fontSize}px Cinzel, Georgia, serif`;
@@ -7423,7 +7803,7 @@ class FantasyGenealogyApp {
       const lineY = yOffset + (idx * lineHeight);
       // Halo / Contorno nítido escuro para legibilidade máxima sobre qualquer mapa/solo sem precisar de fundo retangular
       ctx.strokeStyle = "rgba(10, 8, 5, 0.94)";
-      ctx.lineWidth = 2.8;
+      ctx.lineWidth = Math.max(2.0, 2.8 * Math.min(1.6, scale));
       ctx.lineJoin = "round";
       ctx.miterLimit = 2;
       ctx.strokeText(line, 0, lineY);
@@ -7435,20 +7815,22 @@ class FantasyGenealogyApp {
     ctx.restore();
   }
 
-  // Desenha um assentamento como um PONTO ENVOLTO EM UM CÍRCULO cartográfico com o nome legível
+  // Desenha um assentamento como um PONTO ENVOLTO EM UM CÍRCULO cartográfico com o nome legível e tamanho ajustável
   drawSettlementPoint(ctx, settle, isSelected = false) {
     ctx.save();
     ctx.translate(settle.x, settle.y);
 
     const isCapital = settle.type === "capital";
-    const outerRadius = isCapital ? 7 : 5;
-    const innerRadius = isCapital ? 3.5 : 2.2;
+    const sizeVal = settle.size || this.mapSettlementSize || 20;
+    const scale = sizeVal / 20;
+    const outerRadius = (isCapital ? 7 : 5) * scale;
+    const innerRadius = (isCapital ? 3.5 : 2.2) * scale;
     const ringColor = isSelected ? "#f59e0b" : (isCapital ? "#b91c1c" : "#3b82f6");
     const dotColor = isSelected ? "#fbbf24" : (isCapital ? "#ef4444" : "#60a5fa");
 
     // Sombra suave no chão para destacar sobre qualquer solo/relevo
     ctx.beginPath();
-    ctx.arc(0, 0, outerRadius + 1.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, outerRadius + 1.2 * scale, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
     ctx.fill();
 
@@ -7458,7 +7840,7 @@ class FantasyGenealogyApp {
     ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
     ctx.fill();
     ctx.strokeStyle = ringColor;
-    ctx.lineWidth = isCapital ? 2.2 : 1.6;
+    ctx.lineWidth = (isCapital ? 2.2 : 1.6) * Math.max(0.85, Math.min(1.5, scale));
     ctx.stroke();
 
     // Ponto central sólido envolto pelo círculo
@@ -7470,7 +7852,7 @@ class FantasyGenealogyApp {
     // Se selecionado, anel pulsante dourado em volta
     if (isSelected) {
       ctx.beginPath();
-      ctx.arc(0, 0, outerRadius + 5, 0, Math.PI * 2);
+      ctx.arc(0, 0, outerRadius + 5 * scale, 0, Math.PI * 2);
       ctx.strokeStyle = "#f59e0b";
       ctx.lineWidth = 1.5;
       ctx.setLineDash([3, 3]);
@@ -7478,9 +7860,9 @@ class FantasyGenealogyApp {
       ctx.setLineDash([]);
     }
 
-    // Nome da cidade/capital sem fundo envolvente, com quebra de linha se for longo
+    // Nome da cidade/capital sem fundo envolvente, escalonado proporcionalmente
     if (settle.name) {
-      this.drawSettlementLabel(ctx, settle.name, outerRadius + 4, isCapital, isSelected);
+      this.drawSettlementLabel(ctx, settle.name, outerRadius + 4 * scale, isCapital, isSelected, scale);
     }
 
     ctx.restore();
@@ -7823,12 +8205,7 @@ class FantasyGenealogyApp {
 
         ctx.save();
         if (isLandIcon && territories.length > 0) {
-          ctx.beginPath();
-          territories.forEach(t => {
-            if (Array.isArray(t.points) && t.points.length >= 3) {
-              this.traceTerritoryPolygonPath(ctx, t.points);
-            }
-          });
+          this.traceAllTerritoriesClipPath(ctx, territories);
           ctx.clip();
         }
 
@@ -7865,12 +8242,7 @@ class FantasyGenealogyApp {
 
         ctx.save();
         if (territories.length > 0) {
-          ctx.beginPath();
-          territories.forEach(t => {
-            if (Array.isArray(t.points) && t.points.length >= 3) {
-              this.traceTerritoryPolygonPath(ctx, t.points);
-            }
-          });
+          this.traceAllTerritoriesClipPath(ctx, territories);
           ctx.clip();
         }
         sorted.forEach((p, pIdx) => {
@@ -7891,12 +8263,7 @@ class FantasyGenealogyApp {
 
         ctx.save();
         if (territories.length > 0) {
-          ctx.beginPath();
-          territories.forEach(t => {
-            if (Array.isArray(t.points) && t.points.length >= 3) {
-              this.traceTerritoryPolygonPath(ctx, t.points);
-            }
-          });
+          this.traceAllTerritoriesClipPath(ctx, territories);
           ctx.clip();
         }
         sorted.forEach((p, pIdx) => {
@@ -7925,28 +8292,28 @@ class FantasyGenealogyApp {
         }
         if (s.points.length < 3 || riverLength < 22) return;
 
-        // Linha de água / Rio: traço fluido multicamada sem serrilhado nem tremidos
+        // Linha de água / Rio: tom fluvial sóbrio e natural (menos brilhante e menos azul-neon)
         ctx.save();
-        // 1. Leito profundo da água (halo sutil)
+        // 1. Leito escuro sutil da margem
         this.traceSmoothStrokePath(ctx, s.points);
-        ctx.strokeStyle = "rgba(14, 116, 144, 0.38)";
-        ctx.lineWidth = 6.6 / this.mapZoom;
+        ctx.strokeStyle = "rgba(15, 34, 48, 0.42)";
+        ctx.lineWidth = 5.4 / this.mapZoom;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.stroke();
 
-        // 2. Correnteza principal do rio
+        // 2. Correnteza principal do rio (azul-ardósia/petróleo discreto e integrado ao pergaminho)
         this.traceSmoothStrokePath(ctx, s.points);
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 3.6 / this.mapZoom;
+        ctx.strokeStyle = "#264b62";
+        ctx.lineWidth = 3.2 / this.mapZoom;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.stroke();
 
-        // 3. Brilho límpido no centro do curso d'água
+        // 3. Reflexo central muito sutil (sem brilho branco/neon)
         this.traceSmoothStrokePath(ctx, s.points);
-        ctx.strokeStyle = "rgba(224, 242, 254, 0.65)";
-        ctx.lineWidth = 1.2 / this.mapZoom;
+        ctx.strokeStyle = "rgba(72, 118, 145, 0.28)";
+        ctx.lineWidth = 1.0 / this.mapZoom;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.stroke();
@@ -8360,14 +8727,52 @@ class FantasyGenealogyApp {
 
   renderSelectedTerritoryPanel() {
     const panel = document.getElementById("mapTerritoryDetailPanel");
-    if (!panel) return;
+    const editControls = document.getElementById("mapEditControls");
+    const editTerrHeader = document.getElementById("mapEditSelectedTerrHeader");
+
+    // Sincroniza visibilidade entre Modo de Edição (botões à direita) e Modo de Exibição (detalhes e cidades à direita)
+    if (this.isMapEditMode) {
+      if (panel) panel.style.display = "none";
+      if (editControls) editControls.style.display = "flex";
+    } else {
+      if (panel) panel.style.display = "block";
+      if (editControls) editControls.style.display = "none";
+    }
 
     const t = this.engine.getTerritory(this.selectedTerritoryId) || this.engine.data.territories[0];
+
+    // Atualiza o cabeçalho compacto do continente selecionado dentro do painel direito de edição (sem exibir cidades/habitantes)
+    if (editTerrHeader) {
+      if (t) {
+        editTerrHeader.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:7px; min-width:0;">
+              <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${t.color || '#c5a059'}; border:1px solid #fff3d1; flex-shrink:0;"></span>
+              <strong style="font-family:var(--font-display); font-size:0.86rem; color:var(--gold-leaf); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                ${this.escapeHtml(t.name)} ${t.locked ? '🔒' : ''}
+              </strong>
+            </div>
+            <div style="display:flex; gap:5px; flex-shrink:0;">
+              <button class="btn btn-xs btn-medieval" onclick="app.openTerritoryModal('${t.id}')" title="Alterar nome, cor e casa deste continente">✏️ Nome / Cor</button>
+              <button class="btn btn-xs btn-danger" onclick="app.openDeleteTerritoryModal('${t.id}')" title="Apagar este continente">&times;</button>
+            </div>
+          </div>
+        `;
+      } else {
+        editTerrHeader.innerHTML = `
+          <div style="font-size:0.8rem; color:var(--ink-secondary); text-align:center;">
+            Nenhum continente criado. Selecione <strong>+ Novo Continente</strong> abaixo e clique no mapa!
+          </div>
+        `;
+      }
+    }
+
+    if (!panel) return;
     if (!t) {
       panel.innerHTML = `
         <div style="text-align:center; padding:18px 8px;">
-          <p style="margin-bottom:12px; color:var(--ink-secondary);">Todo o mapa está coberto por <strong>Água (mini ondas)</strong>. Clique no botão de continente para criar seu primeiro território de terra!</p>
-          <button class="btn btn-gold" onclick="app.addContinentOnMap()">+ Novo Território (Continente)</button>
+          <p style="margin-bottom:12px; color:var(--ink-secondary);">Todo o mapa está coberto por <strong>Água (mini ondas)</strong>. Habilite a edição e clique no mapa para criar seu primeiro território de terra!</p>
+          <button class="btn btn-gold" onclick="app.setMapTool('add_continent')">+ Novo Território (Continente)</button>
         </div>
       `;
       return;
@@ -8931,6 +9336,10 @@ class FantasyGenealogyApp {
           <label>Posição no Mapa Y:</label>
           <input type="number" id="sf_y" value="${Math.round(y)}" />
         </div>
+        <div class="form-group">
+          <label>Tamanho do Ponto &amp; Nome (10 a 48):</label>
+          <input type="number" id="sf_size" min="10" max="48" value="${this.mapSettlementSize || 20}" />
+        </div>
       </div>
       <p style="font-size:0.82rem; color:var(--ink-secondary); margin-top:4px;">
         ${
@@ -8961,6 +9370,9 @@ class FantasyGenealogyApp {
     const houseId = document.getElementById("sf_houseId").value;
     const x = Number(document.getElementById("sf_x").value) || 0;
     const y = Number(document.getElementById("sf_y").value) || 0;
+    const sizeInput = document.getElementById("sf_size");
+    const size = Math.max(10, Math.min(56, Number(sizeInput ? sizeInput.value : (this.mapSettlementSize || 20)) || 20));
+    this.mapSettlementSize = size;
 
     const snapshot = this.engine.createSnapshot();
     this.engine.data.settlements = this.engine.data.settlements || [];
@@ -8978,6 +9390,7 @@ class FantasyGenealogyApp {
         existing.houseId = houseId;
         existing.x = x;
         existing.y = y;
+        existing.size = size;
       }
       this.engine.recordAuditLog(
         "TERRITÓRIO",
@@ -8993,6 +9406,7 @@ class FantasyGenealogyApp {
         name,
         x,
         y,
+        size,
         territoryId,
         houseId
       };
@@ -9074,6 +9488,10 @@ class FantasyGenealogyApp {
         <div class="form-group">
           <label>Posição no Mapa Y:</label>
           <input type="number" id="sf_y" value="${settle.y}" />
+        </div>
+        <div class="form-group">
+          <label>Tamanho do Ponto &amp; Nome (10 a 48):</label>
+          <input type="number" id="sf_size" min="10" max="48" value="${settle.size || this.mapSettlementSize || 20}" />
         </div>
       </div>
     `;
