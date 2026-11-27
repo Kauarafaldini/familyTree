@@ -184,6 +184,7 @@ function getDefaultCleanData(worldId, title = "Crônicas & Linhagens", currentYe
       worldTitle: title,
       currentYear: Number(currentYear) || 1000,
       treeColorMode: "linhagem",
+      treeGroupBy: "raca",
       selectedHouseFilter: "all",
       selectedRaceFilter: "all"
     },

@@ -13,7 +13,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2.7.0" />
+  <link rel="stylesheet" href="styles.css?v=2.8.0" />
 </head>
 
 <body class="auth-locked">
@@ -110,7 +110,20 @@
        ==================================================================== -->
   <section id="tab-tree" class="tab-panel active">
     <div class="tree-toolbar">
-      <!-- Grupo 1: Perspectiva -->
+      <!-- Grupo 1: Agrupamento da Genealogia -->
+      <div class="toolbar-section">
+        <span class="toolbar-section-label">Agrupamento:</span>
+        <div class="mode-toggle-box">
+          <button id="btnGroupRaca" class="mode-toggle-btn active" onclick="app.setTreeGroupBy('raca')" title="Separar grupos e linhagens por Raça (Padrão)">
+            👑 Por Raça (Padrão)
+          </button>
+          <button id="btnGroupCasa" class="mode-toggle-btn" onclick="app.setTreeGroupBy('casa')" title="Separar grupos por Casa Nobre / Dinastia">
+            🏰 Por Casa
+          </button>
+        </div>
+      </div>
+
+      <!-- Grupo 1B: Perspectiva -->
       <div class="toolbar-section">
         <span class="toolbar-section-label">Perspectiva:</span>
         <div class="mode-toggle-box">
@@ -967,9 +980,9 @@
   </div>
 
   <!-- Scripts do Códice -->
-  <script src="data.js?v=2.7.0"></script>
-  <script src="engine.js?v=2.7.0"></script>
-  <script src="app.js?v=2.7.0"></script>
+  <script src="data.js?v=2.8.0"></script>
+  <script src="engine.js?v=2.8.0"></script>
+  <script src="app.js?v=2.8.0"></script>
 </body>
 
 </html>

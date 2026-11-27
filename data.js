@@ -92,6 +92,7 @@ const DEFAULT_WORLD_DATA = {
     worldTitle: "Crônicas & Linhagens",
     currentYear: 1000,
     treeColorMode: "linhagem", // "linhagem" ou "territorio"
+    treeGroupBy: "raca",       // "raca" (padrão) ou "casa"
     selectedHouseFilter: "all",
     selectedRaceFilter: "all"
   },

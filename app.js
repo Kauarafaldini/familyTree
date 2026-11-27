@@ -702,6 +702,27 @@ class FantasyGenealogyApp {
         btnTerritorio.classList.remove("active");
       }
     }
+
+    const currentGroupBy = (d.meta.treeGroupBy || "raca").toLowerCase();
+    const btnGroupRaca = document.getElementById("btnGroupRaca");
+    const btnGroupCasa = document.getElementById("btnGroupCasa");
+    if (btnGroupRaca && btnGroupCasa) {
+      if (currentGroupBy === "casa") {
+        btnGroupRaca.classList.remove("active");
+        btnGroupCasa.classList.add("active");
+      } else {
+        btnGroupRaca.classList.add("active");
+        btnGroupCasa.classList.remove("active");
+      }
+    }
+  }
+
+  setTreeGroupBy(mode) {
+    const cleanMode = (mode || "raca").toLowerCase();
+    this.engine.data.meta.treeGroupBy = cleanMode;
+    this.engine.saveToStorage();
+    this.syncHeaderAndBadges();
+    this.renderTree();
   }
 
   switchTab(tabId) {
@@ -1114,55 +1135,41 @@ class FantasyGenealogyApp {
 
     const getNormRace = c => normalizeText((c && (c.race || c.creatureType)) || "humano");
 
-    // Agrupa por Cacho / Casa Feudal Principal ou joga personagens isolados para "o outro lado"
-    const UNCONNECTED_CLUSTER_ID = "__unconnected_seats__";
-    const getClusterHouseId = c => {
-      if (!hasFamilyBond(c)) {
-        return UNCONNECTED_CLUSTER_ID;
+    // Identificação visual e metadados heráldicos de cada Raça / Espécie
+    const getRaceMeta = rawRace => {
+      const clean = (rawRace || "Humano").trim();
+      const norm = normalizeText(clean);
+      if (norm.includes("elfo")) {
+        return { name: clean, icon: "🧝", color: "#10b981", motto: "Linhagens e Povos Élficos" };
       }
-      if (matchingHouseIds !== null) {
-        if (c.birthHouseId && matchingHouseIds.has(c.birthHouseId)) return c.birthHouseId;
-        if (c.officialHouseId && matchingHouseIds.has(c.officialHouseId)) return c.officialHouseId;
+      if (norm.includes("humano")) {
+        return { name: clean, icon: "🛡️", color: "#3b82f6", motto: "Casas e Dinastias Humanas" };
       }
-      if (c.spouseIds && c.spouseIds.length > 0) {
-        for (const spId of c.spouseIds) {
-          const sp = this.engine.getCharacter(spId);
-          if (sp && this.engine.isNobleRank(sp.socialRank)) {
-            return sp.officialHouseId || sp.birthHouseId;
-          }
-        }
+      if (norm.includes("bruxo") || norm.includes("feiticeir") || norm.includes("mago")) {
+        return { name: clean, icon: "🧙", color: "#8b5cf6", motto: "Círculos e Conclaves Arcanos" };
       }
-      if (c.fatherId) {
-        const father = this.engine.getCharacter(c.fatherId);
-        if (father) return father.officialHouseId || father.birthHouseId;
+      if (norm.includes("anao") || norm.includes("anã")) {
+        return { name: clean, icon: "⚒️", color: "#d97706", motto: "Clãs das Forjas e Montanhas" };
       }
-      return c.officialHouseId || c.birthHouseId || "house_plebe";
+      if (norm.includes("orc")) {
+        return { name: clean, icon: "🧌", color: "#84cc16", motto: "Tribos e Hordas Guerreiras" };
+      }
+      if (norm.includes("vampir")) {
+        return { name: clean, icon: "🧛", color: "#e11d48", motto: "Cortes e Linhagens Sanguíneas" };
+      }
+      if (norm.includes("drac") || norm.includes("drag")) {
+        return { name: clean, icon: "🐉", color: "#ea580c", motto: "Progênie e Linhagens Draconianas" };
+      }
+      if (norm.includes("sereia") || norm.includes("tritao") || norm.includes("tritão")) {
+        return { name: clean, icon: "🧜", color: "#06b6d4", motto: "Reinos e Águas Profundas" };
+      }
+      if (norm.includes("fada") || norm.includes("silfo")) {
+        return { name: clean, icon: "🧚", color: "#ec4899", motto: "Cortes Feéricas e Silvestres" };
+      }
+      return { name: clean, icon: "⚜️", color: "#c5a059", motto: `Povos e Linhagens da Raça ${clean}` };
     };
 
-    const clustersByHouse = {};
-    chars.forEach(c => {
-      const hId = getClusterHouseId(c);
-      if (!clustersByHouse[hId]) clustersByHouse[hId] = [];
-      clustersByHouse[hId].push(c);
-    });
-
-    // Calcula a raça predominante de cada cluster para manter famílias da mesma raça próximas
-    const getClusterDominantRace = hId => {
-      const list = clustersByHouse[hId] || [];
-      const counts = {};
-      let bestRace = "humano";
-      let bestCount = 0;
-      list.forEach(c => {
-        const r = getNormRace(c);
-        counts[r] = (counts[r] || 0) + 1;
-        if (counts[r] > bestCount) {
-          bestCount = counts[r];
-          bestRace = r;
-        }
-      });
-      return bestRace;
-    };
-
+    const groupBy = (d.meta.treeGroupBy || "raca").toLowerCase();
     const positions = {};
     const clusterHeaders = [];
     let currentClusterOffsetX = 90;
@@ -1170,127 +1177,304 @@ class FantasyGenealogyApp {
     const GEN_SPACING_Y = 220;
     const TOP_MARGIN_Y = 105;
 
-    // Garante que famílias de mesma raça fiquem próximas umas das outras e o cluster sem vínculos fique "do outro lado"
-    const sortedHouseIds = Object.keys(clustersByHouse).sort((a, b) => {
-      if (a === UNCONNECTED_CLUSTER_ID) return 1;
-      if (b === UNCONNECTED_CLUSTER_ID) return -1;
-      const raceA = getClusterDominantRace(a);
-      const raceB = getClusterDominantRace(b);
-      if (raceA !== raceB) return raceA.localeCompare(raceB);
-      return 0;
-    });
-
-    sortedHouseIds.forEach(houseId => {
-      const clusterChars = clustersByHouse[houseId];
-      const isUnconnected = houseId === UNCONNECTED_CLUSTER_ID;
-      const houseObj = isUnconnected ? null : this.engine.getHouse(houseId);
-
-      const rows = {};
-      clusterChars.forEach(c => {
-        const g = genMap[c.id] || 0;
-        if (!rows[g]) rows[g] = [];
-        rows[g].push(c);
+    if (groupBy === "raca") {
+      // =========================================================================
+      // MODO PADRÃO: SEPARAR GRUPOS POR RAÇA
+      // =========================================================================
+      const clusters = {};
+      chars.forEach(c => {
+        let rName = (c.race || c.creatureType || "Humano").trim();
+        if (!rName) rName = "Humano";
+        rName = rName.charAt(0).toUpperCase() + rName.slice(1);
+        const rKey = normalizeText(rName) || "humano";
+        if (!clusters[rKey]) {
+          clusters[rKey] = {
+            id: rKey,
+            meta: getRaceMeta(rName),
+            chars: []
+          };
+        }
+        clusters[rKey].chars.push(c);
       });
 
-      let maxRowCount = 1;
-      Object.keys(rows).forEach(gKey => {
-        // Ordena inicialmente por raça para que personagens da mesma raça fiquem sempre próximos, mesmo se não forem da mesma família
-        const rowList = rows[gKey].slice().sort((a, b) => {
-          const rA = getNormRace(a);
-          const rB = getNormRace(b);
-          if (rA !== rB) return rA.localeCompare(rB);
-          return 0;
+      const sortedClusterKeys = Object.keys(clusters).sort((a, b) => {
+        return clusters[a].meta.name.localeCompare(clusters[b].meta.name);
+      });
+
+      sortedClusterKeys.forEach(cKey => {
+        const clusterData = clusters[cKey];
+        const clusterChars = clusterData.chars;
+        const meta = clusterData.meta;
+
+        const rows = {};
+        clusterChars.forEach(c => {
+          const g = genMap[c.id] || 0;
+          if (!rows[g]) rows[g] = [];
+          rows[g].push(c);
         });
-        const ordered = [];
-        const placed = new Set();
 
-        // Agrupamento familiar e racial: pessoas conectadas (cônjuges, gêmeos, irmãos) ficam coladas,
-        // seguidas imediatamente por outros personagens da mesma raça
-        const placePersonAndTies = person => {
-          if (!person || placed.has(person.id)) return;
-          ordered.push(person);
-          placed.add(person.id);
+        let maxRowCount = 1;
+        Object.keys(rows).forEach(gKey => {
+          const rowList = rows[gKey].slice();
+          const ordered = [];
+          const placed = new Set();
 
-          // 1. Cônjuge(s) na mesma geração ficam colados lado a lado
-          (person.spouseIds || []).forEach(spId => {
-            const sp = rowList.find(x => x.id === spId);
-            if (sp && !placed.has(sp.id)) {
-              ordered.push(sp);
-              placed.add(sp.id);
-            }
-          });
+          const placePersonAndTies = person => {
+            if (!person || placed.has(person.id)) return;
+            ordered.push(person);
+            placed.add(person.id);
 
-          // 2. Irmão gêmeo direto (bidirecional) na mesma geração fica adjacente
-          rowList.forEach(other => {
-            if (!placed.has(other.id) && this.areCharactersTwins(person, other)) {
-              placePersonAndTies(other);
-            }
-          });
-
-          // 3. Irmãos que compartilham o mesmo pai/mãe ou laço fraterno direto
-          rowList.forEach(other => {
-            if (placed.has(other.id)) return;
-            const sameFather = person.fatherId && other.fatherId && person.fatherId === other.fatherId;
-            const sameMother = person.motherId && other.motherId && person.motherId === other.motherId;
-            const directSibling = (Array.isArray(person.siblingIds) && person.siblingIds.includes(other.id)) ||
-                                  (Array.isArray(other.siblingIds) && other.siblingIds.includes(person.id));
-            if (sameFather || sameMother || directSibling || this.areCharactersTwins(person, other)) {
-              placePersonAndTies(other);
-            }
-          });
-        };
-
-        rowList.forEach(person => {
-          if (!placed.has(person.id)) {
-            const targetRace = getNormRace(person);
-            placePersonAndTies(person);
-            // Puxa também outros personagens da mesma raça nesta fileira para ficarem próximos mesmo sem vínculo familiar
-            rowList.forEach(sameRaceOther => {
-              if (!placed.has(sameRaceOther.id) && getNormRace(sameRaceOther) === targetRace) {
-                placePersonAndTies(sameRaceOther);
+            // 1. Cônjuges na mesma geração ficam colados lado a lado
+            (person.spouseIds || []).forEach(spId => {
+              const sp = rowList.find(x => x.id === spId);
+              if (sp && !placed.has(sp.id)) {
+                ordered.push(sp);
+                placed.add(sp.id);
               }
             });
+
+            // 2. Irmão gêmeo direto na mesma geração fica adjacente
+            rowList.forEach(other => {
+              if (!placed.has(other.id) && this.areCharactersTwins(person, other)) {
+                placePersonAndTies(other);
+              }
+            });
+
+            // 3. Irmãos que compartilham pai/mãe ou laço fraterno direto
+            rowList.forEach(other => {
+              if (placed.has(other.id)) return;
+              const sameFather = person.fatherId && other.fatherId && person.fatherId === other.fatherId;
+              const sameMother = person.motherId && other.motherId && person.motherId === other.motherId;
+              const directSibling = (Array.isArray(person.siblingIds) && person.siblingIds.includes(other.id)) ||
+                                    (Array.isArray(other.siblingIds) && other.siblingIds.includes(person.id));
+              if (sameFather || sameMother || directSibling || this.areCharactersTwins(person, other)) {
+                placePersonAndTies(other);
+              }
+            });
+          };
+
+          rowList.forEach(person => {
+            if (!placed.has(person.id)) {
+              placePersonAndTies(person);
+              // Puxa também parentes da mesma casa feudal para manter famílias unidas no grupo da raça
+              const pFamily = person.officialHouseId || person.birthHouseId;
+              if (pFamily) {
+                rowList.forEach(sameHouseOther => {
+                  if (!placed.has(sameHouseOther.id) && (sameHouseOther.officialHouseId === pFamily || sameHouseOther.birthHouseId === pFamily)) {
+                    placePersonAndTies(sameHouseOther);
+                  }
+                });
+              }
+            }
+          });
+
+          rows[gKey] = ordered;
+          if (ordered.length > maxRowCount) maxRowCount = ordered.length;
+        });
+
+        const clusterWidth = Math.max(maxRowCount * NODE_SPACING_X, 340);
+        const clusterCenterX = currentClusterOffsetX + clusterWidth / 2;
+
+        clusterHeaders.push({
+          clusterKey: cKey,
+          name: `${meta.icon} ${meta.name}`,
+          motto: meta.motto || `Linhagens e Registros de ${meta.name}`,
+          color: meta.color || "#c5a059",
+          count: clusterChars.length,
+          allowAvuncular: false,
+          x: clusterCenterX,
+          y: 26
+        });
+
+        Object.keys(rows).forEach(gKey => {
+          const g = Number(gKey);
+          const rowChars = rows[gKey];
+          const rowWidth = (rowChars.length - 1) * NODE_SPACING_X;
+          const startX = clusterCenterX - rowWidth / 2;
+
+          rowChars.forEach((c, idx) => {
+            const distFromCenter = Math.abs(idx - (rowChars.length - 1) / 2);
+            const grapeArcOffsetY = Math.round(distFromCenter * 8);
+
+            positions[c.id] = {
+              x: startX + idx * NODE_SPACING_X,
+              y: TOP_MARGIN_Y + g * GEN_SPACING_Y + grapeArcOffsetY,
+              generation: g,
+              clusterKey: cKey,
+              clusterRace: meta.name,
+              clusterHouseId: c.officialHouseId || c.birthHouseId || "house_plebe"
+            };
+          });
+        });
+
+        currentClusterOffsetX += clusterWidth + 110;
+      });
+    } else {
+      // =========================================================================
+      // MODO ALTERNATIVO: SEPARAR GRUPOS POR CASA FEUDAL
+      // =========================================================================
+      const UNCONNECTED_CLUSTER_ID = "__unconnected_seats__";
+      const getClusterHouseId = c => {
+        if (!hasFamilyBond(c)) {
+          return UNCONNECTED_CLUSTER_ID;
+        }
+        if (matchingHouseIds !== null) {
+          if (c.birthHouseId && matchingHouseIds.has(c.birthHouseId)) return c.birthHouseId;
+          if (c.officialHouseId && matchingHouseIds.has(c.officialHouseId)) return c.officialHouseId;
+        }
+        if (c.spouseIds && c.spouseIds.length > 0) {
+          for (const spId of c.spouseIds) {
+            const sp = this.engine.getCharacter(spId);
+            if (sp && this.engine.isNobleRank(sp.socialRank)) {
+              return sp.officialHouseId || sp.birthHouseId;
+            }
+          }
+        }
+        if (c.fatherId) {
+          const father = this.engine.getCharacter(c.fatherId);
+          if (father) return father.officialHouseId || father.birthHouseId;
+        }
+        return c.officialHouseId || c.birthHouseId || "house_plebe";
+      };
+
+      const clustersByHouse = {};
+      chars.forEach(c => {
+        const hId = getClusterHouseId(c);
+        if (!clustersByHouse[hId]) clustersByHouse[hId] = [];
+        clustersByHouse[hId].push(c);
+      });
+
+      const getClusterDominantRace = hId => {
+        const list = clustersByHouse[hId] || [];
+        const counts = {};
+        let bestRace = "humano";
+        let bestCount = 0;
+        list.forEach(c => {
+          const r = getNormRace(c);
+          counts[r] = (counts[r] || 0) + 1;
+          if (counts[r] > bestCount) {
+            bestCount = counts[r];
+            bestRace = r;
           }
         });
+        return bestRace;
+      };
 
-        rows[gKey] = ordered;
-        if (ordered.length > maxRowCount) maxRowCount = ordered.length;
+      const sortedHouseIds = Object.keys(clustersByHouse).sort((a, b) => {
+        if (a === UNCONNECTED_CLUSTER_ID) return 1;
+        if (b === UNCONNECTED_CLUSTER_ID) return -1;
+        const raceA = getClusterDominantRace(a);
+        const raceB = getClusterDominantRace(b);
+        if (raceA !== raceB) return raceA.localeCompare(raceB);
+        return 0;
       });
 
-      const clusterWidth = Math.max(maxRowCount * NODE_SPACING_X, 340);
-      const clusterCenterX = currentClusterOffsetX + clusterWidth / 2;
+      sortedHouseIds.forEach(houseId => {
+        const clusterChars = clustersByHouse[houseId];
+        const isUnconnected = houseId === UNCONNECTED_CLUSTER_ID;
+        const houseObj = isUnconnected ? null : this.engine.getHouse(houseId);
 
-      clusterHeaders.push({
-        houseId,
-        name: isUnconnected ? "Sem Vínculo / Outros Registros" : (houseObj ? houseObj.name : "Linhagem"),
-        motto: isUnconnected ? "Personagens sem laços genealógicos ou alianças matrimoniais declarados" : (houseObj ? houseObj.motto : ""),
-        color: isUnconnected ? "#8a9ba8" : (houseObj ? houseObj.color : "#c5a059"),
-        allowAvuncular: houseObj ? houseObj.allowAvuncularMarriage : false,
-        x: clusterCenterX,
-        y: 26
-      });
-
-      Object.keys(rows).forEach(gKey => {
-        const g = Number(gKey);
-        const rowChars = rows[gKey];
-        const rowWidth = (rowChars.length - 1) * NODE_SPACING_X;
-        const startX = clusterCenterX - rowWidth / 2;
-
-        rowChars.forEach((c, idx) => {
-          const distFromCenter = Math.abs(idx - (rowChars.length - 1) / 2);
-          const grapeArcOffsetY = Math.round(distFromCenter * 8);
-
-          positions[c.id] = {
-            x: startX + idx * NODE_SPACING_X,
-            y: TOP_MARGIN_Y + g * GEN_SPACING_Y + grapeArcOffsetY,
-            generation: g,
-            clusterHouseId: houseId
-          };
+        const rows = {};
+        clusterChars.forEach(c => {
+          const g = genMap[c.id] || 0;
+          if (!rows[g]) rows[g] = [];
+          rows[g].push(c);
         });
-      });
 
-      currentClusterOffsetX += clusterWidth + 110;
-    });
+        let maxRowCount = 1;
+        Object.keys(rows).forEach(gKey => {
+          const rowList = rows[gKey].slice().sort((a, b) => {
+            const rA = getNormRace(a);
+            const rB = getNormRace(b);
+            if (rA !== rB) return rA.localeCompare(rB);
+            return 0;
+          });
+          const ordered = [];
+          const placed = new Set();
+
+          const placePersonAndTies = person => {
+            if (!person || placed.has(person.id)) return;
+            ordered.push(person);
+            placed.add(person.id);
+
+            (person.spouseIds || []).forEach(spId => {
+              const sp = rowList.find(x => x.id === spId);
+              if (sp && !placed.has(sp.id)) {
+                ordered.push(sp);
+                placed.add(sp.id);
+              }
+            });
+
+            rowList.forEach(other => {
+              if (!placed.has(other.id) && this.areCharactersTwins(person, other)) {
+                placePersonAndTies(other);
+              }
+            });
+
+            rowList.forEach(other => {
+              if (placed.has(other.id)) return;
+              const sameFather = person.fatherId && other.fatherId && person.fatherId === other.fatherId;
+              const sameMother = person.motherId && other.motherId && person.motherId === other.motherId;
+              const directSibling = (Array.isArray(person.siblingIds) && person.siblingIds.includes(other.id)) ||
+                                    (Array.isArray(other.siblingIds) && other.siblingIds.includes(person.id));
+              if (sameFather || sameMother || directSibling || this.areCharactersTwins(person, other)) {
+                placePersonAndTies(other);
+              }
+            });
+          };
+
+          rowList.forEach(person => {
+            if (!placed.has(person.id)) {
+              const targetRace = getNormRace(person);
+              placePersonAndTies(person);
+              rowList.forEach(sameRaceOther => {
+                if (!placed.has(sameRaceOther.id) && getNormRace(sameRaceOther) === targetRace) {
+                  placePersonAndTies(sameRaceOther);
+                }
+              });
+            }
+          });
+
+          rows[gKey] = ordered;
+          if (ordered.length > maxRowCount) maxRowCount = ordered.length;
+        });
+
+        const clusterWidth = Math.max(maxRowCount * NODE_SPACING_X, 340);
+        const clusterCenterX = currentClusterOffsetX + clusterWidth / 2;
+
+        clusterHeaders.push({
+          houseId,
+          name: isUnconnected ? "Sem Vínculo / Outros Registros" : (houseObj ? houseObj.name : "Linhagem"),
+          motto: isUnconnected ? "Personagens sem laços genealógicos ou alianças matrimoniais declarados" : (houseObj ? houseObj.motto : ""),
+          color: isUnconnected ? "#8a9ba8" : (houseObj ? houseObj.color : "#c5a059"),
+          allowAvuncular: houseObj ? houseObj.allowAvuncularMarriage : false,
+          count: clusterChars.length,
+          x: clusterCenterX,
+          y: 26
+        });
+
+        Object.keys(rows).forEach(gKey => {
+          const g = Number(gKey);
+          const rowChars = rows[gKey];
+          const rowWidth = (rowChars.length - 1) * NODE_SPACING_X;
+          const startX = clusterCenterX - rowWidth / 2;
+
+          rowChars.forEach((c, idx) => {
+            const distFromCenter = Math.abs(idx - (rowChars.length - 1) / 2);
+            const grapeArcOffsetY = Math.round(distFromCenter * 8);
+
+            positions[c.id] = {
+              x: startX + idx * NODE_SPACING_X,
+              y: TOP_MARGIN_Y + g * GEN_SPACING_Y + grapeArcOffsetY,
+              generation: g,
+              clusterHouseId: houseId
+            };
+          });
+        });
+
+        currentClusterOffsetX += clusterWidth + 110;
+      });
+    }
 
     const totalWidth = Math.max(1500, currentClusterOffsetX + 60);
     const maxGen = Math.max(0, ...Object.values(genMap));
@@ -1556,12 +1740,14 @@ class FantasyGenealogyApp {
         <div class="cluster-header-vine" style="left:${ch.x}px; top:${ch.y}px; border-color:${ch.color};">
           <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ch.color};"></span>
           <span>${this.escapeHtml(ch.name)}</span>
+          ${ch.count ? `<span class="badge-pill" style="margin:0; background:rgba(0,0,0,0.45); font-size:0.7rem; color:${ch.color}; border:1px solid ${ch.color};">${ch.count}</span>` : ""}
           ${ch.allowAvuncular ? `<span class="badge-pill badge-avuncular" style="margin:0;">Tradição Avuncular</span>` : ""}
         </div>
       `;
     });
 
     const colorMode = this.engine.data.meta.treeColorMode || "linhagem";
+    const groupByMode = (this.engine.data.meta.treeGroupBy || "raca").toLowerCase();
     const currentYear = Number(this.engine.data.meta.currentYear) || 1248;
 
     chars.forEach(c => {
@@ -1570,18 +1756,21 @@ class FantasyGenealogyApp {
 
       const clusterHouseId = pos.clusterHouseId;
       // Ligação de sangue da família:
-      // Se a pessoa nasceu nesta família (birthHouseId === clusterHouseId), é de sangue (bolinha vermelha).
-      // Se for de outra família que aparece nesta árvore, é bolinha azul.
-      const isBloodOfCurrentFamily = Boolean(
-        (c.birthHouseId && c.birthHouseId === clusterHouseId) ||
-        (!c.birthHouseId && c.officialHouseId === clusterHouseId)
-      );
+      // Se estiver agrupado por casa: verifica se nasceu nesta casa feudal.
+      // Se estiver agrupado por raça: identifica membros de sangue direto da linhagem da raça.
+      const isBloodOfCurrentFamily = groupByMode === "casa"
+        ? Boolean(
+            (c.birthHouseId && c.birthHouseId === clusterHouseId) ||
+            (!c.birthHouseId && c.officialHouseId === clusterHouseId)
+          )
+        : Boolean(c.fatherId || c.motherId || !c.birthHouseId || (c.birthHouseId === c.officialHouseId));
 
       const sphereClass = isBloodOfCurrentFamily ? "sphere-blood" : "sphere-external";
       const ringColor = isBloodOfCurrentFamily ? "#dc2626" : "#2563eb";
+      const raceLabel = c.race || c.creatureType || "Humano";
       const sphereTooltip = isBloodOfCurrentFamily
-        ? "Membro de Sangue da Família"
-        : "Membro de Outra Família (Origem Externa)";
+        ? `${c.name} (${raceLabel}) - Membro de Sangue da Linhagem`
+        : `${c.name} (${raceLabel}) - Membro de Outra Linhagem (Origem Externa)`;
 
       if (c.isPlaceholderEmpty) {
         nodesHtml += `
